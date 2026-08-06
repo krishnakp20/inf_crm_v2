@@ -5,7 +5,6 @@ import {
   Check,
   Download,
   FileText,
-  MessageSquare,
   Paperclip,
   PlayCircle,
   Pencil,
