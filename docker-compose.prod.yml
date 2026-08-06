@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: infcrm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: infcrm_v2
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infcrm -d infcrm_v2"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No ports: exposed — only reachable by the api service over the internal
+    # docker network, since this server also runs other sites/apps.
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://infcrm:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}@postgres:5432/infcrm_v2
+      DATABASE_URL_SYNC: postgresql+psycopg2://infcrm:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}@postgres:5432/infcrm_v2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Bound to localhost only — Apache is the public entrypoint and
+      # reverse-proxies /api/ here. Same port the old inf-crm (v1) used;
+      # stop that stack before bringing this one up (see deploy/README.md).
+      - "127.0.0.1:9001:8000"
+    volumes:
+      - upload_data:/app/uploads
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m app.services.seed &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  postgres_data:
+  upload_data:

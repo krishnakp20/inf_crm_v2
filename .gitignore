@@ -1,0 +1,17 @@
+.env
+backend/.env.production
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+.DS_Store
+
+.devdata/
+
+backend/uploads/
