@@ -27,6 +27,7 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.creator import (
     BoardStats,
+    BulkAssign,
     BulkUploadResult,
     CreatorCreate,
     CreatorDetail,
@@ -39,6 +40,7 @@ from app.schemas.creator import (
     OwnershipMatch,
     StageTimelineEntry,
     StageTransition,
+    TransferOwnership,
 )
 from app.schemas.creator_file import CreatorFileOut
 from app.schemas.creator_lifecycle import CreatorLifecycle
@@ -146,7 +148,9 @@ async def list_creators(
     if user.role == UserRole.advisor:
         owner_id = user.id
 
-    stmt = select(Creator)
+    # Archived creators can't be picked for a new collaboration — they'd need
+    # to be unarchived first, which only an admin can see to do.
+    stmt = select(Creator).where(Creator.is_archived.is_(False))
     if owner_id is not None:
         stmt = stmt.where(Creator.owner_id == owner_id)
     if stage is not None:
@@ -193,6 +197,8 @@ async def list_creators_table(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
     if user.role == UserRole.advisor:
         owner_id = user.id
+        # Archived leads are admin-only, regardless of what's requested.
+        is_archived = False
 
     stmt = select(Creator).where(Creator.is_archived == is_archived)
     if owner_id is not None:
@@ -260,6 +266,8 @@ async def list_creators_table(
                 owner_id=creator.owner_id,
                 status=creator.status,
                 is_archived=creator.is_archived,
+                archived_at=creator.archived_at,
+                archive_reason=creator.archive_reason,
                 created_at=creator.created_at,
                 videos_delivered=videos_delivered,
                 last_cost=last_cost,
@@ -484,14 +492,73 @@ async def update_creator(
         update_data.pop("owner_id", None)
     new_owner_id = update_data.get("owner_id")
     owner_changed = new_owner_id is not None and new_owner_id != creator.owner_id
+    archive_reason = update_data.pop("archive_reason", None)
+    was_archived = creator.is_archived
     for field, value in update_data.items():
         setattr(creator, field, value)
     creator.last_activity_at = datetime.now(timezone.utc)
+    if creator.is_archived and not was_archived:
+        creator.archived_at = datetime.now(timezone.utc)
+        creator.archive_reason = archive_reason
+    elif not creator.is_archived and was_archived:
+        creator.archived_at = None
+        creator.archive_reason = None
     if owner_changed:
         db.add(OwnershipEvent(creator_id=creator.id, user_id=new_owner_id))
     await db.commit()
     await db.refresh(creator)
     return creator
+
+
+@router.post("/{creator_id}/transfer-ownership", response_model=CreatorOut)
+async def transfer_ownership(
+    creator_id: int,
+    payload: TransferOwnership,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Creator:
+    # Self-service: the current owner (or an admin) hands this creator to
+    # another advisor. _get_creator_or_404 already 404s an advisor who
+    # doesn't own this creator, so no extra ownership check is needed here.
+    creator = await _get_creator_or_404(creator_id, db, user)
+    new_owner = await db.get(User, payload.new_owner_id)
+    if new_owner is None or new_owner.role != UserRole.advisor:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid advisor to transfer to.")
+    if new_owner.id == creator.owner_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Creator is already owned by this user.")
+
+    creator.owner_id = new_owner.id
+    creator.last_activity_at = datetime.now(timezone.utc)
+    db.add(OwnershipEvent(creator_id=creator.id, user_id=new_owner.id))
+    await db.commit()
+    await db.refresh(creator)
+    return creator
+
+
+@router.post("/bulk-assign", response_model=list[CreatorOut])
+async def bulk_assign(
+    payload: BulkAssign,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> list[Creator]:
+    new_owner = await db.get(User, payload.new_owner_id)
+    if new_owner is None or new_owner.role != UserRole.advisor:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid advisor to assign to.")
+
+    result = await db.execute(select(Creator).where(Creator.id.in_(payload.creator_ids)))
+    creators = list(result.scalars().all())
+    now = datetime.now(timezone.utc)
+    for creator in creators:
+        creator.owner_id = new_owner.id
+        creator.is_archived = False
+        creator.archived_at = None
+        creator.archive_reason = None
+        creator.last_activity_at = now
+        db.add(OwnershipEvent(creator_id=creator.id, user_id=new_owner.id))
+    await db.commit()
+    for creator in creators:
+        await db.refresh(creator)
+    return creators
 
 
 @router.post("/{creator_id}/stage", response_model=CreatorOut)

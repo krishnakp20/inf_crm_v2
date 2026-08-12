@@ -5,27 +5,20 @@ import {
   Check,
   Download,
   FileText,
-  Paperclip,
   PlayCircle,
   Pencil,
   Receipt,
-  Send,
-  Trash2,
+  ShieldCheck,
   UsersRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { compactNumber, initials } from "../../lib/format";
-import type {
-  CreatorDetail,
-  CreatorFile,
-  CreatorLifecycle,
-  Message,
-  MessageChannel,
-} from "../../lib/types";
+import type { CreatorDetail, CreatorLifecycle, User } from "../../lib/types";
 
-type Tab = "overview" | "video" | "commercial" | "conversation" | "files";
+type Tab = "overview" | "video" | "commercial";
 
 const TIMELINE_ICONS: Record<string, typeof ArrowRight> = {
   stage: ArrowRight,
@@ -33,22 +26,6 @@ const TIMELINE_ICONS: Record<string, typeof ArrowRight> = {
   commercial: Receipt,
   ownership: UsersRound,
   added: FileText,
-};
-
-const CHANNEL_OPTIONS: { label: string; value: MessageChannel }[] = [
-  { label: "Note", value: "note" },
-  { label: "Call", value: "call" },
-  { label: "WhatsApp", value: "whatsapp" },
-  { label: "Email", value: "email" },
-  { label: "Instagram DM", value: "instagram_dm" },
-];
-
-const CHANNEL_LABELS: Record<MessageChannel, string> = {
-  note: "Note",
-  call: "Call",
-  whatsapp: "WhatsApp",
-  email: "Email",
-  instagram_dm: "Instagram DM",
 };
 
 const CATEGORIES = ["Beauty", "Lifestyle", "Makeup", "Skincare", "Fitness", "Fashion"];
@@ -65,12 +42,6 @@ function formatCurrency(amount: number | null): string {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function csvEscape(value: string): string {
@@ -98,6 +69,7 @@ export function CreatorLifecyclePanel({
   onClose: () => void;
   onChanged?: () => void;
 }) {
+  const { user } = useAuth();
   const [data, setData] = useState<CreatorLifecycle | null>(null);
   const [detail, setDetail] = useState<CreatorDetail | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -111,15 +83,12 @@ export function CreatorLifecyclePanel({
   const [editNotes, setEditNotes] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [messageChannel, setMessageChannel] = useState<MessageChannel>("note");
-  const [messageDraft, setMessageDraft] = useState("");
-  const [sendingMessage, setSendingMessage] = useState(false);
-
-  const [files, setFiles] = useState<CreatorFile[]>([]);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [downloadingFileId, setDownloadingFileId] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [advisors, setAdvisors] = useState<User[]>([]);
+  const [transferTargetId, setTransferTargetId] = useState<number | "">("");
+  const [transferring, setTransferring] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [revokeReason, setRevokeReason] = useState("");
+  const [ownershipError, setOwnershipError] = useState<string | null>(null);
 
   function loadLifecycle() {
     api.get<CreatorLifecycle>(`/creators/${creatorId}/lifecycle`).then((res) => setData(res.data));
@@ -129,25 +98,20 @@ export function CreatorLifecyclePanel({
     api.get<CreatorDetail>(`/creators/${creatorId}/detail`).then((res) => setDetail(res.data));
   }
 
-  function loadMessages() {
-    api.get<Message[]>(`/creators/${creatorId}/messages`).then((res) => setMessages(res.data));
-  }
-
-  function loadFiles() {
-    api.get<CreatorFile[]>(`/creators/${creatorId}/files`).then((res) => setFiles(res.data));
-  }
-
   useEffect(() => {
     loadLifecycle();
     loadDetail();
+    setTransferTargetId("");
+    api.get<User[]>("/users").then((res) => setAdvisors(res.data.filter((u) => u.role === "advisor" && u.is_active)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creatorId]);
 
   useEffect(() => {
-    if (tab === "conversation" && messages.length === 0) loadMessages();
-    if (tab === "files" && files.length === 0) loadFiles();
+    if (transferTargetId !== "" || !detail) return;
+    const first = advisors.find((a) => a.id !== detail.creator.owner_id);
+    if (first) setTransferTargetId(first.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, creatorId]);
+  }, [advisors, detail]);
 
   function startEdit() {
     if (!detail) return;
@@ -192,57 +156,43 @@ export function CreatorLifecyclePanel({
     onChanged?.();
   }
 
-  async function sendMessage() {
-    if (!messageDraft.trim()) return;
-    setSendingMessage(true);
+  const otherAdvisors = advisors.filter((a) => a.id !== detail?.creator.owner_id);
+  const isOwner = !!user && user.role === "advisor" && detail?.creator.owner_id === user.id;
+  const ownershipSince = data?.ownership_history.find((o) => o.status === "current")?.since_label;
+
+  async function transferOwnership() {
+    if (!transferTargetId) return;
+    setOwnershipError(null);
+    setTransferring(true);
     try {
-      await api.post(`/creators/${creatorId}/messages`, { channel: messageChannel, body: messageDraft });
-      setMessageDraft("");
-      loadMessages();
+      await api.post(`/creators/${creatorId}/transfer-ownership`, { new_owner_id: transferTargetId });
+      onChanged?.();
+      onClose();
+    } catch (err: any) {
+      setOwnershipError(err.response?.data?.detail ?? "Could not transfer ownership.");
     } finally {
-      setSendingMessage(false);
+      setTransferring(false);
     }
   }
 
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploadingFile(true);
+  async function revokeOwnership() {
+    setOwnershipError(null);
+    setRevoking(true);
     try {
-      const formData = new FormData();
-      formData.append("upload", file);
-      await api.post(`/creators/${creatorId}/files`, formData);
-      loadFiles();
+      await api.patch(`/creators/${creatorId}`, { is_archived: true, archive_reason: revokeReason || null });
+      onChanged?.();
+      onClose();
+    } catch (err: any) {
+      setOwnershipError(err.response?.data?.detail ?? "Could not revoke ownership.");
     } finally {
-      setUploadingFile(false);
+      setRevoking(false);
     }
-  }
-
-  async function downloadFile(f: CreatorFile) {
-    setDownloadingFileId(f.id);
-    try {
-      const res = await api.get(`/creators/${creatorId}/files/${f.id}/download`, { responseType: "blob" });
-      const url = URL.createObjectURL(res.data as Blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = f.original_filename;
-      link.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setDownloadingFileId(null);
-    }
-  }
-
-  async function deleteFile(f: CreatorFile) {
-    await api.delete(`/creators/${creatorId}/files/${f.id}`);
-    setFiles((prev) => prev.filter((existing) => existing.id !== f.id));
   }
 
   if (!data || !detail) {
     return (
       <div className="fixed inset-0 z-50 bg-black/30">
-        <div className="fixed right-0 top-0 h-full w-[560px] bg-white p-6 shadow-lg">
+        <div className="fixed right-0 top-0 h-full w-[50vw] min-w-[560px] bg-white p-6 shadow-lg">
           <p className="text-sm text-gray-400">Loading...</p>
         </div>
       </div>
@@ -252,7 +202,7 @@ export function CreatorLifecyclePanel({
   return (
     <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose}>
       <aside
-        className="fixed right-0 top-0 flex h-full w-[560px] flex-col bg-white shadow-lg"
+        className="fixed right-0 top-0 flex h-full w-[50vw] min-w-[560px] flex-col bg-white shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-[#e7e5e4] p-5">
@@ -318,22 +268,6 @@ export function CreatorLifecyclePanel({
               }`}
             >
               Commercial history <span className="text-gray-400">{data.commercial_history.rows.length}</span>
-            </button>
-            <button
-              onClick={() => setTab("conversation")}
-              className={`border-b-2 px-3 py-3 text-sm font-semibold ${
-                tab === "conversation" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-ink"
-              }`}
-            >
-              Conversation
-            </button>
-            <button
-              onClick={() => setTab("files")}
-              className={`border-b-2 px-3 py-3 text-sm font-semibold ${
-                tab === "files" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-ink"
-              }`}
-            >
-              Files
             </button>
           </div>
         )}
@@ -666,114 +600,61 @@ export function CreatorLifecyclePanel({
               </div>
             </div>
           )}
-
-          {!editing && tab === "conversation" && (
-            <div className="flex flex-col gap-3">
-              {messages.length === 0 && <p className="text-sm text-gray-400">No conversation history tracked yet.</p>}
-              {messages.map((m) => (
-                <div key={m.id} className="rounded-card border border-[#e7e5e4] p-3">
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-ink">{m.author_name}</span>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                      {CHANNEL_LABELS[m.channel]}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">{m.body}</p>
-                  <div className="mt-1 text-[11px] text-gray-400">
-                    {new Date(m.created_at).toLocaleString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!editing && tab === "files" && (
-            <div>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingFile}
-                className="mb-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#e7e5e4] px-4 py-3 text-sm font-semibold text-ink hover:border-brand-200 hover:text-brand-600 disabled:opacity-50"
-              >
-                <Paperclip size={14} />
-                {uploadingFile ? "Uploading..." : "Upload a file"}
-              </button>
-
-              {files.length === 0 && <p className="text-sm text-gray-400">No files uploaded yet.</p>}
-              <div className="flex flex-col gap-2">
-                {files.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between gap-2 rounded-card border border-[#e7e5e4] p-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-ink">{f.original_filename}</div>
-                      <div className="text-xs text-gray-400">
-                        {formatBytes(f.size_bytes)} · {f.uploaded_by_name} · {new Date(f.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        onClick={() => downloadFile(f)}
-                        disabled={downloadingFileId === f.id}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-surface hover:text-brand-600 disabled:opacity-50"
-                        title="Download"
-                      >
-                        <Download size={14} />
-                      </button>
-                      <button
-                        onClick={() => deleteFile(f)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-surface hover:text-[#cf4e43]"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        {!editing && tab === "conversation" && (
-          <div className="border-t border-[#e7e5e4] p-4">
-            <div className="flex items-end gap-2">
-              <select
-                value={messageChannel}
-                onChange={(e) => setMessageChannel(e.target.value as MessageChannel)}
-                className="rounded-lg border border-[#e7e5e4] bg-white px-2 py-2 text-xs text-gray-600"
-              >
-                {CHANNEL_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                value={messageDraft}
-                onChange={(e) => setMessageDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                rows={1}
-                placeholder="Log a call, message, or note..."
-                className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <button
-                onClick={sendMessage}
-                disabled={sendingMessage || !messageDraft.trim()}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
-              >
-                <Send size={14} />
-              </button>
+        {!editing && isOwner && (
+          <footer className="flex flex-col gap-2.5 border-t border-[#e7e5e4] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-brand-600">
+                  <ShieldCheck size={16} />
+                  Current user: {detail.owner_name}
+                </div>
+                {ownershipSince && <div className="mt-0.5 text-xs text-gray-400">Ownership since {ownershipSince}</div>}
+                {ownershipError && <div className="mt-1 text-xs text-red-600">{ownershipError}</div>}
+              </div>
+              <div className="flex items-center gap-2">
+                {otherAdvisors.length > 0 && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                      Transfer to
+                      <select
+                        value={transferTargetId}
+                        onChange={(e) => setTransferTargetId(Number(e.target.value))}
+                        className="rounded-lg border border-[#e7e5e4] bg-white px-2 py-1.5 text-xs font-semibold text-ink"
+                      >
+                        {otherAdvisors.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      onClick={transferOwnership}
+                      disabled={transferring}
+                      className="rounded-lg border border-[#e7e5e4] px-3 py-1.5 text-xs font-bold text-ink hover:bg-surface disabled:opacity-50"
+                    >
+                      {transferring ? "Transferring..." : "Transfer ownership"}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={revokeOwnership}
+                  disabled={revoking}
+                  className="rounded-lg border border-[#f3c9c5] px-3 py-1.5 text-xs font-bold text-[#cf4e43] hover:bg-[#fdf2f1] disabled:opacity-50"
+                >
+                  {revoking ? "Revoking..." : "Revoke ownership"}
+                </button>
+              </div>
             </div>
-          </div>
+            <input
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+              placeholder="Reason for revoking (optional)"
+              className="w-full rounded-lg border border-[#e7e5e4] px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
+            />
+          </footer>
         )}
       </aside>
     </div>

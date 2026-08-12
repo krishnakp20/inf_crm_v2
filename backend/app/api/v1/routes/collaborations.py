@@ -399,6 +399,7 @@ async def transition_collab_stage(
 ) -> CollaborationOut:
     collab = await _get_collaboration_or_404(collab_id, db, user)
     creator = await db.get(Creator, collab.creator_id)
+    was_dead = collab.stage == CollabStage.dead_leads
 
     is_forward_move = COLLAB_STAGE_INDEX[payload.to_stage] > COLLAB_STAGE_INDEX[collab.stage]
     if is_forward_move:
@@ -488,6 +489,28 @@ async def transition_collab_stage(
     )
     collab.stage = payload.to_stage
     collab.last_activity_at = datetime.now(timezone.utc)
+
+    if payload.to_stage == CollabStage.dead_leads and not was_dead:
+        # Archive the creator once every one of their collaborations is dead —
+        # a creator with another still-active collaboration stays visible.
+        other_active = (
+            await db.execute(
+                select(Collaboration.id).where(
+                    Collaboration.creator_id == collab.creator_id,
+                    Collaboration.id != collab.id,
+                    Collaboration.stage != CollabStage.dead_leads,
+                )
+            )
+        ).first()
+        if other_active is None:
+            creator.is_archived = True
+            creator.archived_at = datetime.now(timezone.utc)
+            creator.archive_reason = "All collaborations moved to Dead Leads"
+    elif was_dead and payload.to_stage != CollabStage.dead_leads:
+        creator.is_archived = False
+        creator.archived_at = None
+        creator.archive_reason = None
+
     await db.commit()
     await db.refresh(collab)
 

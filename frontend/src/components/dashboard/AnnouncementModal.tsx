@@ -6,7 +6,7 @@ import type { AnnouncementOut, User } from "../../lib/types";
 const AUDIENCES: { label: string; value: "everyone" | "team" | "selected" }[] = [
   { label: "Everyone", value: "everyone" },
   { label: "Influencer team", value: "team" },
-  { label: "Selected employees", value: "selected" },
+  { label: "Selected users", value: "selected" },
 ];
 
 export function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -74,7 +74,7 @@ export function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; o
             </div>
             <div>
               <h2 className="text-base font-semibold text-ink">Team announcement</h2>
-              <p className="text-xs text-gray-500">Visible on every employee's dashboard</p>
+              <p className="text-xs text-gray-500">Visible on every user's dashboard</p>
             </div>
           </div>
           <button
@@ -138,7 +138,7 @@ export function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; o
 
           {audience === "selected" && (
             <div className="mb-3 rounded-md border border-gray-200 p-2.5">
-              <p className="mb-1.5 text-xs font-medium text-gray-700">Choose employees</p>
+              <p className="mb-1.5 text-xs font-medium text-gray-700">Choose users</p>
               <div className="flex flex-col gap-1.5">
                 {advisors.map((a) => (
                   <label key={a.id} className="flex items-center gap-2 text-sm text-gray-600">

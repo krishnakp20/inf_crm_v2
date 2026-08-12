@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     email: EmailStr
     role: UserRole
     must_change_password: bool
+    is_active: bool
     created_at: datetime
 
     class Config:

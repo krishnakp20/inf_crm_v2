@@ -42,6 +42,7 @@ export default function MyCreators() {
   const [showSetTarget, setShowSetTarget] = useState(false);
 
   const advisors = users.filter((u) => u.role === "advisor");
+  const activeAdvisors = advisors.filter((a) => a.is_active);
   const isAdmin = user?.role === "admin";
 
   useEffect(() => {
@@ -156,7 +157,7 @@ export default function MyCreators() {
 
       {showAddCollab && user && (
         <AddCollaborationModal
-          users={advisors}
+          users={activeAdvisors}
           products={products}
           currentUserId={user.id}
           isAdmin={isAdmin}

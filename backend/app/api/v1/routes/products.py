@@ -3,7 +3,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_admin
-from app.db.models.enums import UserRole
 from app.db.models.product import Product
 from app.db.models.user import User
 from app.db.session import get_db
@@ -43,23 +42,13 @@ async def update_product(
     product_id: int,
     payload: ProductUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
 ) -> Product:
     product = await db.get(Product, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
-    update_data = payload.model_dump(exclude_unset=True)
-    if user.role != UserRole.admin:
-        if product.owner_id != user.id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-        if set(update_data) - {"target_videos"}:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Advisors can only update their own product's target.",
-            )
-
-    for field, value in update_data.items():
+    for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(product, field, value)
     await db.commit()
     await db.refresh(product)

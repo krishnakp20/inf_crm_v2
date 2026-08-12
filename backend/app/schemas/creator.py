@@ -31,11 +31,21 @@ class CreatorUpdate(BaseModel):
     status: CreatorStatus | None = None
     notes: str | None = None
     is_archived: bool | None = None
+    archive_reason: str | None = None
 
 
 class StageTransition(BaseModel):
     to_stage: CreatorStage
     note: str | None = None
+
+
+class TransferOwnership(BaseModel):
+    new_owner_id: int
+
+
+class BulkAssign(BaseModel):
+    creator_ids: list[int]
+    new_owner_id: int
 
 
 class CreatorOut(BaseModel):
@@ -70,6 +80,8 @@ class CreatorTableRow(BaseModel):
     owner_id: int
     status: CreatorStatus
     is_archived: bool
+    archived_at: datetime | None
+    archive_reason: str | None
     created_at: datetime
     videos_delivered: int
     last_cost: float | None

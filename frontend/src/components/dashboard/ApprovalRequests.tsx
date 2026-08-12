@@ -27,14 +27,14 @@ export function ApprovalRequests({
   onApprove?: (id: number) => void;
   onReject?: (id: number) => void;
 }) {
-  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [userFilter, setUserFilter] = useState("");
   const [showAll, setShowAll] = useState(false);
 
-  const employees = useMemo(
+  const users = useMemo(
     () => [...new Set(requests.map((r) => r.requested_by_name))].sort(),
     [requests]
   );
-  const filtered = employeeFilter ? requests.filter((r) => r.requested_by_name === employeeFilter) : requests;
+  const filtered = userFilter ? requests.filter((r) => r.requested_by_name === userFilter) : requests;
   const visible = showAll ? filtered : filtered.slice(0, PAGE_SIZE);
 
   return (
@@ -46,15 +46,15 @@ export function ApprovalRequests({
             {isAdmin ? "Leads sent by agents for Admin approval" : "Requests you have sent to Admin"}
           </p>
         </div>
-        {isAdmin && employees.length > 1 && (
+        {isAdmin && users.length > 1 && (
           <select
-            aria-label="Filter approval requests by employee"
-            value={employeeFilter}
-            onChange={(e) => setEmployeeFilter(e.target.value)}
+            aria-label="Filter approval requests by user"
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
             className="rounded-lg border border-[#e7e5e4] bg-white px-2 py-1 text-[10px] font-semibold text-ink"
           >
-            <option value="">All employees</option>
-            {employees.map((name) => (
+            <option value="">All users</option>
+            {users.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>

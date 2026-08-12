@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: UserRole;
   must_change_password: boolean;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -149,6 +150,8 @@ export interface CreatorTableRow {
   owner_id: number;
   status: CreatorStatus;
   is_archived: boolean;
+  archived_at: string | null;
+  archive_reason: string | null;
   created_at: string;
   videos_delivered: number;
   last_cost: number | null;

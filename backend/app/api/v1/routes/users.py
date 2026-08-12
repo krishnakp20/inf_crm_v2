@@ -1,14 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_admin
 from app.core.security import hash_password, verify_password
+from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.user import ChangePasswordRequest, UserCreate, UserOut
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+MAX_ACTIVE_ADVISORS = 10
+
+
+async def _active_advisor_count(db: AsyncSession) -> int:
+    result = await db.execute(
+        select(func.count()).select_from(User).where(User.role == UserRole.advisor, User.is_active.is_(True))
+    )
+    return result.scalar_one()
 
 
 @router.get("/me", response_model=UserOut)
@@ -35,6 +45,12 @@ async def create_user(
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
+    if payload.role == UserRole.advisor and await _active_advisor_count(db) >= MAX_ACTIVE_ADVISORS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum of {MAX_ACTIVE_ADVISORS} active advisors reached. Deactivate one first.",
+        )
+
     user = User(
         name=payload.name,
         email=payload.email,
@@ -46,6 +62,50 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.post("/{user_id}/deactivate", response_model=UserOut)
+async def deactivate_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> User:
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if target.role != UserRole.advisor:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only advisor accounts can be deactivated.")
+    if target.id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You can't deactivate your own account.")
+
+    target.is_active = False
+    await db.commit()
+    await db.refresh(target)
+    return target
+
+
+@router.post("/{user_id}/activate", response_model=UserOut)
+async def activate_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> User:
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if target.role != UserRole.advisor:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only advisor accounts can be reactivated.")
+
+    if not target.is_active and await _active_advisor_count(db) >= MAX_ACTIVE_ADVISORS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum of {MAX_ACTIVE_ADVISORS} active advisors reached. Deactivate one first.",
+        )
+
+    target.is_active = True
+    await db.commit()
+    await db.refresh(target)
+    return target
 
 
 @router.post("/me/change-password", response_model=UserOut)

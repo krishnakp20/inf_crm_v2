@@ -28,5 +28,7 @@ class Creator(Base):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archive_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

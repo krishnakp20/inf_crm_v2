@@ -17,6 +17,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been deactivated.")
 
     return TokenPair(
         access_token=create_access_token(str(user.id)),
@@ -33,7 +35,7 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
 
     user_id = token_payload.get("sub")
     user = await db.get(User, int(user_id))
-    if user is None:
+    if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     return AccessToken(access_token=create_access_token(str(user.id)))

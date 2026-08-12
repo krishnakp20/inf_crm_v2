@@ -2,6 +2,7 @@ import { ArrowUpDown, Download, Plus, Search, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AddCreatorModal } from "../components/creators/AddCreatorModal";
+import { ArchivedLeadsTable } from "../components/creators/ArchivedLeadsTable";
 import { CreatorLifecyclePanel } from "../components/creators/CreatorLifecyclePanel";
 import { CreatorTable } from "../components/creators/CreatorTable";
 import { OwnershipCheck } from "../components/creators/OwnershipCheck";
@@ -59,7 +60,7 @@ export default function Database() {
   }, []);
 
   const owners = useMemo(() => Object.fromEntries(users.map((u) => [u.id, u.name])), [users]);
-  const advisors = useMemo(() => users.filter((u) => u.role === "advisor"), [users]);
+  const advisors = useMemo(() => users.filter((u) => u.role === "advisor" && u.is_active), [users]);
 
   function loadCreators() {
     const params: Record<string, string | number | boolean> = {
@@ -82,12 +83,18 @@ export default function Database() {
     const base: Record<string, string | number | boolean> = { limit: 1, offset: 0 };
     if (ownerId) base.owner_id = ownerId;
     if (search) base.search = search;
-    Promise.all([
-      api.get("/creators/table", { params: { ...base, is_archived: false } }),
-      api.get("/creators/table", { params: { ...base, is_archived: true } }),
-    ]).then(([allRes, archivedRes]) => {
-      setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total });
-    });
+    if (user?.role === "admin") {
+      Promise.all([
+        api.get("/creators/table", { params: { ...base, is_archived: false } }),
+        api.get("/creators/table", { params: { ...base, is_archived: true } }),
+      ]).then(([allRes, archivedRes]) => {
+        setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total });
+      });
+    } else {
+      api.get("/creators/table", { params: { ...base, is_archived: false } }).then((res) => {
+        setTabCounts({ all: res.data.total, archived: 0 });
+      });
+    }
   }
 
   useEffect(loadCreators, [ownerId, activeTab, sortBy, sortDir, search, offset]);
@@ -299,15 +306,17 @@ export default function Database() {
           >
             All creators <span className="text-gray-400">{tabCounts.all}</span>
           </button>
-          <button
-            onClick={() => {
-              setActiveTab("archived");
-              setOffset(0);
-            }}
-            className={`text-[10px] font-bold ${activeTab === "archived" ? "text-brand-600" : "text-[#77727d]"}`}
-          >
-            Archived leads <span className="text-gray-400">{tabCounts.archived}</span>
-          </button>
+          {user?.role === "admin" && (
+            <button
+              onClick={() => {
+                setActiveTab("archived");
+                setOffset(0);
+              }}
+              className={`text-[10px] font-bold ${activeTab === "archived" ? "text-brand-600" : "text-[#77727d]"}`}
+            >
+              Archived leads <span className="text-gray-400">{tabCounts.archived}</span>
+            </button>
+          )}
         </div>
         {user?.role === "admin" && (
           <label className="flex items-center gap-2">
@@ -340,50 +349,68 @@ export default function Database() {
               setOffset(0);
               setSearch(e.target.value);
             }}
-            placeholder="Search name, username, phone or category..."
+            placeholder={activeTab === "archived" ? "Search archived creators..." : "Search name, username, phone or category..."}
             className="w-full text-xs text-ink placeholder:text-gray-400 focus:outline-none"
           />
         </div>
-        <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
-          <ArrowUpDown size={14} className="text-gray-400" />
-          <select
-            aria-label="Sort creator database"
-            value={sortBy}
-            onChange={(e) => {
-              setOffset(0);
-              setSortBy(e.target.value);
-            }}
-            className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-          className="flex h-9 shrink-0 items-center rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-bold text-[#655f6b] hover:bg-surface"
-        >
-          {sortDir === "asc" ? "Low to high ↑" : "High to low ↓"}
-        </button>
+        {activeTab === "all" && (
+          <>
+            <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
+              <ArrowUpDown size={14} className="text-gray-400" />
+              <select
+                aria-label="Sort creator database"
+                value={sortBy}
+                onChange={(e) => {
+                  setOffset(0);
+                  setSortBy(e.target.value);
+                }}
+                className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              className="flex h-9 shrink-0 items-center rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-bold text-[#655f6b] hover:bg-surface"
+            >
+              {sortDir === "asc" ? "Low to high ↑" : "High to low ↓"}
+            </button>
+          </>
+        )}
       </div>
 
-      <CreatorTable
-        creators={creators}
-        owners={owners}
-        total={total}
-        limit={LIMIT}
-        offset={offset}
-        sortBy={sortBy}
-        onSortChange={(field) => {
-          setOffset(0);
-          setSortBy(field);
-        }}
-        onPageChange={setOffset}
-        onView={setDetailCreatorId}
-      />
+      {activeTab === "archived" ? (
+        <ArchivedLeadsTable
+          creators={creators}
+          owners={owners}
+          advisors={advisors}
+          total={total}
+          limit={LIMIT}
+          offset={offset}
+          onPageChange={setOffset}
+          onView={setDetailCreatorId}
+          onAssigned={refresh}
+        />
+      ) : (
+        <CreatorTable
+          creators={creators}
+          owners={owners}
+          total={total}
+          limit={LIMIT}
+          offset={offset}
+          sortBy={sortBy}
+          onSortChange={(field) => {
+            setOffset(0);
+            setSortBy(field);
+          }}
+          onPageChange={setOffset}
+          onView={setDetailCreatorId}
+        />
+      )}
 
       {detailCreatorId && (
         <CreatorLifecyclePanel

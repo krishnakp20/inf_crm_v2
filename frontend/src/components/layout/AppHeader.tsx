@@ -29,7 +29,7 @@ export function AppHeader() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search creators, campaigns or employees..."
+            placeholder="Search creators, campaigns or users..."
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
           />
           <kbd className="rounded border border-[#e7e5e4] bg-white px-1.5 py-0.5 text-[10px] text-gray-400">⌘ K</kbd>

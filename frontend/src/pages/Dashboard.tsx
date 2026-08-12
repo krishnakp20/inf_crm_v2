@@ -173,7 +173,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-[1.5fr_1fr] gap-3">
         <Targets rows={targets} />
-        <ProductPerformance products={product_performance} onChanged={loadDashboard} />
+        <ProductPerformance products={product_performance} />
       </div>
     </div>
   );

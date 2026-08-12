@@ -30,6 +30,11 @@ async def get_current_user(
     user = await db.get(User, int(user_id))
     if user is None:
         raise credentials_error
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated.",
+        )
     return user
 
 

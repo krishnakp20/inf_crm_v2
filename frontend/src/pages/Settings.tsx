@@ -105,7 +105,7 @@ export default function Settings() {
 
         <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
           <span className="text-xs text-gray-400">
-            {saved ? "Saved -- changes apply to every employee's dashboard." : "Unsaved changes are local until published."}
+            {saved ? "Saved -- changes apply to every user's dashboard." : "Unsaved changes are local until published."}
           </span>
           <div className="flex gap-2">
             <button

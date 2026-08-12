@@ -5,26 +5,26 @@ import type { TargetRow } from "../../lib/types";
 const ROW_COLORS = ["#5B5CE2", "#F06E62", "#238B57", "#E6A23C"];
 
 export function Targets({ rows }: { rows: TargetRow[] }) {
-  const [employeeFilter, setEmployeeFilter] = useState("");
-  const employees = useMemo(() => rows.map((r) => r.name), [rows]);
-  const visible = employeeFilter ? rows.filter((r) => r.name === employeeFilter) : rows;
+  const [userFilter, setUserFilter] = useState("");
+  const users = useMemo(() => rows.map((r) => r.name), [rows]);
+  const visible = userFilter ? rows.filter((r) => r.name === userFilter) : rows;
 
   return (
     <div className="dashboard-card p-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-normal text-ink">Targets</h2>
-          <p className="mt-1 text-[10px] text-muted">Weekly and monthly performance by employee</p>
+          <p className="mt-1 text-[10px] text-muted">Weekly and monthly performance by user</p>
         </div>
-        {employees.length > 1 && (
+        {users.length > 1 && (
           <select
-            aria-label="Filter targets by employee"
-            value={employeeFilter}
-            onChange={(e) => setEmployeeFilter(e.target.value)}
+            aria-label="Filter targets by user"
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
             className="rounded-lg border border-[#e7e5e4] bg-white px-2 py-1 text-[10px] font-semibold text-ink"
           >
-            <option value="">All employees</option>
-            {employees.map((name) => (
+            <option value="">All users</option>
+            {users.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>
