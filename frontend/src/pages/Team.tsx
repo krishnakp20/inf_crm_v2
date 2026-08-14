@@ -6,11 +6,10 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import type { User } from "../lib/types";
 
-const MAX_ACTIVE_ADVISORS = 10;
-
 export default function Team() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [maxActiveAdvisors, setMaxActiveAdvisors] = useState(10);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,13 +24,16 @@ export default function Team() {
 
   useEffect(() => {
     loadUsers();
+    api.get<{ max_active_advisors: number }>("/users/limits").then((res) => {
+      setMaxActiveAdvisors(res.data.max_active_advisors);
+    });
   }, []);
 
   if (user && user.role !== "admin") return <Navigate to="/" replace />;
 
   const advisors = users.filter((u) => u.role === "advisor");
   const activeCount = advisors.filter((a) => a.is_active).length;
-  const atCap = activeCount >= MAX_ACTIVE_ADVISORS;
+  const atCap = activeCount >= maxActiveAdvisors;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -95,7 +97,7 @@ export default function Team() {
           />
           {atCap && (
             <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-              Maximum of {MAX_ACTIVE_ADVISORS} active advisors reached. Deactivate one before adding another.
+              Maximum of {maxActiveAdvisors} active advisors reached. Deactivate one before adding another.
             </p>
           )}
           {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
@@ -112,7 +114,7 @@ export default function Team() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-ink">Advisors</h2>
             <span className="text-xs font-semibold text-gray-500">
-              {activeCount} / {MAX_ACTIVE_ADVISORS} active
+              {activeCount} / {maxActiveAdvisors} active
             </span>
           </div>
           {toggleError && <p className="mb-2 text-xs text-red-600">{toggleError}</p>}
@@ -134,7 +136,7 @@ export default function Team() {
                 <button
                   onClick={() => toggleActive(a)}
                   disabled={togglingId === a.id || (!a.is_active && atCap)}
-                  title={!a.is_active && atCap ? `Maximum of ${MAX_ACTIVE_ADVISORS} active advisors reached` : undefined}
+                  title={!a.is_active && atCap ? `Maximum of ${maxActiveAdvisors} active advisors reached` : undefined}
                   className={`rounded-md border px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${
                     a.is_active
                       ? "border-[#f3c9c5] text-[#cf4e43] hover:bg-[#fdf2f1]"

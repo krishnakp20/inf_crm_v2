@@ -28,3 +28,7 @@ class UserOut(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
+
+
+class UserLimits(BaseModel):
+    max_active_advisors: int
