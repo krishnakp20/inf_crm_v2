@@ -1,7 +1,24 @@
 import { Target, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSort } from "../../hooks/useSort";
 import { api } from "../../lib/api";
+import { SortableHeader } from "../shared/SortableHeader";
 import type { Product, ProductTarget } from "../../lib/types";
+
+function getValue(t: ProductTarget, field: string): unknown {
+  switch (field) {
+    case "product_name":
+      return t.product_name;
+    case "weekly_target":
+      return t.weekly_target;
+    case "monthly_target":
+      return t.monthly_target;
+    case "monthly_progress":
+      return t.monthly_progress;
+    default:
+      return null;
+  }
+}
 
 export function SetTargetDrawer({
   products,
@@ -11,6 +28,7 @@ export function SetTargetDrawer({
   onClose: () => void;
 }) {
   const [targets, setTargets] = useState<ProductTarget[]>([]);
+  const { sorted: sortedTargets, field, direction, toggle } = useSort(targets, getValue);
   const [productId, setProductId] = useState<number | "">(products[0]?.id ?? "");
   const [weeklyTarget, setWeeklyTarget] = useState("");
   const [monthlyTarget, setMonthlyTarget] = useState("");
@@ -124,14 +142,14 @@ export function SetTargetDrawer({
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#e7e5e4] text-left uppercase tracking-wide text-gray-400">
-                <th className="pb-2 font-medium">Product</th>
-                <th className="pb-2 font-medium">Weekly</th>
-                <th className="pb-2 font-medium">Monthly</th>
-                <th className="pb-2 font-medium">Progress</th>
+                <SortableHeader label="Product" field="product_name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Weekly" field="weekly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Monthly" field="monthly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Progress" field="monthly_progress" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
               </tr>
             </thead>
             <tbody>
-              {targets.map((t) => (
+              {sortedTargets.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100">
                   <td className="py-2 font-medium text-ink">{t.product_name}</td>
                   <td className="py-2 text-gray-600">{t.weekly_target}</td>

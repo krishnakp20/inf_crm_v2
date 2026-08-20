@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import (
+    get_current_user,
+    owner_scope_filter,
+    require_admin,
+    require_creator_workspace_access,
+    scoped_owner_ids,
+)
 from app.db.models.approval_request import ApprovalRequest
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
@@ -16,7 +22,11 @@ from app.db.session import get_db
 from app.schemas.approval_request import ApprovalRequestCreate, ApprovalRequestOut
 from app.services.collab_pipeline import COLLAB_STAGE_LABELS
 
-router = APIRouter(prefix="/approval-requests", tags=["approval-requests"])
+router = APIRouter(
+    prefix="/approval-requests",
+    tags=["approval-requests"],
+    dependencies=[Depends(require_creator_workspace_access)],
+)
 
 
 async def _get_primary_product(db: AsyncSession, collaboration_id: int) -> Product | None:
@@ -66,8 +76,10 @@ async def list_approval_requests(
     )
     if user.role == UserRole.advisor:
         stmt = stmt.where(ApprovalRequest.requested_by == user.id)
-    elif owner_id is not None:
-        stmt = stmt.where(Collaboration.owner_id == owner_id)
+    else:
+        owner_ids = await owner_scope_filter(user, db, owner_id)
+        if owner_ids is not None:
+            stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
 
     if status_filter is not None:
         stmt = stmt.where(ApprovalRequest.status == status_filter)
@@ -89,7 +101,8 @@ async def create_approval_request(
     collab = await db.get(Collaboration, payload.collaboration_id)
     if collab is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
-    if user.role == UserRole.advisor and collab.owner_id != user.id:
+    owner_ids = await scoped_owner_ids(user, db)
+    if owner_ids is not None and collab.owner_id not in owner_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
 
     year = datetime.now(timezone.utc).year

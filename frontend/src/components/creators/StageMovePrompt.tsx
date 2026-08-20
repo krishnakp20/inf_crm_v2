@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import type { CollabStage } from "../../lib/types";
+import type { CollabStage, ContentType, DealType } from "../../lib/types";
 
 export function StageMovePrompt({
   collabId,
@@ -21,6 +21,8 @@ export function StageMovePrompt({
   const [creatorReply, setCreatorReply] = useState("");
   const [commercialQuoted, setCommercialQuoted] = useState("");
   const [commercialAmount, setCommercialAmount] = useState("");
+  const [dealType, setDealType] = useState<DealType | "">("");
+  const [contentType, setContentType] = useState<ContentType | "">("");
   const [liveAttributionIds, setLiveAttributionIds] = useState<number[]>([]);
   const [creatorPhone, setCreatorPhone] = useState("");
   const [creatorEmail, setCreatorEmail] = useState("");
@@ -43,6 +45,14 @@ export function StageMovePrompt({
       setError("Commercial locked amount is required.");
       return;
     }
+    if (missingFields.includes("deal_type") && !dealType) {
+      setError("Select a deal type.");
+      return;
+    }
+    if (missingFields.includes("content_type") && !contentType) {
+      setError("Select a content type.");
+      return;
+    }
     if (missingFields.includes("live_attribution") && liveAttributionIds.length === 0) {
       setError("Select every product featured in this video.");
       return;
@@ -62,6 +72,8 @@ export function StageMovePrompt({
         creator_reply: missingFields.includes("creator_reply") ? creatorReply : undefined,
         commercial_quoted: missingFields.includes("commercial_quoted") ? Number(commercialQuoted) : undefined,
         commercial_amount: missingFields.includes("commercial_amount") ? Number(commercialAmount) : undefined,
+        deal_type: missingFields.includes("deal_type") ? dealType : undefined,
+        content_type: missingFields.includes("content_type") ? contentType : undefined,
         live_attribution_product_ids: missingFields.includes("live_attribution") ? liveAttributionIds : undefined,
         creator_phone: missingFields.includes("creator_phone") ? creatorPhone : undefined,
         creator_email: missingFields.includes("creator_email") ? creatorEmail : undefined,
@@ -144,6 +156,34 @@ export function StageMovePrompt({
                 placeholder="₹13,000"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
+            </div>
+          )}
+          {missingFields.includes("deal_type") && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Deal type · Required</label>
+              <select
+                value={dealType}
+                onChange={(e) => setDealType(e.target.value as DealType)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select...</option>
+                <option value="paid">Paid</option>
+                <option value="barter">Barter</option>
+              </select>
+            </div>
+          )}
+          {missingFields.includes("content_type") && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Content type · Required</label>
+              <select
+                value={contentType}
+                onChange={(e) => setContentType(e.target.value as ContentType)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select...</option>
+                <option value="integrated">Integrated</option>
+                <option value="dedicated">Dedicated</option>
+              </select>
             </div>
           )}
           {missingFields.includes("live_attribution") && (

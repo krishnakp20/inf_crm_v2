@@ -11,7 +11,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import get_current_user, require_admin, scoped_owner_id
+from app.core.deps import (
+    get_current_user,
+    owner_scope_filter,
+    require_admin,
+    require_creator_workspace_access,
+    scoped_owner_ids,
+)
 from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
@@ -49,7 +55,9 @@ from app.services.collab_pipeline import COLLAB_STAGE_INDEX, COLLAB_STAGE_LABELS
 from app.services.creator_lifecycle import get_creator_lifecycle
 from app.services.pipeline import STAGE_INDEX, STAGE_LABELS, STAGE_ORDER
 
-router = APIRouter(prefix="/creators", tags=["creators"])
+router = APIRouter(
+    prefix="/creators", tags=["creators"], dependencies=[Depends(require_creator_workspace_access)]
+)
 
 UPLOAD_ROOT = Path(settings.upload_dir)
 
@@ -58,8 +66,10 @@ async def _get_creator_or_404(creator_id: int, db: AsyncSession, user: User | No
     creator = await db.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
-    if user is not None and user.role == UserRole.advisor and creator.owner_id != user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
+    if user is not None:
+        owner_ids = await scoped_owner_ids(user, db)
+        if owner_ids is not None and creator.owner_id not in owner_ids:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
     return creator
 
 
@@ -84,8 +94,7 @@ async def board_stats(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> BoardStats:
-    if user.role == UserRole.advisor:
-        owner_id = user.id
+    owner_ids = await owner_scope_filter(user, db, owner_id)
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
@@ -108,13 +117,13 @@ async def board_stats(
         FollowUp.status == FollowUpStatus.done, FollowUp.completed_at >= week_start
     )
 
-    if owner_id is not None:
-        active_creators_stmt = active_creators_stmt.where(Creator.owner_id == owner_id)
-        overdue_actions_stmt = overdue_actions_stmt.where(FollowUp.assigned_to == owner_id)
-        due_today_stmt = due_today_stmt.where(FollowUp.assigned_to == owner_id)
-        completed_today_stmt = completed_today_stmt.where(FollowUp.assigned_to == owner_id)
-        due_this_week_stmt = due_this_week_stmt.where(FollowUp.assigned_to == owner_id)
-        completed_this_week_stmt = completed_this_week_stmt.where(FollowUp.assigned_to == owner_id)
+    if owner_ids is not None:
+        active_creators_stmt = active_creators_stmt.where(Creator.owner_id.in_(owner_ids))
+        overdue_actions_stmt = overdue_actions_stmt.where(FollowUp.assigned_to.in_(owner_ids))
+        due_today_stmt = due_today_stmt.where(FollowUp.assigned_to.in_(owner_ids))
+        completed_today_stmt = completed_today_stmt.where(FollowUp.assigned_to.in_(owner_ids))
+        due_this_week_stmt = due_this_week_stmt.where(FollowUp.assigned_to.in_(owner_ids))
+        completed_this_week_stmt = completed_this_week_stmt.where(FollowUp.assigned_to.in_(owner_ids))
 
     active_creators = (await db.execute(active_creators_stmt)).scalar_one()
     overdue_actions = (await db.execute(overdue_actions_stmt)).scalar_one()
@@ -145,14 +154,13 @@ async def list_creators(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CreatorListResponse:
-    if user.role == UserRole.advisor:
-        owner_id = user.id
+    owner_ids = await owner_scope_filter(user, db, owner_id)
 
     # Archived creators can't be picked for a new collaboration — they'd need
     # to be unarchived first, which only an admin can see to do.
     stmt = select(Creator).where(Creator.is_archived.is_(False))
-    if owner_id is not None:
-        stmt = stmt.where(Creator.owner_id == owner_id)
+    if owner_ids is not None:
+        stmt = stmt.where(Creator.owner_id.in_(owner_ids))
     if stage is not None:
         stmt = stmt.where(Creator.current_stage == stage)
     if category is not None:
@@ -178,6 +186,7 @@ SORTABLE_FIELDS = {
     "comments_count",
     "created_at",
     "current_stage",
+    "archived_at",
 }
 
 
@@ -195,14 +204,14 @@ async def list_creators_table(
 ) -> CreatorTableResponse:
     if sort_by not in SORTABLE_FIELDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
-    if user.role == UserRole.advisor:
-        owner_id = user.id
+    owner_ids = await owner_scope_filter(user, db, owner_id)
+    if user.role != UserRole.admin:
         # Archived leads are admin-only, regardless of what's requested.
         is_archived = False
 
     stmt = select(Creator).where(Creator.is_archived == is_archived)
-    if owner_id is not None:
-        stmt = stmt.where(Creator.owner_id == owner_id)
+    if owner_ids is not None:
+        stmt = stmt.where(Creator.owner_id.in_(owner_ids))
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
@@ -457,7 +466,10 @@ async def create_creator(
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Creator already exists")
 
-    owner_id = user.id if user.role == UserRole.advisor else (payload.owner_id or user.id)
+    owner_ids = await scoped_owner_ids(user, db)
+    if owner_ids is not None and payload.owner_id is not None and payload.owner_id not in owner_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid owner within your team.")
+    owner_id = payload.owner_id or user.id
     creator = Creator(
         name=payload.name,
         instagram_handle=payload.instagram_handle,
@@ -488,9 +500,15 @@ async def update_creator(
 ) -> Creator:
     creator = await _get_creator_or_404(creator_id, db, user)
     update_data = payload.model_dump(exclude_unset=True)
-    if user.role == UserRole.advisor:
+    if user.role not in (UserRole.admin, UserRole.supervisor):
         update_data.pop("owner_id", None)
     new_owner_id = update_data.get("owner_id")
+    if new_owner_id is not None and user.role == UserRole.supervisor:
+        owner_ids = await scoped_owner_ids(user, db)
+        if new_owner_id not in owner_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid owner within your team."
+            )
     owner_changed = new_owner_id is not None and new_owner_id != creator.owner_id
     archive_reason = update_data.pop("archive_reason", None)
     was_archived = creator.is_archived
@@ -524,6 +542,12 @@ async def transfer_ownership(
     new_owner = await db.get(User, payload.new_owner_id)
     if new_owner is None or new_owner.role != UserRole.advisor:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid advisor to transfer to.")
+    if user.role == UserRole.supervisor:
+        owner_ids = await scoped_owner_ids(user, db)
+        if new_owner.id not in owner_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid advisor to transfer to."
+            )
     if new_owner.id == creator.owner_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Creator is already owned by this user.")
 

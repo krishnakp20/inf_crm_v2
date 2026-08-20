@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { initials } from "../../lib/format";
-import type { Collaboration, CollabStage, PaymentStatus, Product } from "../../lib/types";
+import type { Collaboration, CollabStage, ContentType, DealType, PaymentStatus, Product } from "../../lib/types";
 import { RequestApprovalModal } from "./RequestApprovalModal";
 
 const STAGE_LABEL: Record<CollabStage, string> = Object.fromEntries(
@@ -26,6 +26,8 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   creator_reply: "Creator reply",
   commercial_quoted: "Commercial quoted",
   commercial_amount: "Commercial locked amount",
+  deal_type: "Deal type (Paid/Barter)",
+  content_type: "Content type (Integrated/Dedicated)",
   live_attribution: "Live video attribution",
   creator_phone: "Phone / WhatsApp",
   creator_email: "Email address",
@@ -54,8 +56,12 @@ export function CollabDetailPanel({
   const [counterQuoteAgent, setCounterQuoteAgent] = useState(collab.counter_quote_agent?.toString() ?? "");
   const [counterQuoteCreator, setCounterQuoteCreator] = useState(collab.counter_quote_creator?.toString() ?? "");
   const [commercialAmount, setCommercialAmount] = useState(collab.commercial_amount?.toString() ?? "");
+  const [dealType, setDealType] = useState<DealType | "">(collab.deal_type ?? "");
+  const [contentType, setContentType] = useState<ContentType | "">(collab.content_type ?? "");
   const [trackingLink, setTrackingLink] = useState(collab.tracking_link ?? "");
   const [orderId, setOrderId] = useState(collab.order_id ?? "");
+  const [pocCode, setPocCode] = useState(collab.poc_code ?? "");
+  const [videoLink, setVideoLink] = useState(collab.video_link ?? "");
   const [additionalProductIds, setAdditionalProductIds] = useState<number[]>(
     collab.products.filter((p) => !p.is_primary).map((p) => p.product_id)
   );
@@ -99,8 +105,12 @@ export function CollabDetailPanel({
         counter_quote_agent: counterQuoteAgent ? Number(counterQuoteAgent) : null,
         counter_quote_creator: counterQuoteCreator ? Number(counterQuoteCreator) : null,
         commercial_amount: commercialAmount ? Number(commercialAmount) : null,
+        deal_type: dealType || null,
+        content_type: contentType || null,
         tracking_link: trackingLink || null,
         order_id: orderId || null,
+        poc_code: pocCode || null,
+        video_link: videoLink || null,
         payment_status: paymentStatus,
         note: note || null,
         additional_product_ids: additionalProductIds,
@@ -319,8 +329,34 @@ export function CollabDetailPanel({
               min={0}
               value={commercialAmount}
               onChange={(e) => setCommercialAmount(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+              className="mb-2 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-[11px] text-gray-500">Deal type</label>
+                <select
+                  value={dealType}
+                  onChange={(e) => setDealType(e.target.value as DealType)}
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">Select...</option>
+                  <option value="paid">Paid</option>
+                  <option value="barter">Barter</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-gray-500">Content type</label>
+                <select
+                  value={contentType}
+                  onChange={(e) => setContentType(e.target.value as ContentType)}
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">Select...</option>
+                  <option value="integrated">Integrated</option>
+                  <option value="dedicated">Dedicated</option>
+                </select>
+              </div>
+            </div>
           </section>
 
           <section className="mb-5 rounded-card border border-[#e7e5e4] p-3">
@@ -377,6 +413,27 @@ export function CollabDetailPanel({
                     {p.name}
                   </label>
                 ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-[11px] text-gray-500">POC code</label>
+                <input
+                  value={pocCode}
+                  onChange={(e) => setPocCode(e.target.value)}
+                  placeholder="AN_Creator_1006"
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-gray-500">Video / Reel link</label>
+                <input
+                  type="url"
+                  value={videoLink}
+                  onChange={(e) => setVideoLink(e.target.value)}
+                  placeholder="https://instagram.com/reel/..."
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                />
+              </div>
             </div>
           </section>
 

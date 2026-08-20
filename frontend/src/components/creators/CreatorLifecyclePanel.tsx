@@ -14,9 +14,50 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useSort } from "../../hooks/useSort";
 import { api } from "../../lib/api";
-import { compactNumber, initials } from "../../lib/format";
-import type { CreatorDetail, CreatorLifecycle, User } from "../../lib/types";
+import { downloadCsv } from "../../lib/csv";
+import { compactNumber, formatCurrency, initials } from "../../lib/format";
+import { SortableHeader } from "../shared/SortableHeader";
+import type { CommercialHistoryRow, CreatorDetail, CreatorLifecycle, User, VideoHistoryRow } from "../../lib/types";
+
+function getVideoHistoryValue(v: VideoHistoryRow, field: string): unknown {
+  switch (field) {
+    case "product_name":
+      return v.product_name;
+    case "live_date":
+      return v.live_date;
+    case "cost":
+      return v.cost;
+    case "views":
+      return v.views;
+    case "comments":
+      return v.comments;
+    case "status":
+      return v.status;
+    default:
+      return null;
+  }
+}
+
+function getCommercialHistoryValue(r: CommercialHistoryRow, field: string): unknown {
+  switch (field) {
+    case "product_name":
+      return r.product_name;
+    case "creator_quote":
+      return r.creator_quote;
+    case "agent_counter":
+      return r.agent_counter;
+    case "creator_counter":
+      return r.creator_counter;
+    case "locked":
+      return r.locked;
+    case "user_name":
+      return r.user_name;
+    default:
+      return null;
+  }
+}
 
 type Tab = "overview" | "video" | "commercial";
 
@@ -35,29 +76,8 @@ const STATUS_OPTIONS = [
   { label: "Low", value: "none" },
 ];
 
-function formatCurrency(amount: number | null): string {
-  if (amount == null) return "—";
-  return `₹${Math.round(amount).toLocaleString("en-IN")}`;
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function csvEscape(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
-}
-
-function downloadCsv(filename: string, header: string[], rows: string[][]) {
-  const lines = [header.join(","), ...rows.map((r) => r.map(csvEscape).join(","))];
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 export function CreatorLifecyclePanel({
@@ -71,6 +91,8 @@ export function CreatorLifecyclePanel({
 }) {
   const { user } = useAuth();
   const [data, setData] = useState<CreatorLifecycle | null>(null);
+  const videoHistorySort = useSort(data?.video_history ?? [], getVideoHistoryValue);
+  const commercialHistorySort = useSort(data?.commercial_history.rows ?? [], getCommercialHistoryValue);
   const [detail, setDetail] = useState<CreatorDetail | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
@@ -102,7 +124,12 @@ export function CreatorLifecyclePanel({
     loadLifecycle();
     loadDetail();
     setTransferTargetId("");
-    api.get<User[]>("/users").then((res) => setAdvisors(res.data.filter((u) => u.role === "advisor" && u.is_active)));
+    api.get<User[]>("/users").then((res) => {
+      const activeAdvisors = res.data.filter((u) => u.role === "advisor" && u.is_active);
+      setAdvisors(
+        user?.role === "supervisor" ? activeAdvisors.filter((a) => a.supervisor_id === user.id) : activeAdvisors
+      );
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creatorId]);
 
@@ -157,7 +184,11 @@ export function CreatorLifecyclePanel({
   }
 
   const otherAdvisors = advisors.filter((a) => a.id !== detail?.creator.owner_id);
-  const isOwner = !!user && user.role === "advisor" && detail?.creator.owner_id === user.id;
+  const isOwner =
+    !!user &&
+    !!detail &&
+    ((user.role === "advisor" && detail.creator.owner_id === user.id) ||
+      (user.role === "supervisor" && advisors.some((a) => a.id === detail.creator.owner_id)));
   const ownershipSince = data?.ownership_history.find((o) => o.status === "current")?.since_label;
 
   async function transferOwnership() {
@@ -468,16 +499,16 @@ export function CreatorLifecyclePanel({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e7e5e4] text-left text-[10px] uppercase text-gray-400">
-                    <th className="py-2">Video</th>
-                    <th className="py-2">Live date</th>
-                    <th className="py-2">Cost</th>
-                    <th className="py-2">Views</th>
-                    <th className="py-2">Comments</th>
-                    <th className="py-2">Status</th>
+                    <SortableHeader label="Video" field="product_name" activeField={videoHistorySort.field} direction={videoHistorySort.direction} onSort={videoHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Live date" field="live_date" activeField={videoHistorySort.field} direction={videoHistorySort.direction} onSort={videoHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Cost" field="cost" activeField={videoHistorySort.field} direction={videoHistorySort.direction} onSort={videoHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Views" field="views" activeField={videoHistorySort.field} direction={videoHistorySort.direction} onSort={videoHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Comments" field="comments" activeField={videoHistorySort.field} direction={videoHistorySort.direction} onSort={videoHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Status" field="status" activeField={videoHistorySort.field} direction={videoHistorySort.direction} onSort={videoHistorySort.toggle} className="py-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {data.video_history.map((v, i) => (
+                  {videoHistorySort.sorted.map((v, i) => (
                     <tr key={i} className="border-b border-gray-100">
                       <td className="py-2.5 font-medium text-ink">{v.product_name}</td>
                       <td className="py-2.5 text-gray-600">{formatDate(v.live_date)}</td>
@@ -537,16 +568,16 @@ export function CreatorLifecyclePanel({
               <table className="mt-4 w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e7e5e4] text-left text-[10px] uppercase text-gray-400">
-                    <th className="py-2">Collab / Campaign</th>
-                    <th className="py-2">Creator quote</th>
-                    <th className="py-2">Agent counter</th>
-                    <th className="py-2">Creator counter</th>
-                    <th className="py-2">Locked</th>
-                    <th className="py-2">User / Date</th>
+                    <SortableHeader label="Collab / Campaign" field="product_name" activeField={commercialHistorySort.field} direction={commercialHistorySort.direction} onSort={commercialHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Creator quote" field="creator_quote" activeField={commercialHistorySort.field} direction={commercialHistorySort.direction} onSort={commercialHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Agent counter" field="agent_counter" activeField={commercialHistorySort.field} direction={commercialHistorySort.direction} onSort={commercialHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Creator counter" field="creator_counter" activeField={commercialHistorySort.field} direction={commercialHistorySort.direction} onSort={commercialHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="Locked" field="locked" activeField={commercialHistorySort.field} direction={commercialHistorySort.direction} onSort={commercialHistorySort.toggle} className="py-2" />
+                    <SortableHeader label="User / Date" field="user_name" activeField={commercialHistorySort.field} direction={commercialHistorySort.direction} onSort={commercialHistorySort.toggle} className="py-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {data.commercial_history.rows.map((r, i) => (
+                  {commercialHistorySort.sorted.map((r, i) => (
                     <tr key={i} className="border-b border-gray-100">
                       <td className="py-2.5">
                         <div className="font-medium text-ink">{r.product_name}</div>

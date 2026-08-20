@@ -8,7 +8,7 @@ from app.core.security import hash_password, verify_password
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.user import ChangePasswordRequest, UserCreate, UserLimits, UserOut
+from app.schemas.user import ChangePasswordRequest, UserCreate, UserLimits, UserOut, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -18,6 +18,12 @@ async def _active_advisor_count(db: AsyncSession) -> int:
         select(func.count()).select_from(User).where(User.role == UserRole.advisor, User.is_active.is_(True))
     )
     return result.scalar_one()
+
+
+async def _validate_supervisor_id(db: AsyncSession, supervisor_id: int) -> None:
+    supervisor = await db.get(User, supervisor_id)
+    if supervisor is None or supervisor.role != UserRole.supervisor:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid supervisor.")
 
 
 @router.get("/limits", response_model=UserLimits)
@@ -55,11 +61,16 @@ async def create_user(
             detail=f"Maximum of {settings.max_active_advisors} active advisors reached. Deactivate one first.",
         )
 
+    supervisor_id = payload.supervisor_id if payload.role == UserRole.advisor else None
+    if supervisor_id is not None:
+        await _validate_supervisor_id(db, supervisor_id)
+
     user = User(
         name=payload.name,
         email=payload.email,
         password_hash=hash_password(payload.password),
         role=payload.role,
+        supervisor_id=supervisor_id,
         must_change_password=True,
     )
     db.add(user)
@@ -68,19 +79,42 @@ async def create_user(
     return user
 
 
-@router.post("/{user_id}/deactivate", response_model=UserOut)
-async def deactivate_user(
+@router.patch("/{user_id}", response_model=UserOut)
+async def update_user(
     user_id: int,
+    payload: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> User:
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if target.role != UserRole.advisor:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only advisor accounts can be deactivated.")
-    if target.id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You can't deactivate your own account.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Only Influencer Agents can have a supervisor."
+        )
+    if payload.supervisor_id is not None:
+        if payload.supervisor_id == target.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A user can't supervise themselves.")
+        await _validate_supervisor_id(db, payload.supervisor_id)
+
+    target.supervisor_id = payload.supervisor_id
+    await db.commit()
+    await db.refresh(target)
+    return target
+
+
+@router.post("/{user_id}/deactivate", response_model=UserOut)
+async def deactivate_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> User:
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if target.role == UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Admin accounts can't be deactivated.")
 
     target.is_active = False
     await db.commit()
@@ -97,10 +131,14 @@ async def activate_user(
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if target.role != UserRole.advisor:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only advisor accounts can be reactivated.")
+    if target.role == UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Admin accounts are always active.")
 
-    if not target.is_active and await _active_advisor_count(db) >= settings.max_active_advisors:
+    if (
+        target.role == UserRole.advisor
+        and not target.is_active
+        and await _active_advisor_count(db) >= settings.max_active_advisors
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Maximum of {settings.max_active_advisors} active advisors reached. Deactivate one first.",

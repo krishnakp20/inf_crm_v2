@@ -1,6 +1,8 @@
 import { Eye } from "lucide-react";
 import { useState } from "react";
 import { compactNumber, initials, maskPhone } from "../../lib/format";
+import type { SortDirection } from "../../lib/sort";
+import { SortableHeader } from "../shared/SortableHeader";
 import type { CreatorStatus, CreatorTableRow } from "../../lib/types";
 
 const STATUS_STYLES: Record<CreatorStatus, { label: string; className: string }> = {
@@ -31,32 +33,7 @@ type SortField =
   | "created_at"
   | "current_stage";
 
-function SortableHeader({
-  label,
-  field,
-  sortBy,
-  onSort,
-}: {
-  label: string;
-  field: SortField;
-  sortBy: string;
-  onSort: (field: SortField) => void;
-}) {
-  const active = sortBy === field;
-  return (
-    <th className="py-2.5">
-      <button
-        onClick={() => onSort(field)}
-        className={`flex items-center gap-1 text-[7px] font-extrabold uppercase tracking-wide ${
-          active ? "text-brand-600" : "text-[#918d97]"
-        }`}
-      >
-        {label}
-        <span>{active ? "↑" : "↕"}</span>
-      </button>
-    </th>
-  );
-}
+const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
 export function CreatorTable({
   creators,
@@ -65,6 +42,7 @@ export function CreatorTable({
   limit,
   offset,
   sortBy,
+  sortDir,
   onSortChange,
   onPageChange,
   onView,
@@ -75,6 +53,7 @@ export function CreatorTable({
   limit: number;
   offset: number;
   sortBy: string;
+  sortDir: SortDirection;
   onSortChange: (field: SortField) => void;
   onPageChange: (offset: number) => void;
   onView: (creatorId: number) => void;
@@ -121,17 +100,17 @@ export function CreatorTable({
                   className="h-3.5 w-3.5 rounded"
                 />
               </th>
-              <SortableHeader label="Creator" field="name" sortBy={sortBy} onSort={onSortChange} />
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Contact</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Category</th>
-              <SortableHeader label="Followers" field="followers_count" sortBy={sortBy} onSort={onSortChange} />
-              <SortableHeader label="Added on" field="created_at" sortBy={sortBy} onSort={onSortChange} />
-              <SortableHeader label="Videos" field="videos_delivered" sortBy={sortBy} onSort={onSortChange} />
-              <SortableHeader label="Last cost" field="last_cost" sortBy={sortBy} onSort={onSortChange} />
-              <SortableHeader label="Last video went live" field="last_video_live_at" sortBy={sortBy} onSort={onSortChange} />
-              <SortableHeader label="Comments" field="comments_count" sortBy={sortBy} onSort={onSortChange} />
-              <SortableHeader label="Current stage" field="current_stage" sortBy={sortBy} onSort={onSortChange} />
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Status</th>
+              <SortableHeader label="Creator" field="name" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <th className={TH}>Contact</th>
+              <th className={TH}>Category</th>
+              <SortableHeader label="Followers" field="followers_count" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <SortableHeader label="Added on" field="created_at" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <SortableHeader label="Videos" field="videos_delivered" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <SortableHeader label="Last cost" field="last_cost" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <SortableHeader label="Last video went live" field="last_video_live_at" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <SortableHeader label="Comments" field="comments_count" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <SortableHeader label="Current stage" field="current_stage" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
+              <th className={TH}>Status</th>
               <th className="w-10 py-2.5 pr-4"></th>
             </tr>
           </thead>

@@ -4,12 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, scoped_owner_id
+from app.core.deps import (
+    get_current_user,
+    owner_scope_filter,
+    require_creator_workspace_access,
+    scoped_owner_ids,
+)
 from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
-from app.db.models.enums import CollabStage, UserRole
+from app.db.models.enums import CollabStage
 from app.db.models.product import Product
 from app.db.models.user import User
 from app.db.session import get_db
@@ -26,10 +31,13 @@ from app.services.collab_pipeline import (
     COLLAB_STAGE_INDEX,
     STAGE_REQUIRED_FIELDS,
     STARTABLE_STAGES,
+    apply_stage_transition,
     is_video_live,
 )
 
-router = APIRouter(prefix="/collaborations", tags=["collaborations"])
+router = APIRouter(
+    prefix="/collaborations", tags=["collaborations"], dependencies=[Depends(require_creator_workspace_access)]
+)
 
 
 def _is_overdue(collab: Collaboration) -> bool:
@@ -44,8 +52,10 @@ async def _get_collaboration_or_404(collab_id: int, db: AsyncSession, user: User
     collab = await db.get(Collaboration, collab_id)
     if collab is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
-    if user is not None and user.role == UserRole.advisor and collab.owner_id != user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
+    if user is not None:
+        owner_ids = await scoped_owner_ids(user, db)
+        if owner_ids is not None and collab.owner_id not in owner_ids:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
     return collab
 
 
@@ -131,13 +141,18 @@ def _to_out(
         counter_quote_creator=(
             float(collab.counter_quote_creator) if collab.counter_quote_creator is not None else None
         ),
+        deal_type=collab.deal_type,
+        content_type=collab.content_type,
         tracking_link=collab.tracking_link,
         order_id=collab.order_id,
+        poc_code=collab.poc_code,
+        video_link=collab.video_link,
         is_overdue=_is_overdue(collab),
         creator_total_collabs=total,
         creator_videos_live=live,
         created_at=collab.created_at,
         last_activity_at=collab.last_activity_at,
+        ownership_revoked_at=collab.ownership_revoked_at,
     )
 
 
@@ -153,16 +168,15 @@ async def list_collaborations(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[CollaborationOut]:
-    if user.role == UserRole.advisor:
-        owner_id = user.id
+    owner_ids = await owner_scope_filter(user, db, owner_id)
 
     stmt = (
         select(Collaboration, Creator, User)
         .join(Creator, Creator.id == Collaboration.creator_id)
         .join(User, User.id == Collaboration.owner_id)
     )
-    if owner_id is not None:
-        stmt = stmt.where(Collaboration.owner_id == owner_id)
+    if owner_ids is not None:
+        stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
     if product_id is not None:
         stmt = stmt.where(
             exists(
@@ -200,12 +214,11 @@ async def collab_board_stats(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CollabBoardStats:
-    if user.role == UserRole.advisor:
-        owner_id = user.id
+    owner_ids = await owner_scope_filter(user, db, owner_id)
 
     stmt = select(Collaboration)
-    if owner_id is not None:
-        stmt = stmt.where(Collaboration.owner_id == owner_id)
+    if owner_ids is not None:
+        stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
     result = await db.execute(stmt)
     collabs = list(result.scalars().all())
 
@@ -241,6 +254,10 @@ async def create_collaboration(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Commercial quoted is required for this stage.")
     if "commercial_amount" in required and payload.commercial_amount is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Commercial locked amount is required for this stage.")
+    if "deal_type" in required and payload.deal_type is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Deal type (Paid/Barter) is required for this stage.")
+    if "content_type" in required and payload.content_type is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Content type (Integrated/Dedicated) is required for this stage.")
     if "live_attribution" in required and not payload.live_attribution_product_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -264,7 +281,10 @@ async def create_collaboration(
             detail="Live attribution can only include products already linked to this collaboration.",
         )
 
-    owner_id = user.id if user.role == UserRole.advisor else (payload.owner_id or user.id)
+    owner_ids = await scoped_owner_ids(user, db)
+    if owner_ids is not None and payload.owner_id is not None and payload.owner_id not in owner_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid owner within your team.")
+    owner_id = payload.owner_id or user.id
     owner = await db.get(User, owner_id)
     if owner is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Owner not found")
@@ -285,6 +305,8 @@ async def create_collaboration(
         counter_quote_agent=payload.counter_quote_agent,
         counter_quote_creator=payload.counter_quote_creator,
         commercial_amount=payload.commercial_amount,
+        deal_type=payload.deal_type,
+        content_type=payload.content_type,
         tracking_link=payload.tracking_link,
         order_id=payload.order_id,
     )
@@ -399,7 +421,6 @@ async def transition_collab_stage(
 ) -> CollaborationOut:
     collab = await _get_collaboration_or_404(collab_id, db, user)
     creator = await db.get(Creator, collab.creator_id)
-    was_dead = collab.stage == CollabStage.dead_leads
 
     is_forward_move = COLLAB_STAGE_INDEX[payload.to_stage] > COLLAB_STAGE_INDEX[collab.stage]
     if is_forward_move:
@@ -426,6 +447,10 @@ async def transition_collab_stage(
             missing.append("commercial_quoted")
         if "commercial_amount" in required and payload.commercial_amount is None and collab.commercial_amount is None:
             missing.append("commercial_amount")
+        if "deal_type" in required and payload.deal_type is None and collab.deal_type is None:
+            missing.append("deal_type")
+        if "content_type" in required and payload.content_type is None and collab.content_type is None:
+            missing.append("content_type")
         if "live_attribution" in required:
             has_existing_attribution = (
                 await db.execute(
@@ -461,6 +486,10 @@ async def transition_collab_stage(
             collab.counter_quote_creator = payload.counter_quote_creator
         if payload.commercial_amount is not None:
             collab.commercial_amount = payload.commercial_amount
+        if payload.deal_type is not None:
+            collab.deal_type = payload.deal_type
+        if payload.content_type is not None:
+            collab.content_type = payload.content_type
         if payload.live_attribution_product_ids is not None:
             links = (
                 (
@@ -481,35 +510,7 @@ async def transition_collab_stage(
             for link in links:
                 link.is_live_attributed = link.product_id in payload.live_attribution_product_ids
 
-    db.add(
-        CollabStageEvent(
-            collaboration_id=collab.id, from_stage=collab.stage, to_stage=payload.to_stage,
-            actor_id=user.id, note=payload.note,
-        )
-    )
-    collab.stage = payload.to_stage
-    collab.last_activity_at = datetime.now(timezone.utc)
-
-    if payload.to_stage == CollabStage.dead_leads and not was_dead:
-        # Archive the creator once every one of their collaborations is dead —
-        # a creator with another still-active collaboration stays visible.
-        other_active = (
-            await db.execute(
-                select(Collaboration.id).where(
-                    Collaboration.creator_id == collab.creator_id,
-                    Collaboration.id != collab.id,
-                    Collaboration.stage != CollabStage.dead_leads,
-                )
-            )
-        ).first()
-        if other_active is None:
-            creator.is_archived = True
-            creator.archived_at = datetime.now(timezone.utc)
-            creator.archive_reason = "All collaborations moved to Dead Leads"
-    elif was_dead and payload.to_stage != CollabStage.dead_leads:
-        creator.is_archived = False
-        creator.archived_at = None
-        creator.archive_reason = None
+    await apply_stage_transition(db, collab, creator, payload.to_stage, user.id, payload.note, bump_activity=True)
 
     await db.commit()
     await db.refresh(collab)

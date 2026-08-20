@@ -1,6 +1,6 @@
 import { ArrowUpDown, Download, Plus, Search, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { AddCreatorModal } from "../components/creators/AddCreatorModal";
 import { ArchivedLeadsTable } from "../components/creators/ArchivedLeadsTable";
 import { CreatorLifecyclePanel } from "../components/creators/CreatorLifecyclePanel";
@@ -60,7 +60,14 @@ export default function Database() {
   }, []);
 
   const owners = useMemo(() => Object.fromEntries(users.map((u) => [u.id, u.name])), [users]);
-  const advisors = useMemo(() => users.filter((u) => u.role === "advisor" && u.is_active), [users]);
+  const advisors = useMemo(() => {
+    const active = users.filter((u) => u.role === "advisor" && u.is_active);
+    return user?.role === "supervisor" ? active.filter((u) => u.supervisor_id === user.id) : active;
+  }, [users, user]);
+  const filterableUsers = useMemo(
+    () => (user?.role === "supervisor" ? users.filter((u) => u.id === user.id || u.supervisor_id === user.id) : users),
+    [users, user]
+  );
 
   function loadCreators() {
     const params: Record<string, string | number | boolean> = {
@@ -100,9 +107,23 @@ export default function Database() {
   useEffect(loadCreators, [ownerId, activeTab, sortBy, sortDir, search, offset]);
   useEffect(loadTabCounts, [ownerId, search]);
 
+  if (user && (user.role === "marketer" || user.role === "editor")) {
+    return <Navigate to="/" replace />;
+  }
+
   function refresh() {
     loadCreators();
     loadTabCounts();
+  }
+
+  function handleSortChange(clickedField: string) {
+    setOffset(0);
+    if (sortBy === clickedField) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(clickedField);
+      setSortDir("asc");
+    }
   }
 
   async function handleBulkUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -287,7 +308,7 @@ export default function Database() {
         <AddCreatorModal
           users={advisors}
           currentUserId={user.id}
-          isAdmin={user.role === "admin"}
+          canAssignOwner={user.role === "admin" || user.role === "supervisor"}
           onClose={() => setShowAddCreator(false)}
           onCreated={refresh}
         />
@@ -318,7 +339,7 @@ export default function Database() {
             </button>
           )}
         </div>
-        {user?.role === "admin" && (
+        {(user?.role === "admin" || user?.role === "supervisor") && (
           <label className="flex items-center gap-2">
             <span className="text-[8px] text-[#918d97]">Filter by user</span>
             <select
@@ -330,7 +351,7 @@ export default function Database() {
               className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
             >
               <option value="">All users</option>
-              {users.map((u) => (
+              {filterableUsers.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
                 </option>
@@ -391,6 +412,9 @@ export default function Database() {
           total={total}
           limit={LIMIT}
           offset={offset}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortChange={handleSortChange}
           onPageChange={setOffset}
           onView={setDetailCreatorId}
           onAssigned={refresh}
@@ -403,10 +427,8 @@ export default function Database() {
           limit={LIMIT}
           offset={offset}
           sortBy={sortBy}
-          onSortChange={(field) => {
-            setOffset(0);
-            setSortBy(field);
-          }}
+          sortDir={sortDir}
+          onSortChange={handleSortChange}
           onPageChange={setOffset}
           onView={setDetailCreatorId}
         />

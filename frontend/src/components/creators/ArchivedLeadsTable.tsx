@@ -2,7 +2,11 @@ import { Eye, Users } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { initials } from "../../lib/format";
+import type { SortDirection } from "../../lib/sort";
+import { SortableHeader } from "../shared/SortableHeader";
 import type { CreatorTableRow, User } from "../../lib/types";
+
+const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
 const AVATAR_PALETTE = [
   { bg: "bg-[#fff0ed]", text: "text-[#ca4d43]" },
@@ -24,6 +28,9 @@ export function ArchivedLeadsTable({
   total,
   limit,
   offset,
+  sortBy,
+  sortDir,
+  onSortChange,
   onPageChange,
   onView,
   onAssigned,
@@ -34,6 +41,9 @@ export function ArchivedLeadsTable({
   total: number;
   limit: number;
   offset: number;
+  sortBy: string;
+  sortDir: SortDirection;
+  onSortChange: (field: string) => void;
   onPageChange: (offset: number) => void;
   onView: (creatorId: number) => void;
   onAssigned: () => void;
@@ -131,13 +141,13 @@ export function ArchivedLeadsTable({
                   className="h-3.5 w-3.5 rounded"
                 />
               </th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Creator</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Previous user</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Archived on</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Last stage</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Videos</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Last cost</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Reason</th>
+              <SortableHeader label="Creator" field="name" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <th className={TH}>Previous user</th>
+              <SortableHeader label="Archived on" field="archived_at" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Last stage" field="current_stage" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Videos" field="videos_delivered" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Last cost" field="last_cost" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <th className={TH}>Reason</th>
               <th className="w-10 py-2.5 pr-4"></th>
             </tr>
           </thead>

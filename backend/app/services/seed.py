@@ -106,7 +106,32 @@ async def seed() -> None:
             db.add(advisor)
             advisors.append(advisor)
 
+        supervisor = User(
+            name="Kabir",
+            email="kabir@sotrue.com",
+            password_hash=hash_password("supervisor123"),
+            role=UserRole.supervisor,
+        )
+        marketer = User(
+            name="Ananya",
+            email="ananya@sotrue.com",
+            password_hash=hash_password("marketer123"),
+            role=UserRole.marketer,
+        )
+        editor = User(
+            name="Devansh",
+            email="devansh@sotrue.com",
+            password_hash=hash_password("editor123"),
+            role=UserRole.editor,
+        )
+        db.add_all([supervisor, marketer, editor])
+
         await db.flush()
+
+        # Give the demo Supervisor a team of 2 out of the 4 demo advisors, so
+        # "Team" scoping has something real to show; the other 2 stay unassigned.
+        for advisor in advisors[:2]:
+            advisor.supervisor_id = supervisor.id
 
         now = datetime.now(timezone.utc)
 
@@ -384,8 +409,9 @@ async def seed() -> None:
 
         await db.commit()
         print(
-            f"Seeded: 1 admin, {len(advisors)} advisors, {len(creators)} creators, "
-            f"{len(products)} products, {collab_counter} collaborations, {len(approval_seed_collabs)} approval requests."
+            f"Seeded: 1 admin, {len(advisors)} advisors, 1 supervisor, 1 marketer, 1 editor, "
+            f"{len(creators)} creators, {len(products)} products, {collab_counter} collaborations, "
+            f"{len(approval_seed_collabs)} approval requests."
         )
 
 

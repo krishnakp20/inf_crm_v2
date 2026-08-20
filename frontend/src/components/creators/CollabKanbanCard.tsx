@@ -22,6 +22,16 @@ const PAYMENT_STYLES: Record<string, { label: string; className: string }> = {
   payment_done: { label: "Payment Done", className: "bg-emerald-50 text-emerald-600" },
 };
 
+const DEAL_TYPE_STYLES: Record<string, { label: string; className: string }> = {
+  paid: { label: "Paid", className: "bg-emerald-50 text-emerald-600" },
+  barter: { label: "Barter", className: "bg-violet-50 text-violet-600" },
+};
+
+const CONTENT_TYPE_STYLES: Record<string, { label: string; className: string }> = {
+  integrated: { label: "Integrated", className: "bg-cyan-50 text-cyan-600" },
+  dedicated: { label: "Dedicated", className: "bg-indigo-50 text-indigo-600" },
+};
+
 export function CollabKanbanCard({
   collab,
   nextStage,
@@ -101,8 +111,27 @@ export function CollabKanbanCard({
                 : ""}
             </span>
           ))}
+          {collab.deal_type && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${DEAL_TYPE_STYLES[collab.deal_type].className}`}
+            >
+              {DEAL_TYPE_STYLES[collab.deal_type].label}
+            </span>
+          )}
+          {collab.content_type && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${CONTENT_TYPE_STYLES[collab.content_type].className}`}
+            >
+              {CONTENT_TYPE_STYLES[collab.content_type].label}
+            </span>
+          )}
           {collab.is_overdue && (
             <span className="rounded-full bg-[#fff0ed] px-2 py-0.5 text-[10px] font-bold text-[#cf4e43]">Overdue</span>
+          )}
+          {collab.ownership_revoked_at && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+              Auto-archived
+            </span>
           )}
         </div>
       )}
@@ -113,9 +142,18 @@ export function CollabKanbanCard({
         >
           {PAYMENT_STYLES[collab.payment_status].label}
         </span>
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[8px] font-bold text-gray-500">
-          {initials(collab.owner_name)}
-        </span>
+        {collab.ownership_revoked_at ? (
+          <span
+            title="Ownership auto-revoked by dead zone automation"
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-50 text-[10px] font-bold text-gray-300"
+          >
+            —
+          </span>
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[8px] font-bold text-gray-500">
+            {initials(collab.owner_name)}
+          </span>
+        )}
       </div>
 
       {isDead && (

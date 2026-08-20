@@ -4,6 +4,9 @@ import enum
 class UserRole(str, enum.Enum):
     admin = "admin"
     advisor = "advisor"
+    supervisor = "supervisor"
+    marketer = "marketer"
+    editor = "editor"
 
 
 class CreatorStage(str, enum.Enum):
@@ -77,3 +80,49 @@ class PaymentStatus(str, enum.Enum):
     pending = "pending"
     partial_payment = "partial_payment"
     payment_done = "payment_done"
+
+
+class Platform(str, enum.Enum):
+    instagram = "instagram"
+    youtube = "youtube"
+
+
+class CampaignStatus(str, enum.Enum):
+    draft = "draft"
+    scheduled = "scheduled"
+    live = "live"
+    paused = "paused"
+    completed = "completed"
+
+
+class TicketStatus(str, enum.Enum):
+    open = "open"
+    pending_at_user = "pending_at_user"
+    pending_at_admin = "pending_at_admin"
+    closed_and_live = "closed_and_live"
+
+
+# Named "Partnership" (not just CollabStatus) to avoid confusion with the
+# pre-existing, unrelated CollabStage enum (the Kanban pipeline).
+class PartnershipCollabStatus(str, enum.Enum):
+    open = "open"
+    partnership_sent = "partnership_sent"
+    need_tag = "need_tag"
+    ad_code_not_working = "ad_code_not_working"
+    closed = "closed"
+    closed_and_live = "closed_and_live"
+
+
+class MetricImportStatus(str, enum.Enum):
+    completed = "completed"
+    failed = "failed"
+
+
+class DealType(str, enum.Enum):
+    paid = "paid"
+    barter = "barter"
+
+
+class ContentType(str, enum.Enum):
+    integrated = "integrated"
+    dedicated = "dedicated"

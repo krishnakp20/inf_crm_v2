@@ -6,7 +6,7 @@ import type { CreatorStage, User } from "../../lib/types";
 export function AddCreatorModal({
   users,
   currentUserId,
-  isAdmin,
+  canAssignOwner,
   defaultOwnerId,
   initialStage,
   onClose,
@@ -14,7 +14,7 @@ export function AddCreatorModal({
 }: {
   users: User[];
   currentUserId: number;
-  isAdmin: boolean;
+  canAssignOwner: boolean;
   defaultOwnerId?: number;
   initialStage?: CreatorStage;
   onClose: () => void;
@@ -24,7 +24,7 @@ export function AddCreatorModal({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [ownerId, setOwnerId] = useState(
-    defaultOwnerId ?? (isAdmin ? users[0]?.id ?? currentUserId : currentUserId)
+    defaultOwnerId ?? (canAssignOwner ? users[0]?.id ?? currentUserId : currentUserId)
   );
   const [category, setCategory] = useState("");
   const [followersCount, setFollowersCount] = useState("");
@@ -35,7 +35,7 @@ export function AddCreatorModal({
   const ownerName = (ownerIdToFind: number) =>
     users.find((u) => u.id === ownerIdToFind)?.name ?? "another advisor";
 
-  const canSubmit = name.trim() && handle.trim() && (!isAdmin || ownerId);
+  const canSubmit = name.trim() && handle.trim() && (!canAssignOwner || ownerId);
 
   async function checkHandleOwnership() {
     const cleanHandle = handle.replace(/^@/, "").trim();
@@ -67,7 +67,7 @@ export function AddCreatorModal({
         phone: phone || null,
         followers_count: followersCount ? Number(followersCount) : 0,
         category: category || "Beauty",
-        owner_id: isAdmin ? ownerId : currentUserId,
+        owner_id: canAssignOwner ? ownerId : currentUserId,
       });
       if (initialStage && initialStage !== "new_lead") {
         await api.post(`/creators/${created.id}/stage`, { to_stage: initialStage });
@@ -161,7 +161,7 @@ export function AddCreatorModal({
             Not required for a new lead — will be asked for once the creator replies.
           </p>
 
-          {isAdmin && (
+          {canAssignOwner && (
             <>
               <label className="mb-1 block text-sm font-medium text-gray-700">Assigned to · Required</label>
               <select

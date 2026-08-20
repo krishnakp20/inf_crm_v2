@@ -5,11 +5,12 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: "#f4f4ff",
-          100: "#eeedff",
-          500: "#7a7bec",
-          600: "#5b5ce2",
-          700: "#4749c9",
+          50: "#f9f0f7",
+          100: "#eed5e9",
+          200: "#d8a0ce",
+          500: "#bf60ad",
+          600: "#a92b92",
+          700: "#872275",
         },
         ink: "#17151f",
         surface: "#f7f6f3",

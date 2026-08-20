@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.db.models.enums import CollabStage, CreatorStatus, PaymentStatus
+from app.db.models.enums import CollabStage, ContentType, CreatorStatus, DealType, PaymentStatus
 
 
 class CollaborationCreate(BaseModel):
@@ -19,6 +19,8 @@ class CollaborationCreate(BaseModel):
     counter_quote_agent: float | None = None
     counter_quote_creator: float | None = None
     commercial_amount: float | None = None
+    deal_type: DealType | None = None
+    content_type: ContentType | None = None
     tracking_link: str | None = None
     order_id: str | None = None
 
@@ -31,8 +33,12 @@ class CollaborationUpdate(BaseModel):
     counter_quote_agent: float | None = None
     counter_quote_creator: float | None = None
     commercial_amount: float | None = None
+    deal_type: DealType | None = None
+    content_type: ContentType | None = None
     tracking_link: str | None = None
     order_id: str | None = None
+    poc_code: str | None = None
+    video_link: str | None = None
     payment_status: PaymentStatus | None = None
     additional_product_ids: list[int] | None = None
     live_attribution_product_ids: list[int] | None = None
@@ -46,6 +52,8 @@ class CollabStageTransition(BaseModel):
     counter_quote_agent: float | None = None
     counter_quote_creator: float | None = None
     commercial_amount: float | None = None
+    deal_type: DealType | None = None
+    content_type: ContentType | None = None
     live_attribution_product_ids: list[int] | None = None
     creator_phone: str | None = None
     creator_email: str | None = None
@@ -82,13 +90,18 @@ class CollaborationOut(BaseModel):
     commercial_quoted: float | None
     counter_quote_agent: float | None
     counter_quote_creator: float | None
+    deal_type: DealType | None
+    content_type: ContentType | None
     tracking_link: str | None
     order_id: str | None
+    poc_code: str | None
+    video_link: str | None
     is_overdue: bool
     creator_total_collabs: int
     creator_videos_live: int
     created_at: datetime
     last_activity_at: datetime
+    ownership_revoked_at: datetime | None
 
 
 class CollabBoardStats(BaseModel):

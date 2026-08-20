@@ -1,13 +1,29 @@
 import { useMemo, useState } from "react";
+import { useSort } from "../../hooks/useSort";
 import { initials } from "../../lib/format";
+import { SortableHeader } from "../shared/SortableHeader";
 import type { TargetRow } from "../../lib/types";
 
 const ROW_COLORS = ["#5B5CE2", "#F06E62", "#238B57", "#E6A23C"];
+
+function getValue(row: TargetRow, field: string): unknown {
+  switch (field) {
+    case "name":
+      return row.name;
+    case "weekly_pct":
+      return row.weekly_pct;
+    case "monthly_pct":
+      return row.monthly_pct;
+    default:
+      return null;
+  }
+}
 
 export function Targets({ rows }: { rows: TargetRow[] }) {
   const [userFilter, setUserFilter] = useState("");
   const users = useMemo(() => rows.map((r) => r.name), [rows]);
   const visible = userFilter ? rows.filter((r) => r.name === userFilter) : rows;
+  const { sorted, field, direction, toggle } = useSort(visible, getValue);
 
   return (
     <div className="dashboard-card p-5">
@@ -35,13 +51,13 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
       <table className="mt-4 w-full text-[13px]">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
-            <th className="pb-2 font-medium">Name</th>
-            <th className="pb-2 font-medium">Weekly target</th>
-            <th className="pb-2 font-medium">Monthly target</th>
+            <SortableHeader label="Name" field="name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+            <SortableHeader label="Weekly target" field="weekly_pct" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+            <SortableHeader label="Monthly target" field="monthly_pct" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
           </tr>
         </thead>
         <tbody>
-          {visible.map((row, idx) => {
+          {sorted.map((row, idx) => {
             const color = ROW_COLORS[idx % ROW_COLORS.length];
             return (
               <tr key={row.user_id} className="border-t border-[#e7e5e4]">

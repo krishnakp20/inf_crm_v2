@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER, STARTABLE_COLLAB_STAGES } from "../../lib/collab-stages";
-import type { CollabStage, Creator, Product, User } from "../../lib/types";
+import type { CollabStage, ContentType, Creator, DealType, Product, User } from "../../lib/types";
 
 const STAGE_INDEX: Record<CollabStage, number> = Object.fromEntries(
   COLLAB_STAGE_ORDER.map((s, i) => [s.key, i])
@@ -35,7 +35,7 @@ export function AddCollaborationModal({
   users,
   products,
   currentUserId,
-  isAdmin,
+  canAssignOwner,
   defaultOwnerId,
   initialStage,
   onClose,
@@ -44,7 +44,7 @@ export function AddCollaborationModal({
   users: User[];
   products: Product[];
   currentUserId: number;
-  isAdmin: boolean;
+  canAssignOwner: boolean;
   defaultOwnerId?: number;
   initialStage?: CollabStage;
   onClose: () => void;
@@ -76,6 +76,8 @@ export function AddCollaborationModal({
   const [counterQuoteAgent, setCounterQuoteAgent] = useState("");
   const [counterQuoteCreator, setCounterQuoteCreator] = useState("");
   const [commercialAmount, setCommercialAmount] = useState("");
+  const [dealType, setDealType] = useState<DealType | "">("");
+  const [contentType, setContentType] = useState<ContentType | "">("");
   const [trackingLink, setTrackingLink] = useState("");
   const [orderId, setOrderId] = useState("");
   const [additionalProductIds, setAdditionalProductIds] = useState<number[]>([]);
@@ -143,7 +145,7 @@ export function AddCollaborationModal({
           instagram_link: newInstagramLink || null,
           category: newCategory,
           followers_count: Number(newFollowers),
-          owner_id: isAdmin ? ownerId : undefined,
+          owner_id: canAssignOwner ? ownerId : undefined,
         });
         creatorId = created.id;
       }
@@ -163,6 +165,16 @@ export function AddCollaborationModal({
         setSubmitting(false);
         return;
       }
+      if (showNegotiation && !dealType) {
+        setError("Select a deal type.");
+        setSubmitting(false);
+        return;
+      }
+      if (showLocked && !contentType) {
+        setError("Select a content type.");
+        setSubmitting(false);
+        return;
+      }
       if (showLiveAttribution && liveAttributionProductIds.length === 0) {
         setError("Select every product featured in this video.");
         setSubmitting(false);
@@ -174,7 +186,7 @@ export function AddCollaborationModal({
         primary_product_id: productId,
         additional_product_ids: additionalProductIds,
         live_attribution_product_ids: liveAttributionProductIds,
-        owner_id: isAdmin ? ownerId : undefined,
+        owner_id: canAssignOwner ? ownerId : undefined,
         priority,
         stage,
         creator_reply: showReply ? creatorReply : null,
@@ -182,6 +194,8 @@ export function AddCollaborationModal({
         counter_quote_agent: showNegotiation && counterQuoteAgent ? Number(counterQuoteAgent) : null,
         counter_quote_creator: showNegotiation && counterQuoteCreator ? Number(counterQuoteCreator) : null,
         commercial_amount: showLocked && commercialAmount ? Number(commercialAmount) : null,
+        deal_type: showNegotiation && dealType ? dealType : null,
+        content_type: showLocked && contentType ? contentType : null,
         tracking_link: showProductSent && trackingLink ? trackingLink : null,
         order_id: showProductSent && orderId ? orderId : null,
       });
@@ -402,7 +416,7 @@ export function AddCollaborationModal({
             <p className="mt-1 text-[11px] text-gray-400">Synced product master · no free-text duplicates</p>
           </div>
 
-          {isAdmin && (
+          {canAssignOwner && (
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Assign to user</label>
               <select
@@ -460,8 +474,18 @@ export function AddCollaborationModal({
               value={counterQuoteCreator}
               onChange={(e) => setCounterQuoteCreator(e.target.value)}
               placeholder="₹15,000"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
+            <label className="mb-1 block text-sm font-medium text-gray-700">Deal type · Required</label>
+            <select
+              value={dealType}
+              onChange={(e) => setDealType(e.target.value as DealType)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select...</option>
+              <option value="paid">Paid</option>
+              <option value="barter">Barter</option>
+            </select>
           </div>
         )}
 
@@ -474,8 +498,18 @@ export function AddCollaborationModal({
               value={commercialAmount}
               onChange={(e) => setCommercialAmount(e.target.value)}
               placeholder="₹13,000"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
+            <label className="mb-1 block text-sm font-medium text-gray-700">Content type · Required</label>
+            <select
+              value={contentType}
+              onChange={(e) => setContentType(e.target.value as ContentType)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select...</option>
+              <option value="integrated">Integrated</option>
+              <option value="dedicated">Dedicated</option>
+            </select>
           </div>
         )}
 

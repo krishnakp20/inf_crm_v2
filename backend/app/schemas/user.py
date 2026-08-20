@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: UserRole = UserRole.advisor
+    supervisor_id: int | None = None
 
 
 class UserOut(BaseModel):
@@ -17,12 +18,17 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     role: UserRole
+    supervisor_id: int | None
     must_change_password: bool
     is_active: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    supervisor_id: int | None = None
 
 
 class ChangePasswordRequest(BaseModel):

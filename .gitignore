@@ -15,3 +15,4 @@ dist/
 .devdata/
 
 backend/uploads/
+*.log

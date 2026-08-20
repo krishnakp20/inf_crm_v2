@@ -1,13 +1,16 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
+    analytics,
     announcements,
     approval_requests,
     auth,
+    campaigns,
     collaborations,
     creators,
     dashboard,
     follow_ups,
+    partnership,
     product_targets,
     products,
     settings,
@@ -26,3 +29,6 @@ api_router.include_router(product_targets.router)
 api_router.include_router(collaborations.router)
 api_router.include_router(settings.router)
 api_router.include_router(approval_requests.router)
+api_router.include_router(campaigns.router)
+api_router.include_router(partnership.router)
+api_router.include_router(analytics.router)

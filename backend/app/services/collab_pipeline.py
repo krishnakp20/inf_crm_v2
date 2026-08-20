@@ -1,11 +1,15 @@
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
+from app.db.models.creator import Creator
 from app.db.models.enums import CollabStage
+from app.db.models.partnership_ticket import PartnershipTicket
 
 # Matches the reference site's actual Kanban columns exactly (confirmed by
 # checking the real "Add collaboration" form's Starting stage dropdown,
@@ -94,8 +98,8 @@ def bucket_min_index(stages: list[CollabStage]) -> int:
 # one CollaborationProduct row with is_live_attributed=True must be provided".
 _STAGE_FIELD_ADDITIONS: dict[CollabStage, list[str]] = {
     CollabStage.replied: ["creator_reply"],
-    CollabStage.negotiating: ["commercial_quoted"],
-    CollabStage.commercial_locked: ["commercial_amount"],
+    CollabStage.negotiating: ["commercial_quoted", "deal_type"],
+    CollabStage.commercial_locked: ["commercial_amount", "content_type"],
     CollabStage.live: ["live_attribution"],
 }
 
@@ -108,7 +112,7 @@ for _stage in COLLAB_STAGE_ORDER:
     STAGE_REQUIRED_FIELDS[_stage] = list(_cumulative)
 
 
-async def get_video_credit_by_product(db: AsyncSession, owner_id: int | None = None) -> dict[int, float]:
+async def get_video_credit_by_product(db: AsyncSession, owner_ids: list[int] | None = None) -> dict[int, float]:
     """Per-product fractional video-live credit for the Dashboard's
     Product-wise performance panel. A collaboration in the Live stage always
     counts as exactly one video overall (see is_video_live) -- this function
@@ -127,8 +131,8 @@ async def get_video_credit_by_product(db: AsyncSession, owner_id: int | None = N
         .join(Collaboration, Collaboration.id == CollaborationProduct.collaboration_id)
         .where(Collaboration.stage == CollabStage.live)
     )
-    if owner_id is not None:
-        stmt = stmt.where(Collaboration.owner_id == owner_id)
+    if owner_ids is not None:
+        stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
     rows = (await db.execute(stmt)).all()
 
     by_collab: dict[int, list[tuple[int, bool, bool]]] = defaultdict(list)
@@ -147,3 +151,62 @@ async def get_video_credit_by_product(db: AsyncSession, owner_id: int | None = N
             if primary is not None:
                 credit[primary] += 1.0
     return dict(credit)
+
+
+async def apply_stage_transition(
+    db: AsyncSession,
+    collab: Collaboration,
+    creator: Creator,
+    to_stage: CollabStage,
+    actor_id: int,
+    note: str | None = None,
+    bump_activity: bool = True,
+) -> None:
+    """Core stage-mutation + side effects shared by the interactive
+    transition_collab_stage route and the automated dead-zone sweep
+    (services/dead_zone.py). Does NOT run the forward-move required-field
+    validation gauntlet -- that stays a route-only concern the automated job
+    must never be blocked by. Does NOT commit -- caller controls the
+    transaction.
+    """
+    was_live = collab.stage == CollabStage.live
+    was_dead = collab.stage == CollabStage.dead_leads
+
+    db.add(
+        CollabStageEvent(
+            collaboration_id=collab.id, from_stage=collab.stage, to_stage=to_stage, actor_id=actor_id, note=note
+        )
+    )
+    collab.stage = to_stage
+    if bump_activity:
+        collab.last_activity_at = datetime.now(timezone.utc)
+
+    if to_stage == CollabStage.live and not was_live:
+        existing_ticket = (
+            await db.execute(select(PartnershipTicket.id).where(PartnershipTicket.collaboration_id == collab.id))
+        ).first()
+        if existing_ticket is None:
+            db.add(PartnershipTicket(collaboration_id=collab.id))
+
+    if to_stage == CollabStage.dead_leads and not was_dead:
+        other_active = (
+            await db.execute(
+                select(Collaboration.id).where(
+                    Collaboration.creator_id == collab.creator_id,
+                    Collaboration.id != collab.id,
+                    Collaboration.stage != CollabStage.dead_leads,
+                )
+            )
+        ).first()
+        if other_active is None:
+            creator.is_archived = True
+            creator.archived_at = datetime.now(timezone.utc)
+            creator.archive_reason = "All collaborations moved to Dead Leads"
+    elif was_dead and to_stage != CollabStage.dead_leads:
+        creator.is_archived = False
+        creator.archived_at = None
+        creator.archive_reason = None
+        # Manually reviving a dead lead should also drop the auto-revoked
+        # marker -- the "no owner shown" display is specifically for cards
+        # a human hasn't touched since the automated move.
+        collab.ownership_revoked_at = None

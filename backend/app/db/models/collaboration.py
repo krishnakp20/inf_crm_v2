@@ -4,7 +4,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.db.models.enums import CollabStage, CreatorStatus, PaymentStatus
+from app.db.models.enums import CollabStage, ContentType, CreatorStatus, DealType, PaymentStatus, Platform
 
 
 class Collaboration(Base):
@@ -29,7 +29,30 @@ class Collaboration(Base):
     counter_quote_creator: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     tracking_link: Mapped[str | None] = mapped_column(String(300), nullable=True)
     order_id: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # Set from the "Live video attribution" section once a card reaches Live --
+    # a manually-entered ops tracking code (e.g. "AN_Naina_1198"), distinct
+    # from collab_code (our own auto-generated Collab ID) and from
+    # tracking_link (the Product Sent shipment link). Metric Upload matches
+    # rows against these two fields, not collab_code/tracking_link.
+    poc_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    video_link: Mapped[str | None] = mapped_column(String(300), nullable=True)
     views_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     comments_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Populated by Metric Upload (Settings) only -- see app/services/metric_upload.py.
+    likes_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    revenue: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    ad_spend: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    roas: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    campaign_id: Mapped[int | None] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    platform: Mapped[Platform | None] = mapped_column(Enum(Platform, name="platform"), nullable=True)
+    deal_type: Mapped[DealType | None] = mapped_column(Enum(DealType, name="deal_type"), nullable=True)
+    content_type: Mapped[ContentType | None] = mapped_column(Enum(ContentType, name="content_type"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Set only by the automated dead-zone sweep (services/dead_zone.py) --
+    # never exposed on Create/Update schemas. Drives the Kanban card's
+    # owner-avatar display only; owner_id itself is left fully intact so no
+    # scoping/joins anywhere else in the app need to change (see plan notes).
+    ownership_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

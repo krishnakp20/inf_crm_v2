@@ -63,3 +63,4 @@ class DashboardResponse(BaseModel):
     approval_requests: list[ApprovalRequestOut]
     activity: list[ActivityItem]
     announcement: AnnouncementOut | None
+    placeholder_notice: str | None = None

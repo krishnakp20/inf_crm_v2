@@ -1,3 +1,17 @@
+import type { UserRole } from "./types";
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Administrator",
+  supervisor: "Supervisor",
+  advisor: "Influencer Agent",
+  marketer: "Marketer",
+  editor: "Video Editor",
+};
+
+export function roleLabel(role: UserRole): string {
+  return ROLE_LABELS[role] ?? role;
+}
+
 export function timeBasedGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -26,6 +40,11 @@ export function compactNumber(n: number): string {
   if (n >= 100_000) return `${trimTrailingZero((n / 100_000).toFixed(1))}L`;
   if (n >= 1_000) return `${trimTrailingZero((n / 1_000).toFixed(1))}K`;
   return String(n);
+}
+
+export function formatCurrency(amount: number | null): string {
+  if (amount == null) return "—";
+  return `₹${Math.round(amount).toLocaleString("en-IN")}`;
 }
 
 export function maskPhone(phone: string | null): string {

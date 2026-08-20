@@ -1,12 +1,31 @@
-import { ArrowRight, KeyRound, LayoutGrid, Settings, Sparkles, Table2, UsersRound, MoreHorizontal } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  Handshake,
+  KeyRound,
+  LayoutGrid,
+  Megaphone,
+  Settings,
+  Sparkles,
+  Table2,
+  UsersRound,
+  MoreHorizontal,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
-import { initials } from "../../lib/format";
+import { initials, roleLabel } from "../../lib/format";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: LayoutGrid },
+const DASHBOARD_ITEM = { to: "/", label: "Dashboard", icon: LayoutGrid };
+
+const CAMPAIGNS_ITEM = { to: "/campaigns", label: "Campaigns", icon: Megaphone };
+
+const PARTNERSHIP_ITEM = { to: "/partnership", label: "Partnership Hub", icon: Handshake };
+
+const ANALYTICS_ITEM = { to: "/analytics", label: "Analytics", icon: BarChart3 };
+
+const CREATOR_WORKSPACE_ITEMS = [
   { to: "/database", label: "Database", icon: Table2 },
   { to: "/my-creators", label: "My Creators", icon: UsersRound },
 ];
@@ -55,12 +74,18 @@ export function Sidebar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
 
+  const inCreatorWorkspace = user?.role !== "marketer" && user?.role !== "editor";
+  const canSeeCampaigns = user?.role !== "editor";
+  const canSeeAnalytics = user?.role !== "editor";
+
   useEffect(() => {
     if (!user) return;
     if (user.role === "advisor") {
       api
         .get("/creators", { params: { owner_id: user.id, limit: 1 } })
         .then((res) => setMyCreatorsCount(res.data.total));
+    } else if (user.role === "supervisor") {
+      api.get("/creators", { params: { limit: 1 } }).then((res) => setMyCreatorsCount(res.data.total));
     }
     api.get("/dashboard/my-progress").then((res) => setProgress(res.data));
   }, [user]);
@@ -81,13 +106,18 @@ export function Sidebar() {
         </div>
         <div className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-gray-400">Workspace</div>
         <nav className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
-            <NavItem
-              key={item.to}
-              {...item}
-              badge={item.to === "/my-creators" ? myCreatorsCount : undefined}
-            />
-          ))}
+          <NavItem {...DASHBOARD_ITEM} />
+          {canSeeCampaigns && <NavItem {...CAMPAIGNS_ITEM} />}
+          <NavItem {...PARTNERSHIP_ITEM} />
+          {canSeeAnalytics && <NavItem {...ANALYTICS_ITEM} />}
+          {inCreatorWorkspace &&
+            CREATOR_WORKSPACE_ITEMS.map((item) => (
+              <NavItem
+                key={item.to}
+                {...item}
+                badge={item.to === "/my-creators" ? myCreatorsCount : undefined}
+              />
+            ))}
         </nav>
 
         {user?.role === "admin" && (
@@ -137,7 +167,7 @@ export function Sidebar() {
           </div>
           <div className="flex-1 text-left">
             <div className="text-sm font-medium text-ink">{user?.name}</div>
-            <div className="text-xs capitalize text-gray-500">{user?.role === "admin" ? "Administrator" : user?.role}</div>
+            <div className="text-xs text-gray-500">{user ? roleLabel(user.role) : ""}</div>
           </div>
           <MoreHorizontal size={16} className="text-gray-400" />
         </button>

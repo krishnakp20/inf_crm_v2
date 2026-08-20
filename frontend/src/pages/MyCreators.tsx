@@ -1,5 +1,6 @@
 import { LayoutGrid, List, Plus, Search, Target } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { AddCollaborationModal } from "../components/creators/AddCollaborationModal";
 import { CollabBoardStatsRow } from "../components/creators/CollabBoardStatsRow";
 import { CollabDetailPanel } from "../components/creators/CollabDetailPanel";
@@ -44,6 +45,8 @@ export default function MyCreators() {
   const advisors = users.filter((u) => u.role === "advisor");
   const activeAdvisors = advisors.filter((a) => a.is_active);
   const isAdmin = user?.role === "admin";
+  const isSupervisor = user?.role === "supervisor";
+  const canViewTeam = isAdmin || isSupervisor;
 
   useEffect(() => {
     if (!user) return;
@@ -52,6 +55,12 @@ export default function MyCreators() {
         setUsers(res.data);
         const advisorUsers = res.data.filter((u) => u.role === "advisor");
         setSelectedOwnerId(advisorUsers[0]?.id ?? null);
+      });
+    } else if (user.role === "supervisor") {
+      api.get<User[]>("/users").then((res) => {
+        const team = res.data.filter((u) => u.role === "advisor" && u.supervisor_id === user.id);
+        setUsers(team);
+        setSelectedOwnerId("all");
       });
     } else {
       setUsers([user]);
@@ -99,6 +108,10 @@ export default function MyCreators() {
     });
   }, [collaborations, priorityFilter, searchQuery]);
 
+  if (user && (user.role === "marketer" || user.role === "editor")) {
+    return <Navigate to="/" replace />;
+  }
+
   async function handleAdvance(collabId: number, nextStage: CollabStage) {
     try {
       await api.post(`/collaborations/${collabId}/stage`, { to_stage: nextStage });
@@ -132,7 +145,7 @@ export default function MyCreators() {
         subtitle="One creator username can hold multiple collaboration cards without duplicating the creator record."
         actions={
           <div className="flex gap-2">
-            {!isAdmin && (
+            {user?.role === "advisor" && (
               <button
                 onClick={() => setShowSetTarget(true)}
                 className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] px-4 py-2.5 text-xs font-bold text-ink hover:bg-surface"
@@ -160,13 +173,19 @@ export default function MyCreators() {
           users={activeAdvisors}
           products={products}
           currentUserId={user.id}
-          isAdmin={isAdmin}
+          canAssignOwner={canViewTeam}
           defaultOwnerId={typeof selectedOwnerId === "number" ? selectedOwnerId : undefined}
           initialStage={addCardStage ?? undefined}
           onClose={() => setShowAddCollab(false)}
           onCreated={() => selectedOwnerId && loadBoard(selectedOwnerId)}
         />
       )}
+
+      <div className="mb-4 rounded-card border border-[#e7e5e4] bg-surface p-3 text-xs text-gray-500">
+        <span className="font-semibold text-ink">Dead zone automation is active</span> — Active cards: 60 days
+        without meaningful activity · Live cards: 6 months without meaningful activity · ownership is revoked
+        automatically. <span className="font-semibold">Daily check · Asia/Kolkata.</span>
+      </div>
 
       {stats && <CollabBoardStatsRow stats={stats} />}
 
@@ -181,7 +200,7 @@ export default function MyCreators() {
           />
         </div>
 
-        {isAdmin && (
+        {canViewTeam && (
           <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
             <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">User</span>
             <select

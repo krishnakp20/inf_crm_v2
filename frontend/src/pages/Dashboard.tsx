@@ -61,6 +61,20 @@ export default function Dashboard() {
     );
   }
 
+  if (data.placeholder_notice) {
+    return (
+      <div>
+        <Topbar eyebrow={longWeekdayDate()} title={`${greeting}, ${user?.name?.split(" ")[0] ?? ""}`} />
+        {data.announcement && (
+          <AnnouncementBanner announcement={data.announcement} isAdmin={false} onManage={() => {}} />
+        )}
+        <div className="mt-6 rounded-card border border-dashed border-[#e7e5e4] bg-white p-8 text-center text-sm text-gray-500">
+          {data.placeholder_notice}
+        </div>
+      </div>
+    );
+  }
+
   const isAdmin = user?.role === "admin";
 
   const {

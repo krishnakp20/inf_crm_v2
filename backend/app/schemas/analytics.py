@@ -1,43 +1,79 @@
 from pydantic import BaseModel
 
-from app.schemas.dashboard import FunnelStage
+
+class AnalyticsBusinessImpact(BaseModel):
+    revenue: float | None  # Admin-only; null = not-yet-wired Metric Upload placeholder
+    roas: float | None  # Admin-only; null = placeholder
+    ads_live: int  # all roles; Closed & Live tickets in Partnership Hub
 
 
-class OverviewMetrics(BaseModel):
-    new_leads: int
-    reply_rate_pct: float
-    commercial_lock_rate_pct: float
-    avg_time_to_lock_days: float | None
-    content_went_live: int
-
-
-class LeadConversion(BaseModel):
-    funnel: list[FunnelStage]
-    overall_conversion_pct: float
-
-
-class StageAgeing(BaseModel):
-    stage: str
-    label: str
-    open_records: int
-    avg_age_days: float
-
-
-class CostMetrics(BaseModel):
-    total_commercial_locked: float
-    cost_per_live_video: float | None
-    cost_per_1k_views: float | None
+class AnalyticsPerformanceOverview(BaseModel):
+    live_videos: int
     total_views: int
-    avg_engagement_pct: float
+    cpv: float | None  # null for Marketer, or when views==0
+    hit_rate_pct: float
+    hits: int
+    total_live_videos_for_hit_rate: int
+    cost_per_comment: float | None  # null for Marketer, or when comments==0
+    total_comments: int
 
 
-class TeamPerformanceRow(BaseModel):
+class AnalyticsProductPerformanceRow(BaseModel):
+    product_id: int
+    product_name: str
+    videos: float  # fractional live-video credit
+    views: int
+    comments: int
+    cost_per_comment: float | None  # null for Marketer
+
+
+class AnalyticsCostEfficiency(BaseModel):
+    avg_creator_cost: float | None
+    total_creator_cost: float
+    cost_per_hit: float | None
+
+
+class AnalyticsWhatIsWorkingRow(BaseModel):
+    rank: int
+    dimension_value: str
+    videos: int
+    views: int
+    comments: int
+    hit_rate_pct: float
+
+
+class AnalyticsWhatIsWorking(BaseModel):
+    content_bucket: list[AnalyticsWhatIsWorkingRow]
+    language: list[AnalyticsWhatIsWorkingRow]
+    creator_category: list[AnalyticsWhatIsWorkingRow]
+
+
+class AnalyticsPipelineVelocityRow(BaseModel):
+    label: str
+    avg_days: float | None
+    delta_days: float | None  # negative = faster than the prior equivalent period
+    sample_size: int
+
+
+class AnalyticsTargetRow(BaseModel):
     user_id: int
-    name: str
-    leads_worked: int
-    reply_rate_pct: float
-    deals_locked: int
-    content_live: int
-    overdue: int
-    avg_speed_days: float | None
-    crm_health_pct: float
+    user_name: str
+    credit: float
+    target: float
+    pct: float
+
+
+class AnalyticsResponse(BaseModel):
+    scope_label: str
+    date_range_label: str
+    live_video_count: int
+    business_impact: AnalyticsBusinessImpact
+    performance_overview: AnalyticsPerformanceOverview
+    product_performance: list[AnalyticsProductPerformanceRow]
+    cost_efficiency: AnalyticsCostEfficiency | None  # None entirely for Marketer
+    what_is_working: AnalyticsWhatIsWorking
+    pipeline_velocity: list[AnalyticsPipelineVelocityRow]
+    target_vs_achieved: list[AnalyticsTargetRow]
+    show_cpv: bool
+    show_cost_efficiency: bool
+    show_revenue: bool
