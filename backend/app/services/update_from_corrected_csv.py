@@ -261,28 +261,27 @@ async def run_update(csv_path: str, import_cutoff: datetime, dry_run: bool = Tru
                 # "sakshijaswant" is a genuine unrelated production creator
                 # named "Sakshi"; the CSV's "sakshijaswant" is a different
                 # real person, "Mounika Kattekola"). Trust a profile update
-                # when EITHER:
-                #   (a) at least one of THIS username's CSV video links
-                #       already belongs to THIS SAME creator_id in the DB --
-                #       a video_link is a real, specific Instagram URL, so
-                #       that match is unambiguous proof, unlike the
-                #       username string; or
-                #   (b) this creator's created_at is at/after the original
-                #       import's own run -- it can only exist because the
-                #       import script itself created it from this same CSV
-                #       project, which covers the ~250 zero-video,
-                #       profile-only creators that (a) can never verify
-                #       (they have no video link to check at all, since the
-                #       CSV never listed one for them -- confirmed by
-                #       cross-checking both CSV versions directly).
-                all_links_for_username: set[str] = set()
-                for pr in by_username[username]:
-                    all_links_for_username.update(link for _d, link in pr["videos"])
-                link_verified = any(
-                    existing_collabs_by_link.get(link, (None, None))[1] == existing_creator.id
-                    for link in all_links_for_username
-                )
-                verified = link_verified or existing_creator.created_at >= import_cutoff
+                # ONLY when this creator's created_at is at/after the
+                # original import's own run -- it can then only exist
+                # because the import script itself created it from this
+                # same CSV project.
+                #
+                # A prior version of this check ALSO trusted a matching
+                # video_link already tied to this creator_id, reasoning
+                # that a specific Instagram URL is unambiguous proof. That
+                # is circular for any creator the ORIGINAL import (which
+                # had no safety check at all) already blindly matched by
+                # username and attached a video to: the video_link
+                # "evidence" is itself the original misattribution, so
+                # finding it there proves nothing. Confirmed live against
+                # production: "sakshijaswant" still passed the video-link
+                # check and got its 'Sakshi' -> 'Mounika Kattekola' overwrite
+                # queued, because that exact video had already been
+                # (wrongly) attached to Sakshi's creator_id by the original
+                # import. created_at is not subject to this circularity --
+                # it reflects real insert time regardless of what the
+                # import matched or attached.
+                verified = existing_creator.created_at >= import_cutoff
 
                 safe_to_extend[username] = verified
                 if not verified:
