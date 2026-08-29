@@ -7,10 +7,19 @@ also corrects fields on records already imported, since the client
 re-shared "the same data with correction."
 
 Run (dry run, no DB writes -- default):
-    python -m app.services.update_from_corrected_csv "path/to/corrected.csv"
+    python -m app.services.update_from_corrected_csv "path/to/corrected.csv" "<import-cutoff>"
 
 Run for real:
-    python -m app.services.update_from_corrected_csv "path/to/corrected.csv" --commit
+    python -m app.services.update_from_corrected_csv "path/to/corrected.csv" "<import-cutoff>" --commit
+
+<import-cutoff> is an ISO timestamp (e.g. "2026-08-26 08:15:00+00:00") taken from just
+BEFORE the original import_legacy_creators.py --commit run actually executed against
+this same database. Find it per-environment with:
+    SELECT created_at, count(*) FROM creators GROUP BY created_at ORDER BY created_at;
+and look for the sudden large cluster (the import's actual insert timestamp) -- pass a
+value a minute or two before that cluster starts. This is required (not inferred
+automatically) because it differs between local dev and production, and guessing it
+wrong silently defeats the safety check below.
 
 Decisions this makes (confirmed with the user before writing this):
 - The client's cleanup did a blanket rename "Kajal" -> "DS Kohl Pencil" in
@@ -98,6 +107,8 @@ class UpdateSummary:
         self.products_created: list[str] = []
         self.rows_skipped_no_username: list[str] = []
         self.rows_with_no_videos = 0
+        self.creators_skipped_unverified: list[str] = []
+        self.collaborations_skipped_unverified = 0
 
     def report(self) -> str:
         lines = [
@@ -106,11 +117,18 @@ class UpdateSummary:
         ]
         for name in self.creators_updated:
             lines.append(f"  -> {name}")
+        lines.append(
+            f"Creators SKIPPED as unverified (username matched but no video link ties it to this CSV -- "
+            f"likely an unrelated pre-existing creator, left untouched): {len(self.creators_skipped_unverified)}"
+        )
+        for name in self.creators_skipped_unverified:
+            lines.append(f"  -> {name}")
         lines += [
             f"Creators unchanged: {self.creators_unchanged}",
             f"Collaborations created (new video): {self.collaborations_created}",
             f"Existing collaborations with product linkage replaced: {self.collaborations_products_replaced}",
             f"Existing collaborations with commercial_amount updated: {self.collaborations_cost_updated}",
+            f"New videos SKIPPED (would attach to an unverified creator): {self.collaborations_skipped_unverified}",
             f"Rows with zero filled video links: {self.rows_with_no_videos}",
             f"New advisor users created: {len(self.users_created)}",
         ]
@@ -133,7 +151,7 @@ def _row_recency(row: dict, videos: list[tuple[datetime | None, str]]) -> dateti
     return max(dates) if dates else datetime.min.replace(tzinfo=timezone.utc)
 
 
-async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
+async def run_update(csv_path: str, import_cutoff: datetime, dry_run: bool = True) -> UpdateSummary:
     summary = UpdateSummary()
 
     async with AsyncSessionLocal() as db:
@@ -182,11 +200,25 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
         user_cache: dict[str, int] = {}
         product_cache: dict[str, int] = {}
         creator_cache: dict[str, int] = {}
+        # False only for an existing creator we could NOT verify belongs to
+        # this CSV (see Pass 3) -- gates Pass 4 from attaching a brand-new
+        # collaboration to a creator who might be a different, unrelated
+        # real person. True for brand-new creators (unambiguous) and for
+        # existing ones confirmed via a matching video link.
+        safe_to_extend: dict[str, bool] = {}
 
         existing_links_result = await db.execute(
-            select(Collaboration.id, Collaboration.video_link).where(Collaboration.video_link.is_not(None))
+            select(Collaboration.id, Collaboration.video_link, Collaboration.creator_id).where(
+                Collaboration.video_link.is_not(None)
+            )
         )
-        existing_collabs_by_link: dict[str, int] = {link: cid for cid, link in existing_links_result.all()}
+        # video_link -> (collaboration_id, creator_id) -- the creator_id lets
+        # us confirm an existing creator genuinely came from THIS CSV data
+        # (see the verification check below), not just that its username
+        # string happens to match.
+        existing_collabs_by_link: dict[str, tuple[int, int]] = {
+            link: (cid, creator_id) for cid, link, creator_id in existing_links_result.all()
+        }
 
         # Pass 3: resolve every creator profile once, using the most-recent row.
         for username, best in most_recent_row.items():
@@ -216,8 +248,50 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
                 db.add(creator)
                 await db.flush()
                 creator_cache[username] = creator.id
+                safe_to_extend[username] = True
                 summary.creators_created += 1
             else:
+                creator_cache[username] = existing_creator.id
+
+                # SAFETY CHECK: a username-string match alone is not proof
+                # this existing creator is the same person as the CSV row --
+                # production has real, pre-existing creators unrelated to
+                # this import whose handle happens to collide with someone
+                # else's in the client's historical export (confirmed case:
+                # "sakshijaswant" is a genuine unrelated production creator
+                # named "Sakshi"; the CSV's "sakshijaswant" is a different
+                # real person, "Mounika Kattekola"). Trust a profile update
+                # when EITHER:
+                #   (a) at least one of THIS username's CSV video links
+                #       already belongs to THIS SAME creator_id in the DB --
+                #       a video_link is a real, specific Instagram URL, so
+                #       that match is unambiguous proof, unlike the
+                #       username string; or
+                #   (b) this creator's created_at is at/after the original
+                #       import's own run -- it can only exist because the
+                #       import script itself created it from this same CSV
+                #       project, which covers the ~250 zero-video,
+                #       profile-only creators that (a) can never verify
+                #       (they have no video link to check at all, since the
+                #       CSV never listed one for them -- confirmed by
+                #       cross-checking both CSV versions directly).
+                all_links_for_username: set[str] = set()
+                for pr in by_username[username]:
+                    all_links_for_username.update(link for _d, link in pr["videos"])
+                link_verified = any(
+                    existing_collabs_by_link.get(link, (None, None))[1] == existing_creator.id
+                    for link in all_links_for_username
+                )
+                verified = link_verified or existing_creator.created_at >= import_cutoff
+
+                safe_to_extend[username] = verified
+                if not verified:
+                    summary.creators_skipped_unverified.append(
+                        f"{username} (DB has {existing_creator.name!r}, CSV says {name!r} -- "
+                        f"no matching video link ties them together, left untouched)"
+                    )
+                    continue
+
                 changed = []
                 if name and name != existing_creator.name:
                     changed.append(f"name {existing_creator.name!r}->{name!r}")
@@ -231,7 +305,6 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
                 if owner_id != existing_creator.owner_id:
                     changed.append(f"owner_id {existing_creator.owner_id}->{owner_id}")
                     existing_creator.owner_id = owner_id
-                creator_cache[username] = existing_creator.id
                 if changed:
                     summary.creators_updated.append(f"{username}: {', '.join(changed)}")
                 else:
@@ -263,7 +336,8 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
                         break
 
             for idx, (date, link) in enumerate(videos):
-                existing_collab_id = existing_collabs_by_link.get(link)
+                existing_entry = existing_collabs_by_link.get(link)
+                existing_collab_id = existing_entry[0] if existing_entry is not None else None
 
                 if existing_collab_id is not None:
                     # Replace product linkage wholesale -- simpler and safer
@@ -290,6 +364,13 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
                         if collab is not None and collab.commercial_amount != last_cost:
                             collab.commercial_amount = last_cost
                             summary.collaborations_cost_updated += 1
+                    continue
+
+                if not safe_to_extend.get(username, False):
+                    # A brand-new video for a creator we couldn't verify
+                    # belongs to this CSV -- attaching it would risk the
+                    # same misattribution as a profile overwrite would.
+                    summary.collaborations_skipped_unverified += 1
                     continue
 
                 # Brand-new video (previously-skipped row now fixed, or a
@@ -329,7 +410,7 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
                     )
                 )
                 db.add(PartnershipTicket(collaboration_id=collab.id))
-                existing_collabs_by_link[link] = collab.id
+                existing_collabs_by_link[link] = (collab.id, creator_id)
                 summary.collaborations_created += 1
 
         if dry_run:
@@ -341,11 +422,16 @@ async def run_update(csv_path: str, dry_run: bool = True) -> UpdateSummary:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python -m app.services.update_from_corrected_csv <csv_path> [--commit]")
+    if len(sys.argv) < 3:
+        print(
+            "Usage: python -m app.services.update_from_corrected_csv <csv_path> <import_cutoff_iso> [--commit]"
+        )
         sys.exit(1)
     path = sys.argv[1]
-    commit = "--commit" in sys.argv[2:]
-    result = asyncio.run(run_update(path, dry_run=not commit))
+    cutoff = datetime.fromisoformat(sys.argv[2])
+    if cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
+    commit = "--commit" in sys.argv[3:]
+    result = asyncio.run(run_update(path, cutoff, dry_run=not commit))
     print(f"{'DRY RUN (no changes written)' if not commit else 'COMMITTED'}")
     print(result.report())
