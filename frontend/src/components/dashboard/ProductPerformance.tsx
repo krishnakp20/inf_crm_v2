@@ -9,10 +9,10 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
   // Real contributors (who actually delivered each product's live videos),
   // not products' static owner_name -- see credit_by_owner on the backend.
   const users = useMemo(
-    () => [...new Set(products.flatMap((p) => Object.keys(p.credit_by_owner)))].sort(),
+    () => [...new Set(products.flatMap((p) => Object.keys(p.credit_by_owner ?? {})))].sort(),
     [products]
   );
-  const visible = userFilter ? products.filter((p) => (p.credit_by_owner[userFilter] ?? 0) > 0) : products;
+  const visible = userFilter ? products.filter((p) => (p.credit_by_owner?.[userFilter] ?? 0) > 0) : products;
 
   return (
     <div className="dashboard-card p-5">
@@ -40,7 +40,7 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
       <div className="mt-4 flex flex-col gap-3">
         {visible.map((product, idx) => {
           const color = ROW_COLORS[idx % ROW_COLORS.length];
-          const videosLive = userFilter ? product.credit_by_owner[userFilter] ?? 0 : product.videos_live;
+          const videosLive = userFilter ? product.credit_by_owner?.[userFilter] ?? 0 : product.videos_live;
           const pct = product.target_videos > 0 ? Math.min((videosLive / product.target_videos) * 100, 100) : 0;
           return (
             <div key={product.id}>

@@ -137,8 +137,9 @@ export default function Database() {
       const formData = new FormData();
       formData.append("upload", file);
       const res = await api.post<BulkUploadResult>("/creators/bulk-upload", formData);
-      setUploadResult(res.data);
-      downloadBulkUploadLog(res.data.rows);
+      const rows = res.data.rows ?? [];
+      setUploadResult({ ...res.data, rows });
+      downloadBulkUploadLog(rows);
       loadCreators();
     } finally {
       setUploading(false);

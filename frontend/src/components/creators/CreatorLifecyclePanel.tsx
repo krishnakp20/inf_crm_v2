@@ -393,7 +393,7 @@ export function CreatorLifecyclePanel({
                 tab === "activity" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-ink"
               }`}
             >
-              Activity log <span className="text-gray-400">{data.activity_log.length}</span>
+              Activity log <span className="text-gray-400">{(data.activity_log ?? []).length}</span>
             </button>
           </div>
         )}
@@ -741,7 +741,7 @@ export function CreatorLifecyclePanel({
                 Every ownership assignment, transfer and revoke for this creator, in order.
               </p>
               <div className="mt-3 flex flex-col gap-2">
-                {data.activity_log.map((a, i) => (
+                {(data.activity_log ?? []).map((a, i) => (
                   <div key={i} className="rounded-card border border-[#e7e5e4] p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
