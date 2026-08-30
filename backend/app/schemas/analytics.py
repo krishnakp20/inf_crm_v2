@@ -33,6 +33,12 @@ class AnalyticsCostEfficiency(BaseModel):
     cost_per_hit: float | None
 
 
+class AnalyticsCommercialLocked(BaseModel):
+    total_locked: float  # sum of commercial_amount for every collab locked in the period
+    achieved: float  # same, restricted to collabs currently at stage=live
+    committed: float  # same, restricted to collabs not currently live (total_locked - achieved)
+
+
 class AnalyticsWhatIsWorkingRow(BaseModel):
     rank: int
     dimension_value: str
@@ -71,6 +77,7 @@ class AnalyticsResponse(BaseModel):
     performance_overview: AnalyticsPerformanceOverview
     product_performance: list[AnalyticsProductPerformanceRow]
     cost_efficiency: AnalyticsCostEfficiency | None  # None entirely for Marketer
+    commercial_locked: AnalyticsCommercialLocked | None  # None entirely for Marketer
     what_is_working: AnalyticsWhatIsWorking
     pipeline_velocity: list[AnalyticsPipelineVelocityRow]
     target_vs_achieved: list[AnalyticsTargetRow]

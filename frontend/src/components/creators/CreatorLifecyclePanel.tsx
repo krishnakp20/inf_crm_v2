@@ -12,14 +12,21 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useSort } from "../../hooks/useSort";
 import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/csv";
 import { compactNumber, formatCurrency, initials } from "../../lib/format";
 import { SortableHeader } from "../shared/SortableHeader";
-import type { CommercialHistoryRow, CreatorDetail, CreatorLifecycle, User, VideoHistoryRow } from "../../lib/types";
+import type {
+  ActivityLogEntry,
+  CommercialHistoryRow,
+  CreatorDetail,
+  CreatorLifecycle,
+  User,
+  VideoHistoryRow,
+} from "../../lib/types";
 
 function getVideoHistoryValue(v: VideoHistoryRow, field: string): unknown {
   switch (field) {
@@ -59,7 +66,21 @@ function getCommercialHistoryValue(r: CommercialHistoryRow, field: string): unkn
   }
 }
 
-type Tab = "overview" | "video" | "commercial";
+type Tab = "overview" | "video" | "commercial" | "activity";
+
+const ACTIVITY_EVENT_STYLES: Record<ActivityLogEntry["event_type"], string> = {
+  assigned: "bg-brand-50 text-brand-700",
+  transferred: "bg-blue-50 text-blue-700",
+  admin_assigned: "bg-amber-50 text-amber-700",
+  revoked: "bg-red-50 text-red-700",
+};
+
+const ACTIVITY_EVENT_LABELS: Record<ActivityLogEntry["event_type"], string> = {
+  assigned: "Assigned",
+  transferred: "Transferred",
+  admin_assigned: "Admin assigned",
+  revoked: "Revoked",
+};
 
 const TIMELINE_ICONS: Record<string, typeof ArrowRight> = {
   stage: ArrowRight,
@@ -99,6 +120,7 @@ export function CreatorLifecyclePanel({
 
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAlternatePhone, setEditAlternatePhone] = useState("");
   const [editFollowers, setEditFollowers] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editStatus, setEditStatus] = useState("");
@@ -111,6 +133,34 @@ export function CreatorLifecyclePanel({
   const [revoking, setRevoking] = useState(false);
   const [revokeReason, setRevokeReason] = useState("");
   const [ownershipError, setOwnershipError] = useState<string | null>(null);
+  const [archivePromptOpen, setArchivePromptOpen] = useState(false);
+  const [archiveNote, setArchiveNote] = useState("");
+  const [confirmAction, setConfirmAction] = useState<"transfer" | "revoke" | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: "transfer" | "revoke"; label: string; secondsLeft: number } | null>(
+    null
+  );
+  const pendingTimeoutRef = useRef<number | null>(null);
+  const pendingIntervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingTimeoutRef.current) window.clearTimeout(pendingTimeoutRef.current);
+      if (pendingIntervalRef.current) window.clearInterval(pendingIntervalRef.current);
+    };
+  }, []);
+
+  function cancelPendingAction() {
+    if (pendingTimeoutRef.current) window.clearTimeout(pendingTimeoutRef.current);
+    if (pendingIntervalRef.current) window.clearInterval(pendingIntervalRef.current);
+    pendingTimeoutRef.current = null;
+    pendingIntervalRef.current = null;
+    setPendingAction(null);
+  }
+
+  function handleClose() {
+    cancelPendingAction();
+    onClose();
+  }
 
   function loadLifecycle() {
     api.get<CreatorLifecycle>(`/creators/${creatorId}/lifecycle`).then((res) => setData(res.data));
@@ -145,6 +195,7 @@ export function CreatorLifecyclePanel({
     const { creator } = detail;
     setEditName(creator.name);
     setEditPhone(creator.phone ?? "");
+    setEditAlternatePhone(creator.alternate_phone ?? "");
     setEditFollowers(String(creator.followers_count));
     setEditCategory(creator.category);
     setEditStatus(
@@ -162,6 +213,7 @@ export function CreatorLifecyclePanel({
       await api.patch(`/creators/${creatorId}`, {
         name: editName,
         phone: editPhone || null,
+        alternate_phone: editAlternatePhone || null,
         followers_count: Number(editFollowers) || 0,
         category: editCategory,
         status: editStatus,
@@ -179,6 +231,25 @@ export function CreatorLifecyclePanel({
   async function toggleArchive() {
     if (!detail) return;
     await api.patch(`/creators/${creatorId}`, { is_archived: !detail.creator.is_archived });
+    loadDetail();
+    onChanged?.();
+  }
+
+  function handleArchiveButtonClick() {
+    if (!detail) return;
+    if (detail.creator.is_archived) {
+      // Un-archiving needs no note -- only moving TO archive does.
+      toggleArchive();
+    } else {
+      setArchiveNote("");
+      setArchivePromptOpen(true);
+    }
+  }
+
+  async function confirmArchiveWithNote() {
+    if (!archiveNote.trim()) return;
+    await api.patch(`/creators/${creatorId}`, { is_archived: true, archive_reason: archiveNote });
+    setArchivePromptOpen(false);
     loadDetail();
     onChanged?.();
   }
@@ -220,6 +291,22 @@ export function CreatorLifecyclePanel({
     }
   }
 
+  function schedulePendingAction(type: "transfer" | "revoke", label: string) {
+    setConfirmAction(null);
+    setPendingAction({ type, label, secondsLeft: 10 });
+    pendingIntervalRef.current = window.setInterval(() => {
+      setPendingAction((prev) => (prev ? { ...prev, secondsLeft: prev.secondsLeft - 1 } : prev));
+    }, 1000);
+    pendingTimeoutRef.current = window.setTimeout(() => {
+      pendingTimeoutRef.current = null;
+      if (pendingIntervalRef.current) window.clearInterval(pendingIntervalRef.current);
+      pendingIntervalRef.current = null;
+      setPendingAction(null);
+      if (type === "transfer") transferOwnership();
+      else revokeOwnership();
+    }, 10000);
+  }
+
   if (!data || !detail) {
     return (
       <div className="fixed inset-0 z-50 bg-black/30">
@@ -231,7 +318,7 @@ export function CreatorLifecyclePanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/30" onClick={handleClose}>
       <aside
         className="fixed right-0 top-0 flex h-full w-[50vw] min-w-[560px] flex-col bg-white shadow-lg"
         onClick={(e) => e.stopPropagation()}
@@ -258,14 +345,14 @@ export function CreatorLifecyclePanel({
               <Pencil size={14} />
             </button>
             <button
-              onClick={toggleArchive}
+              onClick={handleArchiveButtonClick}
               title={detail.creator.is_archived ? "Unarchive" : "Archive"}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface hover:text-brand-600"
             >
               {detail.creator.is_archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               title="Close"
               className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface"
             >
@@ -300,6 +387,14 @@ export function CreatorLifecyclePanel({
             >
               Commercial history <span className="text-gray-400">{data.commercial_history.rows.length}</span>
             </button>
+            <button
+              onClick={() => setTab("activity")}
+              className={`border-b-2 px-3 py-3 text-sm font-semibold ${
+                tab === "activity" ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-ink"
+              }`}
+            >
+              Activity log <span className="text-gray-400">{data.activity_log.length}</span>
+            </button>
           </div>
         )}
 
@@ -316,6 +411,13 @@ export function CreatorLifecyclePanel({
               <input
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
+                className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+              <label className="mb-1 block text-sm font-medium text-gray-700">Alternate mobile number</label>
+              <input
+                value={editAlternatePhone}
+                onChange={(e) => setEditAlternatePhone(e.target.value)}
+                placeholder="Optional"
                 className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
               <label className="mb-1 block text-sm font-medium text-gray-700">Followers</label>
@@ -631,6 +733,37 @@ export function CreatorLifecyclePanel({
               </div>
             </div>
           )}
+
+          {!editing && tab === "activity" && (
+            <div>
+              <h3 className="text-sm font-semibold text-ink">Activity log</h3>
+              <p className="mt-0.5 text-xs text-muted">
+                Every ownership assignment, transfer and revoke for this creator, in order.
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                {data.activity_log.map((a, i) => (
+                  <div key={i} className="rounded-card border border-[#e7e5e4] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-ink">{a.title}</div>
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          {a.actor_name ? `By ${a.actor_name}` : "System"} · {a.timestamp_label}
+                        </div>
+                        {a.event_type === "revoked" && (
+                          <div className="mt-1 text-xs text-gray-500">{a.description}</div>
+                        )}
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${ACTIVITY_EVENT_STYLES[a.event_type]}`}
+                      >
+                        {ACTIVITY_EVENT_LABELS[a.event_type]}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {!editing && isOwner && (
@@ -662,8 +795,8 @@ export function CreatorLifecyclePanel({
                       </select>
                     </label>
                     <button
-                      onClick={transferOwnership}
-                      disabled={transferring}
+                      onClick={() => setConfirmAction("transfer")}
+                      disabled={transferring || !!pendingAction}
                       className="rounded-lg border border-[#e7e5e4] px-3 py-1.5 text-xs font-bold text-ink hover:bg-surface disabled:opacity-50"
                     >
                       {transferring ? "Transferring..." : "Transfer ownership"}
@@ -671,21 +804,130 @@ export function CreatorLifecyclePanel({
                   </>
                 )}
                 <button
-                  onClick={revokeOwnership}
-                  disabled={revoking}
+                  onClick={() => setConfirmAction("revoke")}
+                  disabled={revoking || !!pendingAction}
                   className="rounded-lg border border-[#f3c9c5] px-3 py-1.5 text-xs font-bold text-[#cf4e43] hover:bg-[#fdf2f1] disabled:opacity-50"
                 >
                   {revoking ? "Revoking..." : "Revoke ownership"}
                 </button>
               </div>
             </div>
-            <input
-              value={revokeReason}
-              onChange={(e) => setRevokeReason(e.target.value)}
-              placeholder="Reason for revoking (optional)"
-              className="w-full rounded-lg border border-[#e7e5e4] px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
-            />
           </footer>
+        )}
+
+        {confirmAction && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
+            onClick={() => setConfirmAction(null)}
+          >
+            <div onClick={(e) => e.stopPropagation()} className="w-[380px] rounded-card bg-white p-5 shadow-lg">
+              <h3 className="text-sm font-semibold text-ink">
+                {confirmAction === "transfer" ? "Transfer ownership?" : "Revoke ownership?"}
+              </h3>
+              <p className="mt-1.5 text-xs text-muted">
+                {confirmAction === "transfer"
+                  ? `This creator will be reassigned to ${
+                      otherAdvisors.find((a) => a.id === transferTargetId)?.name ?? "the selected advisor"
+                    }.`
+                  : "This creator will be archived and removed from the owner's active pipeline."}{" "}
+                You'll have 10 seconds to undo right after confirming.
+              </p>
+              {confirmAction === "revoke" && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Reason for archiving · Required</label>
+                  <input
+                    autoFocus
+                    value={revokeReason}
+                    onChange={(e) => setRevokeReason(e.target.value)}
+                    placeholder="e.g. Creator went unresponsive after 3 follow-ups"
+                    className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
+                  />
+                </div>
+              )}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction(null)}
+                  className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={confirmAction === "revoke" && !revokeReason.trim()}
+                  onClick={() =>
+                    confirmAction === "transfer"
+                      ? schedulePendingAction(
+                          "transfer",
+                          `Transferring ownership to ${
+                            otherAdvisors.find((a) => a.id === transferTargetId)?.name ?? "advisor"
+                          }`
+                        )
+                      : schedulePendingAction("revoke", "Revoking ownership")
+                  }
+                  className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {confirmAction === "transfer" ? "Transfer ownership" : "Revoke ownership"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {archivePromptOpen && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
+            onClick={() => setArchivePromptOpen(false)}
+          >
+            <div onClick={(e) => e.stopPropagation()} className="w-[380px] rounded-card bg-white p-5 shadow-lg">
+              <h3 className="text-sm font-semibold text-ink">Archive this creator?</h3>
+              <p className="mt-1.5 text-xs text-muted">
+                This creator will be archived and removed from the active pipeline.
+              </p>
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-gray-700">Note · Required</label>
+                <input
+                  autoFocus
+                  value={archiveNote}
+                  onChange={(e) => setArchiveNote(e.target.value)}
+                  placeholder="e.g. Creator went unresponsive after 3 follow-ups"
+                  className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
+                />
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setArchivePromptOpen(false)}
+                  className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!archiveNote.trim()}
+                  onClick={confirmArchiveWithNote}
+                  className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  Archive
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingAction && (
+          <div className="fixed inset-x-0 top-4 z-[70] flex justify-center">
+            <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-800 shadow-lg">
+              {pendingAction.label} in {pendingAction.secondsLeft}s...
+              <button
+                type="button"
+                onClick={cancelPendingAction}
+                className="rounded-md bg-white px-2.5 py-1 text-xs font-bold text-amber-700 shadow-sm hover:bg-amber-100"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
         )}
       </aside>
     </div>

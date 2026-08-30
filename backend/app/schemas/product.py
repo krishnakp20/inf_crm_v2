@@ -27,5 +27,9 @@ class ProductOut(BaseModel):
 
 
 class ProductPerformance(ProductOut):
-    owner_name: str
+    owner_name: str  # whoever's account this product row was created under -- NOT a performance signal
     videos_live: float
+    # Real per-advisor breakdown of this product's live-video credit, keyed
+    # by advisor name -- who actually delivered the videos, unlike owner_name
+    # above. Empty for advisors with zero credit on this product.
+    credit_by_owner: dict[str, float]

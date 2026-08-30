@@ -10,6 +10,7 @@ from app.core.deps import (
     require_creator_workspace_access,
     scoped_owner_ids,
 )
+from app.db.models.approval_request import ApprovalRequest
 from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
@@ -113,12 +114,40 @@ async def _load_products_for_collabs(db: AsyncSession, collab_ids: list[int]) ->
     return out
 
 
+async def _latest_approval_by_collab(
+    db: AsyncSession, collab_ids: list[int]
+) -> dict[int, tuple[str, str]]:
+    """Most recent ApprovalRequest per collaboration_id (status, target) --
+    drives the Kanban card's approval-shield color (gray/yellow/green/red)."""
+    if not collab_ids:
+        return {}
+    rn = (
+        func.row_number()
+        .over(partition_by=ApprovalRequest.collaboration_id, order_by=ApprovalRequest.created_at.desc())
+        .label("rn")
+    )
+    subq = (
+        select(
+            ApprovalRequest.collaboration_id.label("collaboration_id"),
+            ApprovalRequest.status.label("status"),
+            ApprovalRequest.target.label("target"),
+            rn,
+        )
+        .where(ApprovalRequest.collaboration_id.in_(collab_ids))
+        .subquery()
+    )
+    stmt = select(subq.c.collaboration_id, subq.c.status, subq.c.target).where(subq.c.rn == 1)
+    rows = (await db.execute(stmt)).all()
+    return {cid: (approval_status.value, target.value) for cid, approval_status, target in rows}
+
+
 def _to_out(
     collab: Collaboration,
     creator: Creator,
     owner: User,
     products: list[CollabProductOut],
     agg: tuple[int, int],
+    approval: tuple[str, str] | None = None,
 ) -> CollaborationOut:
     total, live = agg
     return CollaborationOut(
@@ -153,6 +182,8 @@ def _to_out(
         created_at=collab.created_at,
         last_activity_at=collab.last_activity_at,
         ownership_revoked_at=collab.ownership_revoked_at,
+        approval_status=approval[0] if approval else None,
+        approval_target=approval[1] if approval else None,
     )
 
 
@@ -202,8 +233,11 @@ async def list_collaborations(
 
     aggregates = await _creator_aggregates(db, list({row[1].id for row in rows}))
     products_by_collab = await _load_products_for_collabs(db, [row[0].id for row in rows])
+    approvals_by_collab = await _latest_approval_by_collab(db, [row[0].id for row in rows])
     return [
-        _to_out(c, creator, owner, products_by_collab.get(c.id, []), aggregates[creator.id])
+        _to_out(
+            c, creator, owner, products_by_collab.get(c.id, []), aggregates[creator.id], approvals_by_collab.get(c.id)
+        )
         for c, creator, owner in rows
     ]
 
@@ -432,17 +466,13 @@ async def transition_collab_stage(
             or (collab.creator_reply and collab.creator_reply.strip())
         ):
             missing.append("creator_reply")
-        # Email/phone aren't required to add a new lead, but the creator must
-        # be reachable once they've actually replied -- same stage threshold
-        # as creator_reply itself.
+        # Phone isn't required to add a new lead, but the creator must be
+        # reachable once they've actually replied -- same stage threshold as
+        # creator_reply itself. Email stays optional throughout.
         if "creator_reply" in required and not (
             (payload.creator_phone and payload.creator_phone.strip()) or (creator.phone and creator.phone.strip())
         ):
             missing.append("creator_phone")
-        if "creator_reply" in required and not (
-            (payload.creator_email and payload.creator_email.strip()) or (creator.email and creator.email.strip())
-        ):
-            missing.append("creator_email")
         if "commercial_quoted" in required and payload.commercial_quoted is None and collab.commercial_quoted is None:
             missing.append("commercial_quoted")
         if "commercial_amount" in required and payload.commercial_amount is None and collab.commercial_amount is None:

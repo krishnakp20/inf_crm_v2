@@ -23,7 +23,7 @@ from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
 from app.db.models.creator_file import CreatorFile
-from app.db.models.enums import CollabStage, CreatorStage, FollowUpStatus, UserRole
+from app.db.models.enums import CollabStage, CreatorStage, FollowUpStatus, OwnershipEventType, UserRole
 from app.db.models.follow_up import FollowUp
 from app.db.models.message import Message
 from app.db.models.ownership_event import OwnershipEvent
@@ -35,6 +35,7 @@ from app.schemas.creator import (
     BoardStats,
     BulkAssign,
     BulkUploadResult,
+    BulkUploadRowResult,
     CreatorCreate,
     CreatorDetail,
     CreatorListResponse,
@@ -333,21 +334,42 @@ async def bulk_upload_creators(
     if user.role == UserRole.admin:
         result = await db.execute(select(User.email, User.id).where(User.role == UserRole.advisor))
         owner_by_email = {email.lower(): uid for email, uid in result.all()}
+    users_by_id = {u.id: u.name for u in (await db.execute(select(User))).scalars().all()}
 
     created = 0
     skipped = 0
     errors: list[str] = []
+    row_results: list[BulkUploadRowResult] = []
 
     for line_num, row in enumerate(reader, start=2):
         name = (row.get("name") or "").strip()
         handle = (row.get("instagram_handle") or row.get("handle") or "").strip().lstrip("@")
         if not name or not handle:
-            errors.append(f"Row {line_num}: missing name or instagram_handle")
+            reason = "Missing name or instagram_handle"
+            errors.append(f"Row {line_num}: {reason.lower()}")
+            row_results.append(
+                BulkUploadRowResult(
+                    row=line_num, instagram_handle=handle, name=name, status="error", reason=reason
+                )
+            )
             continue
 
-        existing = await db.execute(select(Creator).where(Creator.instagram_handle == handle))
-        if existing.scalar_one_or_none() is not None:
+        existing = (
+            await db.execute(select(Creator).where(Creator.instagram_handle == handle))
+        ).scalar_one_or_none()
+        if existing is not None:
             skipped += 1
+            row_results.append(
+                BulkUploadRowResult(
+                    row=line_num,
+                    instagram_handle=handle,
+                    name=name,
+                    status="already_present",
+                    reason="Already present in the database",
+                    existing_owner=users_by_id.get(existing.owner_id, "Unknown"),
+                    existing_stage=existing.current_stage.value.replace("_", " ").title(),
+                )
+            )
             continue
 
         owner_id = user.id
@@ -371,10 +393,24 @@ async def bulk_upload_creators(
             owner_id=owner_id,
         )
         db.add(creator)
+        await db.flush()
+        db.add(
+            OwnershipEvent(
+                creator_id=creator.id,
+                user_id=owner_id,
+                event_type=OwnershipEventType.assigned,
+                actor_id=user.id,
+            )
+        )
         created += 1
+        row_results.append(
+            BulkUploadRowResult(
+                row=line_num, instagram_handle=handle, name=name, status="created", reason="Added to database"
+            )
+        )
 
     await db.commit()
-    return BulkUploadResult(created=created, skipped=skipped, errors=errors)
+    return BulkUploadResult(created=created, skipped=skipped, errors=errors, rows=row_results)
 
 
 @router.get("/{creator_id}", response_model=CreatorOut)
@@ -474,6 +510,7 @@ async def create_creator(
         name=payload.name,
         instagram_handle=payload.instagram_handle,
         phone=payload.phone,
+        alternate_phone=payload.alternate_phone,
         email=payload.email,
         city=payload.city,
         instagram_link=payload.instagram_link or f"https://instagram.com/{payload.instagram_handle}",
@@ -485,7 +522,14 @@ async def create_creator(
     )
     db.add(creator)
     await db.flush()
-    db.add(OwnershipEvent(creator_id=creator.id, user_id=creator.owner_id))
+    db.add(
+        OwnershipEvent(
+            creator_id=creator.id,
+            user_id=creator.owner_id,
+            event_type=OwnershipEventType.assigned,
+            actor_id=user.id,
+        )
+    )
     await db.commit()
     await db.refresh(creator)
     return creator
@@ -516,13 +560,34 @@ async def update_creator(
         setattr(creator, field, value)
     creator.last_activity_at = datetime.now(timezone.utc)
     if creator.is_archived and not was_archived:
+        if not archive_reason or not archive_reason.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A note is required when archiving a creator.",
+            )
         creator.archived_at = datetime.now(timezone.utc)
         creator.archive_reason = archive_reason
+        db.add(
+            OwnershipEvent(
+                creator_id=creator.id,
+                user_id=creator.owner_id,
+                event_type=OwnershipEventType.revoked,
+                actor_id=user.id,
+                note=archive_reason,
+            )
+        )
     elif not creator.is_archived and was_archived:
         creator.archived_at = None
         creator.archive_reason = None
     if owner_changed:
-        db.add(OwnershipEvent(creator_id=creator.id, user_id=new_owner_id))
+        db.add(
+            OwnershipEvent(
+                creator_id=creator.id,
+                user_id=new_owner_id,
+                event_type=OwnershipEventType.admin_assigned,
+                actor_id=user.id,
+            )
+        )
     await db.commit()
     await db.refresh(creator)
     return creator
@@ -553,7 +618,14 @@ async def transfer_ownership(
 
     creator.owner_id = new_owner.id
     creator.last_activity_at = datetime.now(timezone.utc)
-    db.add(OwnershipEvent(creator_id=creator.id, user_id=new_owner.id))
+    db.add(
+        OwnershipEvent(
+            creator_id=creator.id,
+            user_id=new_owner.id,
+            event_type=OwnershipEventType.transferred,
+            actor_id=user.id,
+        )
+    )
     await db.commit()
     await db.refresh(creator)
     return creator
@@ -563,7 +635,7 @@ async def transfer_ownership(
 async def bulk_assign(
     payload: BulkAssign,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ) -> list[Creator]:
     new_owner = await db.get(User, payload.new_owner_id)
     if new_owner is None or new_owner.role != UserRole.advisor:
@@ -578,7 +650,14 @@ async def bulk_assign(
         creator.archived_at = None
         creator.archive_reason = None
         creator.last_activity_at = now
-        db.add(OwnershipEvent(creator_id=creator.id, user_id=new_owner.id))
+        db.add(
+            OwnershipEvent(
+                creator_id=creator.id,
+                user_id=new_owner.id,
+                event_type=OwnershipEventType.admin_assigned,
+                actor_id=admin_user.id,
+            )
+        )
     await db.commit()
     for creator in creators:
         await db.refresh(creator)

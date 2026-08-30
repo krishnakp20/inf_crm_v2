@@ -23,6 +23,7 @@ export function AddCreatorModal({
   const [handle, setHandle] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [alternatePhone, setAlternatePhone] = useState("");
   const [ownerId, setOwnerId] = useState(
     defaultOwnerId ?? (canAssignOwner ? users[0]?.id ?? currentUserId : currentUserId)
   );
@@ -65,6 +66,7 @@ export function AddCreatorModal({
         name,
         instagram_handle: handle.replace(/^@/, ""),
         phone: phone || null,
+        alternate_phone: alternatePhone || null,
         followers_count: followersCount ? Number(followersCount) : 0,
         category: category || "Beauty",
         owner_id: canAssignOwner ? ownerId : currentUserId,
@@ -160,6 +162,15 @@ export function AddCreatorModal({
           <p className="-mt-2 mb-3 text-[11px] text-gray-400">
             Not required for a new lead — will be asked for once the creator replies.
           </p>
+
+          <label className="mb-1 block text-sm font-medium text-gray-700">Alternate mobile number · Optional</label>
+          <input
+            type="tel"
+            value={alternatePhone}
+            onChange={(e) => setAlternatePhone(e.target.value)}
+            placeholder="+91 98765 43210"
+            className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
 
           {canAssignOwner && (
             <>

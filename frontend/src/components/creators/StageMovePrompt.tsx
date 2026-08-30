@@ -25,7 +25,6 @@ export function StageMovePrompt({
   const [contentType, setContentType] = useState<ContentType | "">("");
   const [liveAttributionIds, setLiveAttributionIds] = useState<number[]>([]);
   const [creatorPhone, setCreatorPhone] = useState("");
-  const [creatorEmail, setCreatorEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -61,10 +60,6 @@ export function StageMovePrompt({
       setError("Phone / WhatsApp is required.");
       return;
     }
-    if (missingFields.includes("creator_email") && !creatorEmail.trim()) {
-      setError("Email address is required.");
-      return;
-    }
     setSubmitting(true);
     try {
       await api.post(`/collaborations/${collabId}/stage`, {
@@ -76,7 +71,6 @@ export function StageMovePrompt({
         content_type: missingFields.includes("content_type") ? contentType : undefined,
         live_attribution_product_ids: missingFields.includes("live_attribution") ? liveAttributionIds : undefined,
         creator_phone: missingFields.includes("creator_phone") ? creatorPhone : undefined,
-        creator_email: missingFields.includes("creator_email") ? creatorEmail : undefined,
       });
       onMoved();
       onClose();
@@ -114,18 +108,6 @@ export function StageMovePrompt({
                 value={creatorPhone}
                 onChange={(e) => setCreatorPhone(e.target.value)}
                 placeholder="+91 98765 43210"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-          )}
-          {missingFields.includes("creator_email") && (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Email address · Required</label>
-              <input
-                type="email"
-                value={creatorEmail}
-                onChange={(e) => setCreatorEmail(e.target.value)}
-                placeholder="creator@email.com"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
             </div>

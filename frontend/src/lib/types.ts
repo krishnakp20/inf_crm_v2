@@ -48,6 +48,7 @@ export interface Product {
 export interface ProductPerformance extends Product {
   owner_name: string;
   videos_live: number;
+  credit_by_owner: Record<string, number>;
 }
 
 export interface CollabProduct {
@@ -65,6 +66,7 @@ export type ContentType = "integrated" | "dedicated";
 
 export type ApprovalPriority = "high" | "normal";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type ApprovalTarget = "admin" | "supervisor";
 
 export interface ApprovalRequest {
   id: number;
@@ -79,8 +81,20 @@ export interface ApprovalRequest {
   priority: ApprovalPriority;
   note: string;
   status: ApprovalStatus;
+  target: ApprovalTarget;
   created_at: string;
   resolved_at: string | null;
+}
+
+export interface Notification {
+  kind: "approval" | "partnership";
+  id: number;
+  creator_name: string;
+  creator_handle: string;
+  subtitle: string;
+  priority: "high" | "normal";
+  created_at: string;
+  link: string;
 }
 
 export interface Collaboration {
@@ -113,6 +127,8 @@ export interface Collaboration {
   created_at: string;
   last_activity_at: string;
   ownership_revoked_at: string | null;
+  approval_status: ApprovalStatus | null;
+  approval_target: ApprovalTarget | null;
 }
 
 export interface OwnershipMatch {
@@ -135,6 +151,7 @@ export interface Creator {
   name: string;
   instagram_handle: string;
   phone: string | null;
+  alternate_phone: string | null;
   email: string | null;
   city: string | null;
   instagram_link: string | null;
@@ -175,10 +192,21 @@ export interface CreatorTableResponse {
   total: number;
 }
 
+export interface BulkUploadRowResult {
+  row: number;
+  instagram_handle: string;
+  name: string;
+  status: "created" | "already_present" | "error";
+  reason: string;
+  existing_owner: string | null;
+  existing_stage: string | null;
+}
+
 export interface BulkUploadResult {
   created: number;
   skipped: number;
   errors: string[];
+  rows: BulkUploadRowResult[];
 }
 
 export interface NextAction {
@@ -259,6 +287,14 @@ export interface OwnershipHistoryEntry {
   since_label: string;
 }
 
+export interface ActivityLogEntry {
+  event_type: "assigned" | "transferred" | "admin_assigned" | "revoked";
+  title: string;
+  description: string;
+  actor_name: string | null;
+  timestamp_label: string;
+}
+
 export interface CreatorLifecycle {
   creator_name: string;
   creator_handle: string;
@@ -271,6 +307,7 @@ export interface CreatorLifecycle {
   video_history: VideoHistoryRow[];
   commercial_history: CommercialHistorySummary;
   ownership_history: OwnershipHistoryEntry[];
+  activity_log: ActivityLogEntry[];
 }
 
 export type MessageChannel = "call" | "whatsapp" | "email" | "instagram_dm" | "note";
@@ -589,6 +626,12 @@ export interface AnalyticsCostEfficiency {
   cost_per_hit: number | null;
 }
 
+export interface AnalyticsCommercialLocked {
+  total_locked: number;
+  achieved: number;
+  committed: number;
+}
+
 export interface AnalyticsWhatIsWorkingRow {
   rank: number;
   dimension_value: string;
@@ -627,6 +670,7 @@ export interface AnalyticsResponse {
   performance_overview: AnalyticsPerformanceOverview;
   product_performance: AnalyticsProductPerformanceRow[];
   cost_efficiency: AnalyticsCostEfficiency | null;
+  commercial_locked: AnalyticsCommercialLocked | null;
   what_is_working: AnalyticsWhatIsWorking;
   pipeline_velocity: AnalyticsPipelineVelocityRow[];
   target_vs_achieved: AnalyticsTargetRow[];

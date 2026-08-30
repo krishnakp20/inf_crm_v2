@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import (
     get_current_user,
     owner_scope_filter,
-    require_admin,
     require_creator_workspace_access,
     scoped_owner_ids,
 )
@@ -15,7 +14,7 @@ from app.db.models.approval_request import ApprovalRequest
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
-from app.db.models.enums import ApprovalStatus, UserRole
+from app.db.models.enums import ApprovalStatus, ApprovalTarget, UserRole
 from app.db.models.product import Product
 from app.db.models.user import User
 from app.db.session import get_db
@@ -55,6 +54,7 @@ def _to_out(req: ApprovalRequest, collab: Collaboration, creator: Creator, produ
         priority=req.priority,
         note=req.note,
         status=req.status,
+        target=req.target,
         created_at=req.created_at,
         resolved_at=req.resolved_at,
     )
@@ -80,6 +80,11 @@ async def list_approval_requests(
         owner_ids = await owner_scope_filter(user, db, owner_id)
         if owner_ids is not None:
             stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+        if user.role == UserRole.supervisor:
+            # A supervisor's queue only surfaces requests actually routed to
+            # them -- admin-targeted requests stay admin-only even though
+            # the collaboration is within this supervisor's team.
+            stmt = stmt.where(ApprovalRequest.target == ApprovalTarget.supervisor)
 
     if status_filter is not None:
         stmt = stmt.where(ApprovalRequest.status == status_filter)
@@ -105,6 +110,14 @@ async def create_approval_request(
     if owner_ids is not None and collab.owner_id not in owner_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
 
+    if payload.target == ApprovalTarget.supervisor:
+        owner = await db.get(User, collab.owner_id)
+        if owner is None or owner.supervisor_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This creator's owner has no supervisor assigned -- send to Admin instead.",
+            )
+
     year = datetime.now(timezone.utc).year
     count = (await db.execute(select(func.count(ApprovalRequest.id)))).scalar_one()
     request_code = f"APR-{year}-{count + 1:04d}"
@@ -115,6 +128,7 @@ async def create_approval_request(
         requested_by=user.id,
         priority=payload.priority,
         note=payload.note,
+        target=payload.target,
     )
     db.add(req)
     await db.commit()
@@ -132,13 +146,29 @@ async def _get_request_or_404(request_id: int, db: AsyncSession) -> ApprovalRequ
     return req
 
 
+async def _require_can_resolve(req: ApprovalRequest, db: AsyncSession, user: User) -> None:
+    """Admin can resolve any request. A supervisor can only resolve one
+    that's actually routed to them (target=supervisor) and within their
+    own team -- everyone else (including a supervisor viewing an
+    admin-targeted request) is forbidden."""
+    if user.role == UserRole.admin:
+        return
+    if user.role == UserRole.supervisor and req.target == ApprovalTarget.supervisor:
+        collab = await db.get(Collaboration, req.collaboration_id)
+        owner_ids = await scoped_owner_ids(user, db)
+        if collab is not None and (owner_ids is None or collab.owner_id in owner_ids):
+            return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to resolve this request.")
+
+
 @router.post("/{request_id}/approve", response_model=ApprovalRequestOut)
 async def approve_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ) -> ApprovalRequestOut:
     req = await _get_request_or_404(request_id, db)
+    await _require_can_resolve(req, db, user)
     req.status = ApprovalStatus.approved
     req.resolved_at = datetime.now(timezone.utc)
     req.resolved_by = user.id
@@ -156,9 +186,10 @@ async def approve_request(
 async def reject_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ) -> ApprovalRequestOut:
     req = await _get_request_or_404(request_id, db)
+    await _require_can_resolve(req, db, user)
     req.status = ApprovalStatus.rejected
     req.resolved_at = datetime.now(timezone.utc)
     req.resolved_by = user.id

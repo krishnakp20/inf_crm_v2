@@ -6,8 +6,13 @@ const ROW_COLORS = ["#5B5CE2", "#8B8BF2", "#F06E62", "#238B57", "#E6A23C"];
 export function ProductPerformance({ products }: { products: ProductPerformanceType[] }) {
   const [userFilter, setUserFilter] = useState("");
 
-  const users = useMemo(() => [...new Set(products.map((p) => p.owner_name))].sort(), [products]);
-  const visible = userFilter ? products.filter((p) => p.owner_name === userFilter) : products;
+  // Real contributors (who actually delivered each product's live videos),
+  // not products' static owner_name -- see credit_by_owner on the backend.
+  const users = useMemo(
+    () => [...new Set(products.flatMap((p) => Object.keys(p.credit_by_owner)))].sort(),
+    [products]
+  );
+  const visible = userFilter ? products.filter((p) => (p.credit_by_owner[userFilter] ?? 0) > 0) : products;
 
   return (
     <div className="dashboard-card p-5">
@@ -35,17 +40,17 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
       <div className="mt-4 flex flex-col gap-3">
         {visible.map((product, idx) => {
           const color = ROW_COLORS[idx % ROW_COLORS.length];
-          const pct = product.target_videos > 0 ? Math.min((product.videos_live / product.target_videos) * 100, 100) : 0;
+          const videosLive = userFilter ? product.credit_by_owner[userFilter] ?? 0 : product.videos_live;
+          const pct = product.target_videos > 0 ? Math.min((videosLive / product.target_videos) * 100, 100) : 0;
           return (
             <div key={product.id}>
               <div className="mb-1 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
                   <span className="text-xs font-medium text-ink">{product.name}</span>
-                  {userFilter && <span className="text-[11px] text-gray-400">{product.owner_name}</span>}
                 </div>
                 <span className="text-xs text-gray-500">
-                  <strong className="font-semibold text-ink">{product.videos_live} live</strong>{" "}
+                  <strong className="font-semibold text-ink">{videosLive} live</strong>{" "}
                   <em className="not-italic">of {product.target_videos}</em>
                 </span>
               </div>

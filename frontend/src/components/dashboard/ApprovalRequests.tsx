@@ -18,12 +18,12 @@ const PAGE_SIZE = 4;
 
 export function ApprovalRequests({
   requests,
-  isAdmin,
+  canApprove,
   onApprove,
   onReject,
 }: {
   requests: ApprovalRequest[];
-  isAdmin: boolean;
+  canApprove: boolean;
   onApprove?: (id: number) => void;
   onReject?: (id: number) => void;
 }) {
@@ -41,12 +41,12 @@ export function ApprovalRequests({
     <div className="dashboard-card p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-[15px] font-normal text-ink">{isAdmin ? "Approval requests" : "Approval sent"}</h2>
+          <h2 className="text-[15px] font-normal text-ink">{canApprove ? "Approval requests" : "Approval sent"}</h2>
           <p className="mt-1 text-[10px] text-muted">
-            {isAdmin ? "Leads sent by agents for Admin approval" : "Requests you have sent to Admin"}
+            {canApprove ? "Leads sent to you for approval" : "Requests you have sent for approval"}
           </p>
         </div>
-        {isAdmin && users.length > 1 && (
+        {canApprove && users.length > 1 && (
           <select
             aria-label="Filter approval requests by user"
             value={userFilter}
@@ -80,7 +80,8 @@ export function ApprovalRequests({
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {req.requested_by_name} · {req.collab_stage_label}
+                  {req.requested_by_name} · {req.collab_stage_label} · Sent to{" "}
+                  {req.target === "admin" ? "Admin" : "Supervisor"}
                 </div>
                 <p className="mt-1.5 text-xs text-gray-600">{req.note}</p>
                 <div className="mt-1.5 text-[11px] text-gray-400">
@@ -94,7 +95,7 @@ export function ApprovalRequests({
               </div>
             </div>
             <div className="mt-2.5 flex items-center gap-2">
-              {isAdmin ? (
+              {canApprove ? (
                 <>
                   <Link
                     to="/my-creators"
@@ -125,7 +126,7 @@ export function ApprovalRequests({
         ))}
         {filtered.length === 0 && (
           <p className="text-sm text-gray-400">
-            {isAdmin ? "No pending approval requests." : "You haven't sent any approval requests."}
+            {canApprove ? "No pending approval requests." : "You haven't sent any approval requests."}
           </p>
         )}
       </div>

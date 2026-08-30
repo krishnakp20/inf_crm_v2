@@ -76,6 +76,7 @@ export default function Dashboard() {
   }
 
   const isAdmin = user?.role === "admin";
+  const canApprove = isAdmin || user?.role === "supervisor";
 
   const {
     kpis,
@@ -179,7 +180,7 @@ export default function Dashboard() {
         <PipelineFunnel funnel={funnel} movedThisWeek={funnel_moved_this_week} />
         <ApprovalRequests
           requests={approval_requests}
-          isAdmin={isAdmin}
+          canApprove={canApprove}
           onApprove={approveRequest}
           onReject={rejectRequest}
         />

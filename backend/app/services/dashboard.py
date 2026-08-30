@@ -9,7 +9,7 @@ from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
-from app.db.models.enums import ApprovalStatus, CollabStage, FollowUpStatus, TicketStatus, UserRole
+from app.db.models.enums import ApprovalStatus, ApprovalTarget, CollabStage, FollowUpStatus, TicketStatus, UserRole
 from app.db.models.follow_up import FollowUp
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
@@ -22,6 +22,7 @@ from app.schemas.dashboard import (
     DashboardResponse,
     FunnelStage,
     KpiSummary,
+    NotificationOut,
     TargetRow,
 )
 from app.schemas.product import ProductPerformance
@@ -29,9 +30,10 @@ from app.services.collab_pipeline import (
     COLLAB_FUNNEL_BUCKETS,
     COLLAB_STAGE_INDEX,
     COLLAB_STAGE_LABELS,
-    get_video_credit_by_product,
+    get_video_credit_by_product_and_owner,
 )
 from app.services.collab_pipeline import bucket_min_index as collab_bucket_min_index
+from app.services.partnership_pipeline import scoped_ticket_ids
 
 
 async def get_followup_progress_today(
@@ -272,25 +274,48 @@ async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | No
 
 
 async def get_product_performance(db: AsyncSession, owner_ids: list[int] | None = None) -> list[ProductPerformance]:
-    credit_by_product = await get_video_credit_by_product(db, owner_ids)
+    # Product.owner_id is just whoever's account created/imported the
+    # product row -- not a performance signal (confirmed: 122 of 130
+    # products in this dataset are attributed to the one admin account the
+    # bulk import ran under). The real per-advisor breakdown has to come
+    # from who actually owns the collaborations that delivered each
+    # product's live videos, which get_video_credit_by_product_and_owner
+    # computes directly from Collaboration.owner_id.
+    credit_by_product_and_owner = await get_video_credit_by_product_and_owner(db, owner_ids)
+    all_owner_ids = {oid for by_owner in credit_by_product_and_owner.values() for oid in by_owner}
+    owner_names = (
+        {u.id: u.name for u in (await db.execute(select(User).where(User.id.in_(all_owner_ids)))).scalars().all()}
+        if all_owner_ids
+        else {}
+    )
 
+    # Every product is shown regardless of scope -- target_videos is a
+    # fixed, org-wide value, not per-advisor -- but is_archived-style
+    # scoping isn't applicable here since Product has no owner-based access
+    # restriction; only which collaborations count toward its credit is
+    # scoped, via owner_ids above.
     stmt = select(Product, User.name).join(User, User.id == Product.owner_id)
-    if owner_ids is not None:
-        stmt = stmt.where(Product.owner_id.in_(owner_ids))
     rows = (await db.execute(stmt.order_by(Product.name))).all()
 
-    return [
-        ProductPerformance(
-            id=product.id,
-            name=product.name,
-            owner_id=product.owner_id,
-            target_videos=product.target_videos,
-            created_at=product.created_at,
-            owner_name=owner_name,
-            videos_live=round(credit_by_product.get(product.id, 0.0), 2),
+    result: list[ProductPerformance] = []
+    for product, creator_name in rows:
+        by_owner = credit_by_product_and_owner.get(product.id, {})
+        credit_by_owner_name = {
+            owner_names.get(oid, "Unknown"): round(cred, 2) for oid, cred in by_owner.items() if cred
+        }
+        result.append(
+            ProductPerformance(
+                id=product.id,
+                name=product.name,
+                owner_id=product.owner_id,
+                target_videos=product.target_videos,
+                created_at=product.created_at,
+                owner_name=creator_name,
+                videos_live=round(sum(by_owner.values()), 2),
+                credit_by_owner=credit_by_owner_name,
+            )
         )
-        for product, owner_name in rows
-    ]
+    return result
 
 
 async def _primary_products_by_collab(db: AsyncSession, collab_ids: list[int]) -> dict[int, str]:
@@ -308,7 +333,7 @@ async def _primary_products_by_collab(db: AsyncSession, collab_ids: list[int]) -
 
 
 async def get_dashboard_approval_requests(
-    db: AsyncSession, owner_ids: list[int] | None = None, limit: int = 10
+    db: AsyncSession, owner_ids: list[int] | None = None, limit: int = 10, user: User | None = None
 ) -> list[ApprovalRequestOut]:
     stmt = (
         select(ApprovalRequest, Collaboration, Creator, User)
@@ -319,6 +344,10 @@ async def get_dashboard_approval_requests(
     )
     if owner_ids is not None:
         stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if user is not None and user.role == UserRole.supervisor:
+        # Same rule as approval_requests.py's list endpoint: a supervisor's
+        # queue only shows requests actually routed to them.
+        stmt = stmt.where(ApprovalRequest.target == ApprovalTarget.supervisor)
     stmt = stmt.order_by(ApprovalRequest.created_at.desc()).limit(limit)
     rows = (await db.execute(stmt)).all()
 
@@ -338,11 +367,81 @@ async def get_dashboard_approval_requests(
             priority=req.priority,
             note=req.note,
             status=req.status,
+            target=req.target,
             created_at=req.created_at,
             resolved_at=req.resolved_at,
         )
         for req, collab, creator, requester in rows
     ]
+
+
+_PARTNERSHIP_NOTIFICATION_SUBTITLES: dict[TicketStatus, str] = {
+    TicketStatus.open: "New partnership ticket · needs first action",
+    TicketStatus.pending_at_admin: "Advisor responded · awaiting your review",
+    TicketStatus.pending_at_user: "Awaiting your response",
+}
+
+
+async def get_dashboard_notifications(
+    db: AsyncSession, user: User, owner_ids: list[int] | None
+) -> list[NotificationOut]:
+    """Merges pending approval requests with Partnership Hub tickets
+    currently awaiting this user's action into one bell-dropdown feed.
+    Admin/marketer see tickets sitting at "open" or "pending_at_admin";
+    advisors/supervisors see their own tickets at "pending_at_user" --
+    mirrors the exact same role split the Partnership Hub routes already
+    enforce (see partnership.py's take_action/respond_to_ticket).
+    """
+    approvals = await get_dashboard_approval_requests(db, owner_ids, limit=50, user=user)
+    items: list[NotificationOut] = [
+        NotificationOut(
+            kind="approval",
+            id=a.id,
+            creator_name=a.creator_name,
+            creator_handle=a.creator_handle,
+            subtitle=f"{a.requested_by_name} · {a.collab_stage_label}",
+            priority=a.priority.value,
+            created_at=a.created_at,
+            link="/my-creators",
+        )
+        for a in approvals
+    ]
+
+    if user.role != UserRole.editor:
+        is_admin_side = user.role in (UserRole.admin, UserRole.marketer)
+        wanted_statuses = (
+            [TicketStatus.open, TicketStatus.pending_at_admin]
+            if is_admin_side
+            else [TicketStatus.pending_at_user]
+        )
+        ticket_scope = await scoped_ticket_ids(user, db)
+        stmt = (
+            select(PartnershipTicket, Collaboration, Creator)
+            .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
+            .join(Creator, Creator.id == Collaboration.creator_id)
+            .where(PartnershipTicket.ticket_status.in_(wanted_statuses))
+        )
+        if ticket_scope is not None:
+            stmt = stmt.where(PartnershipTicket.id.in_(ticket_scope))
+        stmt = stmt.order_by(PartnershipTicket.created_at.desc()).limit(50)
+        rows = (await db.execute(stmt)).all()
+
+        for ticket, collab, creator in rows:
+            items.append(
+                NotificationOut(
+                    kind="partnership",
+                    id=ticket.id,
+                    creator_name=creator.name,
+                    creator_handle=creator.instagram_handle,
+                    subtitle=f"{collab.collab_code} · {_PARTNERSHIP_NOTIFICATION_SUBTITLES[ticket.ticket_status]}",
+                    priority="normal" if ticket.ticket_status == TicketStatus.open else "high",
+                    created_at=ticket.created_at,
+                    link="/partnership",
+                )
+            )
+
+    items.sort(key=lambda n: n.created_at, reverse=True)
+    return items
 
 
 async def _activity(db: AsyncSession, owner_ids: list[int] | None = None) -> list[ActivityItem]:
@@ -374,6 +473,7 @@ async def get_dashboard(
     owner_ids: list[int] | None = None,
     range_start: datetime | None = None,
     range_end: datetime | None = None,
+    user: User | None = None,
 ) -> DashboardResponse:
     now = datetime.now(timezone.utc)
     return DashboardResponse(
@@ -382,7 +482,7 @@ async def get_dashboard(
         funnel_moved_this_week=await _collab_moved_in_range(db, now, owner_ids, range_start, range_end),
         targets=await get_targets(db, now, owner_ids),
         product_performance=await get_product_performance(db, owner_ids),
-        approval_requests=await get_dashboard_approval_requests(db, owner_ids),
+        approval_requests=await get_dashboard_approval_requests(db, owner_ids, user=user),
         activity=await _activity(db, owner_ids),
         announcement=await _latest_announcement(db, owner_ids),
     )

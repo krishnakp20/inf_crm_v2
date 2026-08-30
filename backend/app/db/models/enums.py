@@ -126,3 +126,15 @@ class DealType(str, enum.Enum):
 class ContentType(str, enum.Enum):
     integrated = "integrated"
     dedicated = "dedicated"
+
+
+class OwnershipEventType(str, enum.Enum):
+    assigned = "assigned"
+    transferred = "transferred"
+    admin_assigned = "admin_assigned"
+    revoked = "revoked"
+
+
+class ApprovalTarget(str, enum.Enum):
+    admin = "admin"
+    supervisor = "supervisor"

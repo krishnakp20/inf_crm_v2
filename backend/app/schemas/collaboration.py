@@ -102,6 +102,8 @@ class CollaborationOut(BaseModel):
     created_at: datetime
     last_activity_at: datetime
     ownership_revoked_at: datetime | None
+    approval_status: str | None = None  # "pending" | "approved" | "rejected"
+    approval_target: str | None = None  # "admin" | "supervisor"
 
 
 class CollabBoardStats(BaseModel):

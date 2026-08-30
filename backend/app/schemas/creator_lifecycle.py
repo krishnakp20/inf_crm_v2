@@ -59,6 +59,14 @@ class OwnershipHistoryEntry(BaseModel):
     since_label: str
 
 
+class ActivityLogEntry(BaseModel):
+    event_type: str  # "assigned" | "transferred" | "admin_assigned" | "revoked"
+    title: str
+    description: str
+    actor_name: str | None
+    timestamp_label: str
+
+
 class CreatorLifecycle(BaseModel):
     creator_name: str
     creator_handle: str
@@ -71,3 +79,4 @@ class CreatorLifecycle(BaseModel):
     video_history: list[VideoHistoryRow]
     commercial_history: CommercialHistorySummary
     ownership_history: list[OwnershipHistoryEntry]
+    activity_log: list[ActivityLogEntry]

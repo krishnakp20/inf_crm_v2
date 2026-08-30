@@ -55,6 +55,8 @@ export function AddCollaborationModal({
   const [tab, setTab] = useState<CreatorTab>("existing");
   const [existingCreators, setExistingCreators] = useState<Creator[]>([]);
   const [selectedCreatorId, setSelectedCreatorId] = useState<number | "">("");
+  const [creatorSearch, setCreatorSearch] = useState("");
+  const [creatorDropdownOpen, setCreatorDropdownOpen] = useState(false);
 
   const [newName, setNewName] = useState("");
   const [newHandle, setNewHandle] = useState("");
@@ -107,10 +109,24 @@ export function AddCollaborationModal({
   useEffect(() => {
     api.get<{ items: Creator[]; total: number }>("/creators", { params: { owner_id: ownerId, limit: 500 } }).then((res) => {
       setExistingCreators(res.data.items);
-      setSelectedCreatorId(res.data.items[0]?.id ?? "");
+      const first = res.data.items[0];
+      setSelectedCreatorId(first?.id ?? "");
+      setCreatorSearch(first ? `@${first.instagram_handle} · ${first.name}` : "");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerId]);
+
+  const filteredCreators = creatorSearch.trim()
+    ? existingCreators.filter((c) =>
+        `${c.instagram_handle} ${c.name}`.toLowerCase().includes(creatorSearch.trim().toLowerCase())
+      )
+    : existingCreators;
+
+  function selectCreator(c: Creator) {
+    setSelectedCreatorId(c.id);
+    setCreatorSearch(`@${c.instagram_handle} · ${c.name}`);
+    setCreatorDropdownOpen(false);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -256,18 +272,47 @@ export function AddCollaborationModal({
         {tab === "existing" && (
           <>
             <label className="mb-1 block text-sm font-medium text-gray-700">Existing Instagram username</label>
-            <select
-              value={selectedCreatorId}
-              onChange={(e) => setSelectedCreatorId(Number(e.target.value))}
-              className="mb-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {existingCreators.length === 0 && <option value="">No creators yet</option>}
-              {existingCreators.map((c) => (
-                <option key={c.id} value={c.id}>
-                  @{c.instagram_handle} · {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative mb-1">
+              <input
+                value={creatorSearch}
+                onChange={(e) => {
+                  setCreatorSearch(e.target.value);
+                  setCreatorDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  setCreatorSearch("");
+                  setCreatorDropdownOpen(true);
+                }}
+                onBlur={() =>
+                  setTimeout(() => {
+                    setCreatorDropdownOpen(false);
+                    const selected = existingCreators.find((c) => c.id === selectedCreatorId);
+                    setCreatorSearch(selected ? `@${selected.instagram_handle} · ${selected.name}` : "");
+                  }, 150)
+                }
+                placeholder="Search by username or name..."
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+              {creatorDropdownOpen && (
+                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+                  {filteredCreators.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-400">No matching creators</div>
+                  )}
+                  {filteredCreators.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onMouseDown={() => selectCreator(c)}
+                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface ${
+                        c.id === selectedCreatorId ? "bg-brand-50 font-medium text-brand-700" : "text-ink"
+                      }`}
+                    >
+                      @{c.instagram_handle} · {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <p className="mb-3 text-[11px] text-gray-400">
               A new Collab ID will be created. The creator username and Creator ID remain unchanged.
             </p>

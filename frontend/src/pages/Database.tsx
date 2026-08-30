@@ -9,7 +9,7 @@ import { OwnershipCheck } from "../components/creators/OwnershipCheck";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import type { BulkUploadResult, CreatorTableRow, User } from "../lib/types";
+import type { BulkUploadResult, BulkUploadRowResult, CreatorTableRow, User } from "../lib/types";
 
 const SORT_OPTIONS = [
   { label: "Creator name", value: "name" },
@@ -27,7 +27,8 @@ function csvEscape(value: string): string {
   return value;
 }
 
-const LIMIT = 10;
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 50, 100, 150];
 
 export default function Database() {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ export default function Database() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [showAddCreator, setShowAddCreator] = useState(false);
   const [detailCreatorId, setDetailCreatorId] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -71,7 +73,7 @@ export default function Database() {
 
   function loadCreators() {
     const params: Record<string, string | number | boolean> = {
-      limit: LIMIT,
+      limit: pageSize,
       offset,
       is_archived: activeTab === "archived",
       sort_by: sortBy,
@@ -104,7 +106,7 @@ export default function Database() {
     }
   }
 
-  useEffect(loadCreators, [ownerId, activeTab, sortBy, sortDir, search, offset]);
+  useEffect(loadCreators, [ownerId, activeTab, sortBy, sortDir, search, offset, pageSize]);
   useEffect(loadTabCounts, [ownerId, search]);
 
   if (user && (user.role === "marketer" || user.role === "editor")) {
@@ -136,10 +138,38 @@ export default function Database() {
       formData.append("upload", file);
       const res = await api.post<BulkUploadResult>("/creators/bulk-upload", formData);
       setUploadResult(res.data);
+      downloadBulkUploadLog(res.data.rows);
       loadCreators();
     } finally {
       setUploading(false);
     }
+  }
+
+  function downloadBulkUploadLog(rows: BulkUploadRowResult[]) {
+    const header = ["Row", "Instagram handle", "Name", "Status", "Reason", "Existing owner", "Existing stage"];
+    const lines = [
+      header.join(","),
+      ...rows.map((r) =>
+        [
+          String(r.row),
+          r.instagram_handle,
+          r.name,
+          r.status,
+          r.reason,
+          r.existing_owner ?? "",
+          r.existing_stage ?? "",
+        ]
+          .map((v) => csvEscape(v))
+          .join(",")
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bulk-upload-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function downloadTemplate() {
@@ -288,12 +318,33 @@ export default function Database() {
           <div className="flex items-center justify-between">
             <span>
               Bulk upload: <strong>{uploadResult.created}</strong> created, <strong>{uploadResult.skipped}</strong>{" "}
-              skipped (already existed){uploadResult.errors.length > 0 && `, ${uploadResult.errors.length} errors`}
+              already present{uploadResult.errors.length > 0 && `, ${uploadResult.errors.length} errors`}
             </span>
-            <button onClick={() => setUploadResult(null)} className="text-xs text-gray-400 hover:text-gray-600">
-              Dismiss
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => downloadBulkUploadLog(uploadResult.rows)}
+                className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline"
+              >
+                <Download size={12} />
+                Download log
+              </button>
+              <button onClick={() => setUploadResult(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                Dismiss
+              </button>
+            </div>
           </div>
+          {uploadResult.rows.some((r) => r.status === "already_present") && (
+            <ul className="mt-2 list-disc pl-5 text-xs text-gray-500">
+              {uploadResult.rows
+                .filter((r) => r.status === "already_present")
+                .map((r, i) => (
+                  <li key={i}>
+                    Row {r.row} · @{r.instagram_handle}: already present, owned by {r.existing_owner} · currently{" "}
+                    {r.existing_stage}
+                  </li>
+                ))}
+            </ul>
+          )}
           {uploadResult.errors.length > 0 && (
             <ul className="mt-2 list-disc pl-5 text-xs text-[#cf4e43]">
               {uploadResult.errors.map((err, i) => (
@@ -402,6 +453,24 @@ export default function Database() {
             </button>
           </>
         )}
+        <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
+          <span className="text-xs text-gray-400">Per page</span>
+          <select
+            aria-label="Creators per page"
+            value={pageSize}
+            onChange={(e) => {
+              setOffset(0);
+              setPageSize(Number(e.target.value));
+            }}
+            className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {activeTab === "archived" ? (
@@ -410,7 +479,7 @@ export default function Database() {
           owners={owners}
           advisors={advisors}
           total={total}
-          limit={LIMIT}
+          limit={pageSize}
           offset={offset}
           sortBy={sortBy}
           sortDir={sortDir}
@@ -424,7 +493,7 @@ export default function Database() {
           creators={creators}
           owners={owners}
           total={total}
-          limit={LIMIT}
+          limit={pageSize}
           offset={offset}
           sortBy={sortBy}
           sortDir={sortDir}

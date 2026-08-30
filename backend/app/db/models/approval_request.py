@@ -4,7 +4,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.db.models.enums import ApprovalPriority, ApprovalStatus
+from app.db.models.enums import ApprovalPriority, ApprovalStatus, ApprovalTarget
 
 
 class ApprovalRequest(Base):
@@ -16,6 +16,12 @@ class ApprovalRequest(Base):
     requested_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     priority: Mapped[ApprovalPriority] = mapped_column(
         Enum(ApprovalPriority, name="approval_priority"), default=ApprovalPriority.normal
+    )
+    # Who this request needs a decision from. Admin can always act on any
+    # request regardless of target -- this only changes whether a
+    # supervisor's own queue picks it up (see approval_requests.py).
+    target: Mapped[ApprovalTarget] = mapped_column(
+        Enum(ApprovalTarget, name="approval_target"), default=ApprovalTarget.admin
     )
     note: Mapped[str] = mapped_column(Text)
     status: Mapped[ApprovalStatus] = mapped_column(

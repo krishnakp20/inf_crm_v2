@@ -5,11 +5,12 @@ from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
-from app.db.models.enums import CollabStage
+from app.db.models.enums import CollabStage, OwnershipEventType
 from app.db.models.ownership_event import OwnershipEvent
 from app.db.models.product import Product
 from app.db.models.user import User
 from app.schemas.creator_lifecycle import (
+    ActivityLogEntry,
     CommercialHistoryRow,
     CommercialHistorySummary,
     CreatorLifecycle,
@@ -145,14 +146,21 @@ async def get_creator_lifecycle(db: AsyncSession, creator_id: int) -> CreatorLif
         .scalars()
         .all()
     )
+    user_ids = {e.user_id for e in ownership_events} | {e.actor_id for e in ownership_events if e.actor_id}
+    users_by_id = (
+        {u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()}
+        if user_ids
+        else {}
+    )
+
+    # A "revoked" event doesn't reassign the creator to anyone new -- it must
+    # be excluded here, or it would wrongly appear as a fresh assignment to
+    # the same owner and reset their "ownership since" date to today.
+    assignment_events = [e for e in ownership_events if e.event_type != OwnershipEventType.revoked]
+
     ownership_history: list[OwnershipHistoryEntry] = []
-    if ownership_events:
-        user_ids = {e.user_id for e in ownership_events}
-        users_by_id = {
-            u.id: u
-            for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
-        }
-        for i, event in enumerate(reversed(ownership_events)):
+    if assignment_events:
+        for i, event in enumerate(reversed(assignment_events)):
             u = users_by_id.get(event.user_id)
             name = u.name if u else "Unknown"
             is_current = i == 0
@@ -173,6 +181,41 @@ async def get_creator_lifecycle(db: AsyncSession, creator_id: int) -> CreatorLif
                 status="current",
                 note="Current user",
                 since_label=_date_label(creator.created_at),
+            )
+        )
+
+    # --- Activity log: every ownership event, including revokes, each with
+    # who performed it -- unlike ownership_history above, which only tracks
+    # who currently/previously owned the creator.
+    ACTIVITY_TITLES: dict[OwnershipEventType | None, str] = {
+        OwnershipEventType.assigned: "Ownership assigned to {name}",
+        OwnershipEventType.transferred: "Ownership transferred to {name}",
+        OwnershipEventType.admin_assigned: "Assigned by admin to {name}",
+        OwnershipEventType.revoked: "Ownership revoked from {name}",
+        None: "Ownership assigned to {name}",
+    }
+    activity_log: list[ActivityLogEntry] = []
+    for event in reversed(ownership_events):
+        target = users_by_id.get(event.user_id)
+        target_name = target.name if target else "Unknown"
+        actor = users_by_id.get(event.actor_id) if event.actor_id else None
+        activity_log.append(
+            ActivityLogEntry(
+                event_type=(event.event_type.value if event.event_type else "assigned"),
+                title=ACTIVITY_TITLES[event.event_type].format(name=target_name),
+                description=(event.note or "").strip() or "No additional notes.",
+                actor_name=actor.name if actor else None,
+                timestamp_label=_date_label(event.created_at),
+            )
+        )
+    if not activity_log:
+        activity_log.append(
+            ActivityLogEntry(
+                event_type="assigned",
+                title=f"Ownership assigned to {owner_name}",
+                description="No additional notes.",
+                actor_name=None,
+                timestamp_label=_date_label(creator.created_at),
             )
         )
 
@@ -242,7 +285,9 @@ async def get_creator_lifecycle(db: AsyncSession, creator_id: int) -> CreatorLif
         LifecycleTimelineEntry(
             icon="ownership",
             title=f"Ownership assigned to {owner_name}",
-            timestamp_label=_date_label(ownership_events[-1].created_at if ownership_events else creator.created_at),
+            timestamp_label=_date_label(
+                assignment_events[-1].created_at if assignment_events else creator.created_at
+            ),
             description=(
                 "First ownership assignment for this creator."
                 if len(ownership_history) <= 1
@@ -318,4 +363,5 @@ async def get_creator_lifecycle(db: AsyncSession, creator_id: int) -> CreatorLif
         video_history=video_history,
         commercial_history=commercial_history,
         ownership_history=ownership_history,
+        activity_log=activity_log,
     )

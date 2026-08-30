@@ -112,21 +112,31 @@ for _stage in COLLAB_STAGE_ORDER:
     STAGE_REQUIRED_FIELDS[_stage] = list(_cumulative)
 
 
-async def get_video_credit_by_product(db: AsyncSession, owner_ids: list[int] | None = None) -> dict[int, float]:
+async def get_video_credit_by_product_and_owner(
+    db: AsyncSession, owner_ids: list[int] | None = None
+) -> dict[int, dict[int, float]]:
     """Per-product fractional video-live credit for the Dashboard's
-    Product-wise performance panel. A collaboration in the Live stage always
-    counts as exactly one video overall (see is_video_live) -- this function
-    only decides how that one video's credit is split across products: evenly
+    Product-wise performance panel, keyed by (product_id -> {collaboration
+    owner_id: credit}). A collaboration in the Live stage always counts as
+    exactly one video overall (see is_video_live) -- this function only
+    decides how that one video's credit is split across products: evenly
     across whichever products are marked is_live_attributed, or, if none are
     marked (e.g. the collab reached Live via drag/"Jump to stage" rather than
     the backfill form), the full credit falls to the primary product.
-    """
+
+    Keyed by the collaboration's real owner_id, not Product.owner_id --
+    the latter is just whoever's account created/imported the product row
+    (confirmed: 122 of 130 products in this dataset are attributed to the
+    one admin account the bulk import ran under), which is why the
+    Dashboard's per-user filter used to show almost nothing for any advisor
+    other than that one account."""
     stmt = (
         select(
             CollaborationProduct.collaboration_id,
             CollaborationProduct.product_id,
             CollaborationProduct.is_primary,
             CollaborationProduct.is_live_attributed,
+            Collaboration.owner_id,
         )
         .join(Collaboration, Collaboration.id == CollaborationProduct.collaboration_id)
         .where(Collaboration.stage == CollabStage.live)
@@ -136,21 +146,24 @@ async def get_video_credit_by_product(db: AsyncSession, owner_ids: list[int] | N
     rows = (await db.execute(stmt)).all()
 
     by_collab: dict[int, list[tuple[int, bool, bool]]] = defaultdict(list)
-    for collab_id, product_id, is_primary, is_live_attributed in rows:
+    owner_by_collab: dict[int, int] = {}
+    for collab_id, product_id, is_primary, is_live_attributed, collab_owner_id in rows:
         by_collab[collab_id].append((product_id, is_primary, is_live_attributed))
+        owner_by_collab[collab_id] = collab_owner_id
 
-    credit: dict[int, float] = defaultdict(float)
-    for links in by_collab.values():
+    credit: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+    for collab_id, links in by_collab.items():
+        collab_owner_id = owner_by_collab[collab_id]
         live_attributed = [pid for pid, _, live in links if live]
         if live_attributed:
             share = 1.0 / len(live_attributed)
             for pid in live_attributed:
-                credit[pid] += share
+                credit[pid][collab_owner_id] += share
         else:
             primary = next((pid for pid, is_primary, _ in links if is_primary), None)
             if primary is not None:
-                credit[primary] += 1.0
-    return dict(credit)
+                credit[primary][collab_owner_id] += 1.0
+    return {pid: dict(by_owner) for pid, by_owner in credit.items()}
 
 
 async def apply_stage_transition(

@@ -6,6 +6,17 @@ from app.schemas.approval_request import ApprovalRequestOut
 from app.schemas.product import ProductPerformance
 
 
+class NotificationOut(BaseModel):
+    kind: str  # "approval" | "partnership"
+    id: int  # source row id -- unique within kind, not across kinds
+    creator_name: str
+    creator_handle: str
+    subtitle: str
+    priority: str  # "high" | "normal"
+    created_at: datetime
+    link: str
+
+
 class KpiSummary(BaseModel):
     total_creators: int
     new_this_month: int

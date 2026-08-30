@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
-import type { ApprovalPriority, Collaboration } from "../../lib/types";
+import type { ApprovalPriority, ApprovalTarget, Collaboration } from "../../lib/types";
 
 export function RequestApprovalModal({
   collab,
@@ -11,8 +12,11 @@ export function RequestApprovalModal({
   onClose: () => void;
   onSent: () => void;
 }) {
+  const { user } = useAuth();
+  const hasSupervisor = user?.supervisor_id != null;
   const primaryProductName = collab.products.find((p) => p.is_primary)?.product_name ?? collab.products[0]?.product_name;
   const [priority, setPriority] = useState<ApprovalPriority>("normal");
+  const [target, setTarget] = useState<ApprovalTarget>("admin");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -30,6 +34,7 @@ export function RequestApprovalModal({
         collaboration_id: collab.id,
         priority,
         note,
+        target,
       });
       onSent();
       onClose();
@@ -50,6 +55,23 @@ export function RequestApprovalModal({
         <h2 className="mb-1 text-base font-semibold text-ink">Request approval</h2>
         <p className="mb-4 text-sm text-gray-500">
           {collab.creator_name} · {primaryProductName} · {collab.collab_code}
+        </p>
+
+        <label className="mb-1 block text-sm font-medium text-gray-700">Send to</label>
+        <select
+          value={target}
+          onChange={(e) => setTarget(e.target.value as ApprovalTarget)}
+          className="mb-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="admin">Admin</option>
+          <option value="supervisor" disabled={!hasSupervisor}>
+            My supervisor{!hasSupervisor ? " (none assigned)" : ""}
+          </option>
+        </select>
+        <p className="-mt-1 mb-3 text-[11px] text-gray-400">
+          {target === "supervisor"
+            ? "Only your supervisor will see and act on this request."
+            : "Admin will see and act on this request."}
         </p>
 
         <label className="mb-1 block text-sm font-medium text-gray-700">Priority</label>

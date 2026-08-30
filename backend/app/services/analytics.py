@@ -15,6 +15,7 @@ from app.db.models.product_target import ProductTarget
 from app.db.models.user import User
 from app.schemas.analytics import (
     AnalyticsBusinessImpact,
+    AnalyticsCommercialLocked,
     AnalyticsCostEfficiency,
     AnalyticsPerformanceOverview,
     AnalyticsPipelineVelocityRow,
@@ -72,6 +73,66 @@ async def _scoped_live_collab_ids(
     if owner_ids is not None:
         stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
     return [row[0] for row in (await db.execute(stmt)).all()]
+
+
+async def _scoped_locked_collab_ids(
+    db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
+) -> list[int]:
+    """Collaborations whose commercial got locked within [range_start,
+    range_end) -- same date-range pattern as _scoped_live_collab_ids, but
+    keyed off when the commercial was locked rather than when the video
+    went live, since a collab in this set may or may not have gone live yet.
+
+    Prefers the first CollabStageEvent.to_stage==commercial_locked
+    timestamp, falling back to the collaboration's created_at when no such
+    event exists. That fallback is required, not cosmetic: bulk-imported
+    legacy collaborations (see import_legacy_creators.py) were created
+    directly at stage=live with a single None->live event and no granular
+    per-stage history, so an inner join on that event would silently
+    exclude the vast majority of real historical data (confirmed: only 8 of
+    937 live+commercial-locked collaborations have ever had a real
+    commercial_locked event)."""
+    locked_date_subq = (
+        select(
+            CollabStageEvent.collaboration_id.label("collaboration_id"),
+            func.min(CollabStageEvent.created_at).label("locked_date"),
+        )
+        .where(CollabStageEvent.to_stage == CollabStage.commercial_locked)
+        .group_by(CollabStageEvent.collaboration_id)
+        .subquery()
+    )
+    locked_date = func.coalesce(locked_date_subq.c.locked_date, Collaboration.created_at)
+    stmt = (
+        select(Collaboration.id)
+        .outerjoin(locked_date_subq, locked_date_subq.c.collaboration_id == Collaboration.id)
+        .where(
+            Collaboration.commercial_amount.is_not(None),
+            locked_date >= range_start,
+            locked_date < range_end,
+        )
+    )
+    if owner_ids is not None:
+        stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    return [row[0] for row in (await db.execute(stmt)).all()]
+
+
+async def commercial_locked_summary(db: AsyncSession, locked_ids: list[int]) -> AnalyticsCommercialLocked:
+    if not locked_ids:
+        return AnalyticsCommercialLocked(total_locked=0.0, achieved=0.0, committed=0.0)
+    stmt = select(
+        func.coalesce(func.sum(Collaboration.commercial_amount), 0),
+        func.coalesce(
+            func.sum(case((Collaboration.stage == CollabStage.live, Collaboration.commercial_amount), else_=0)), 0
+        ),
+    ).where(Collaboration.id.in_(locked_ids))
+    total_locked, achieved = (await db.execute(stmt)).one()
+    total_locked = float(total_locked)
+    achieved = float(achieved)
+    return AnalyticsCommercialLocked(
+        total_locked=total_locked,
+        achieved=achieved,
+        committed=total_locked - achieved,
+    )
 
 
 async def business_impact(db: AsyncSession, owner_ids: list[int] | None) -> AnalyticsBusinessImpact:

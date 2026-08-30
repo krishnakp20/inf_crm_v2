@@ -7,12 +7,11 @@ from app.core.deps import get_current_user, scoped_owner_ids
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.approval_request import ApprovalRequestOut
-from app.schemas.dashboard import DashboardResponse, KpiSummary
+from app.schemas.dashboard import DashboardResponse, KpiSummary, NotificationOut
 from app.services.dashboard import (
     _latest_announcement,
     get_dashboard,
-    get_dashboard_approval_requests,
+    get_dashboard_notifications,
     get_followup_progress_today,
 )
 
@@ -54,23 +53,23 @@ async def dashboard(
             placeholder_notice=_PLACEHOLDER_NOTICE[user.role],
         )
     owner_ids = await scoped_owner_ids(user, db)
-    return await get_dashboard(db, owner_ids, date_from, date_to)
+    return await get_dashboard(db, owner_ids, date_from, date_to, user)
 
 
-@router.get("/notifications", response_model=list[ApprovalRequestOut])
+@router.get("/notifications", response_model=list[NotificationOut])
 async def notifications(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> list[ApprovalRequestOut]:
-    """Pending approval requests scoped to this user -- same list and scope
-    the Dashboard's Approval requests panel shows, surfaced in the header
-    bell so a user doesn't need to be on the Dashboard to see what's
+) -> list[NotificationOut]:
+    """Pending approval requests and Partnership Hub tickets awaiting this
+    user's action, merged into one feed for the header bell -- so a user
+    doesn't need to be on the Dashboard or Partnership Hub to see what's
     waiting on them.
     """
-    if user.role in (UserRole.marketer, UserRole.editor):
+    if user.role == UserRole.marketer:
         return []
     owner_ids = await scoped_owner_ids(user, db)
-    return await get_dashboard_approval_requests(db, owner_ids, limit=50)
+    return await get_dashboard_notifications(db, user, owner_ids)
 
 
 @router.get("/my-progress")

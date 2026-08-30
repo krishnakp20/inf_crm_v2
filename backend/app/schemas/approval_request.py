@@ -2,13 +2,14 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.db.models.enums import ApprovalPriority, ApprovalStatus
+from app.db.models.enums import ApprovalPriority, ApprovalStatus, ApprovalTarget
 
 
 class ApprovalRequestCreate(BaseModel):
     collaboration_id: int
     priority: ApprovalPriority = ApprovalPriority.normal
     note: str
+    target: ApprovalTarget = ApprovalTarget.admin
 
 
 class ApprovalRequestOut(BaseModel):
@@ -24,5 +25,6 @@ class ApprovalRequestOut(BaseModel):
     priority: ApprovalPriority
     note: str
     status: ApprovalStatus
+    target: ApprovalTarget
     created_at: datetime
     resolved_at: datetime | None

@@ -32,6 +32,21 @@ const CONTENT_TYPE_STYLES: Record<string, { label: string; className: string }> 
   dedicated: { label: "Dedicated", className: "bg-indigo-50 text-indigo-600" },
 };
 
+const APPROVAL_SHIELD_STYLES: Record<string, string> = {
+  pending: "text-amber-500 hover:text-amber-600",
+  approved: "text-emerald-500 hover:text-emerald-600",
+  rejected: "text-red-500 hover:text-red-600",
+};
+
+function approvalShieldTitle(collab: Collaboration): string {
+  if (collab.approval_status === "pending") {
+    return `Pending approval · ${collab.approval_target === "supervisor" ? "Supervisor" : "Admin"}`;
+  }
+  if (collab.approval_status === "approved") return "Approval approved";
+  if (collab.approval_status === "rejected") return "Approval rejected";
+  return "Request approval";
+}
+
 export function CollabKanbanCard({
   collab,
   nextStage,
@@ -68,8 +83,12 @@ export function CollabKanbanCard({
               e.stopPropagation();
               onRequestApproval(collab);
             }}
-            title="Request approval"
-            className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-surface hover:text-brand-600"
+            title={approvalShieldTitle(collab)}
+            className={`flex h-5 w-5 items-center justify-center rounded hover:bg-surface ${
+              collab.approval_status
+                ? APPROVAL_SHIELD_STYLES[collab.approval_status]
+                : "text-gray-300 hover:text-brand-600"
+            }`}
           >
             <ShieldCheck size={12} />
           </button>

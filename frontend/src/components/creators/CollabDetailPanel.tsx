@@ -30,7 +30,6 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   content_type: "Content type (Integrated/Dedicated)",
   live_attribution: "Live video attribution",
   creator_phone: "Phone / WhatsApp",
-  creator_email: "Email address",
 };
 
 function toggleId(list: number[], setList: (v: number[]) => void, id: number) {
@@ -71,11 +70,13 @@ export function CollabDetailPanel({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(collab.payment_status);
   const [note, setNote] = useState(collab.note ?? "");
   const [creatorPhone, setCreatorPhone] = useState("");
+  const [creatorAlternatePhone, setCreatorAlternatePhone] = useState("");
   const [creatorEmail, setCreatorEmail] = useState("");
 
   useEffect(() => {
     api.get(`/creators/${collab.creator_id}`).then((res) => {
       setCreatorPhone(res.data.phone ?? "");
+      setCreatorAlternatePhone(res.data.alternate_phone ?? "");
       setCreatorEmail(res.data.email ?? "");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +119,7 @@ export function CollabDetailPanel({
       });
       await api.patch(`/creators/${collab.creator_id}`, {
         phone: creatorPhone || null,
+        alternate_phone: creatorAlternatePhone || null,
         email: creatorEmail || null,
       });
       onChanged();
@@ -267,18 +269,29 @@ export function CollabDetailPanel({
                 />
               </div>
               <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Alternate mobile number</label>
+                <input
+                  type="tel"
+                  value={creatorAlternatePhone}
+                  onChange={(e) => setCreatorAlternatePhone(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
                 <label className="mb-1 block text-xs font-medium text-gray-700">Email address</label>
                 <input
                   type="email"
                   value={creatorEmail}
                   onChange={(e) => setCreatorEmail(e.target.value)}
-                  placeholder="Not provided for this lead yet"
+                  placeholder="Optional"
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
             </div>
             <p className="mt-2 text-[11px] text-gray-400">
-              Not required for a new lead — required once the creator has replied.
+              Phone isn't required for a new lead — required once the creator has replied. Alternate number and
+              email are always optional.
             </p>
           </section>
 

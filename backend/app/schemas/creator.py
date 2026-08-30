@@ -9,6 +9,7 @@ class CreatorCreate(BaseModel):
     name: str
     instagram_handle: str
     phone: str | None = None
+    alternate_phone: str | None = None
     email: str | None = None
     city: str | None = None
     instagram_link: str | None = None
@@ -22,6 +23,7 @@ class CreatorCreate(BaseModel):
 class CreatorUpdate(BaseModel):
     name: str | None = None
     phone: str | None = None
+    alternate_phone: str | None = None
     email: str | None = None
     city: str | None = None
     instagram_link: str | None = None
@@ -53,6 +55,7 @@ class CreatorOut(BaseModel):
     name: str
     instagram_handle: str
     phone: str | None
+    alternate_phone: str | None
     email: str | None
     city: str | None
     instagram_link: str | None
@@ -96,10 +99,21 @@ class CreatorTableResponse(BaseModel):
     total: int
 
 
+class BulkUploadRowResult(BaseModel):
+    row: int
+    instagram_handle: str
+    name: str
+    status: str  # "created" | "already_present" | "error"
+    reason: str
+    existing_owner: str | None = None
+    existing_stage: str | None = None
+
+
 class BulkUploadResult(BaseModel):
     created: int
     skipped: int
     errors: list[str]
+    rows: list[BulkUploadRowResult]
 
 
 class CreatorListResponse(BaseModel):

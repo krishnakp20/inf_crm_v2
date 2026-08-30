@@ -16,7 +16,9 @@ from app.db.session import get_db
 from app.schemas.analytics import AnalyticsResponse
 from app.services.analytics import (
     _scoped_live_collab_ids,
+    _scoped_locked_collab_ids,
     business_impact,
+    commercial_locked_summary,
     cost_efficiency,
     performance_overview,
     pipeline_velocity,
@@ -90,6 +92,13 @@ async def get_analytics(
         performance_overview=overview,
         product_performance=await product_performance(db, live_ids, show_cost),
         cost_efficiency=await cost_efficiency(db, live_ids) if show_cost else None,
+        commercial_locked=(
+            await commercial_locked_summary(
+                db, await _scoped_locked_collab_ids(db, owner_ids, range_start, range_end)
+            )
+            if show_cost
+            else None
+        ),
         what_is_working=await what_is_working(db, live_ids),
         pipeline_velocity=await pipeline_velocity(db, owner_ids, range_start, range_end),
         target_vs_achieved=await target_vs_achieved(db, owner_ids, range_start, range_end),

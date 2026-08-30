@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { initials } from "../../lib/format";
-import type { ApprovalRequest } from "../../lib/types";
+import type { Notification } from "../../lib/types";
 
 const PRIORITY_STYLES: Record<string, string> = {
   high: "bg-[#fff0ed] text-[#cf4e43]",
@@ -15,12 +15,12 @@ export function AppHeader() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [notifications, setNotifications] = useState<ApprovalRequest[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   function loadNotifications() {
-    api.get<ApprovalRequest[]>("/dashboard/notifications").then((res) => setNotifications(res.data));
+    api.get<Notification[]>("/dashboard/notifications").then((res) => setNotifications(res.data));
   }
 
   useEffect(loadNotifications, []);
@@ -61,7 +61,7 @@ export function AppHeader() {
             if (!open) loadNotifications();
             setOpen((v) => !v);
           }}
-          title="Pending approval requests"
+          title="Notifications"
           className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-[#e7e5e4] text-ink hover:bg-surface"
         >
           <Bell size={18} />
@@ -74,14 +74,12 @@ export function AppHeader() {
 
         {open && (
           <div className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-card border border-[#e7e5e4] bg-white p-2 shadow-lg">
-            <div className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-gray-400">
-              Approval requests
-            </div>
+            <div className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-gray-400">Notifications</div>
             <div className="max-h-80 overflow-y-auto">
               {notifications.map((n) => (
                 <Link
-                  key={n.id}
-                  to="/my-creators"
+                  key={`${n.kind}-${n.id}`}
+                  to={n.link}
                   onClick={() => setOpen(false)}
                   className="flex items-start gap-2.5 rounded-lg p-2 hover:bg-surface"
                 >
@@ -97,14 +95,12 @@ export function AppHeader() {
                         {n.priority}
                       </span>
                     </div>
-                    <div className="truncate text-[11px] text-gray-500">
-                      {n.requested_by_name} · {n.collab_stage_label}
-                    </div>
+                    <div className="truncate text-[11px] text-gray-500">{n.subtitle}</div>
                   </div>
                 </Link>
               ))}
               {notifications.length === 0 && (
-                <p className="px-2 py-3 text-center text-xs text-gray-400">No pending approval requests.</p>
+                <p className="px-2 py-3 text-center text-xs text-gray-400">No pending notifications.</p>
               )}
             </div>
             {notifications.length > 0 && (

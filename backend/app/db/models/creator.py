@@ -14,6 +14,7 @@ class Creator(Base):
     name: Mapped[str] = mapped_column(String(120))
     instagram_handle: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     phone: Mapped[str | None] = mapped_column(String(30), index=True, nullable=True)
+    alternate_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     instagram_link: Mapped[str | None] = mapped_column(String(300), nullable=True)

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AnalyticsSummaryStrip } from "../components/analytics/AnalyticsSummaryStrip";
 import { AnalyticsTabs, type AnalyticsTab } from "../components/analytics/AnalyticsTabs";
 import { BusinessImpactRow } from "../components/analytics/BusinessImpactRow";
+import { CommercialLockedPanel } from "../components/analytics/CommercialLockedPanel";
 import { CostEfficiencyPanel } from "../components/analytics/CostEfficiencyPanel";
 import { PerformanceOverviewRow } from "../components/analytics/PerformanceOverviewRow";
 import { PipelineVelocityPanel } from "../components/analytics/PipelineVelocityPanel";
@@ -174,6 +175,7 @@ export default function Analytics() {
           <PerformanceOverviewRow data={data.performance_overview} showCpv={data.show_cpv} />
           <ProductPerformanceTable rows={data.product_performance} showCostPerComment={data.show_cost_efficiency} />
           {data.cost_efficiency && <CostEfficiencyPanel data={data.cost_efficiency} />}
+          {data.commercial_locked && <CommercialLockedPanel data={data.commercial_locked} />}
           <WhatIsWorkingPanel data={data.what_is_working} />
           <PipelineVelocityPanel rows={data.pipeline_velocity} />
           <TargetVsAchievedPanel rows={data.target_vs_achieved} />
