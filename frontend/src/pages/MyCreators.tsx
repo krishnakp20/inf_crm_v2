@@ -20,6 +20,13 @@ const PRIORITY_FILTERS = [
   { label: "Low", value: "none" },
 ];
 
+const PAYMENT_FILTERS = [
+  { label: "All payments", value: "" },
+  { label: "Paid", value: "payment_done" },
+  { label: "Pending", value: "pending" },
+  { label: "Partial", value: "partial_payment" },
+];
+
 export default function MyCreators() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
@@ -30,6 +37,7 @@ export default function MyCreators() {
   const [showAddCollab, setShowAddCollab] = useState(false);
   const [addCardStage, setAddCardStage] = useState<CollabStage | null>(null);
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [detailCollabId, setDetailCollabId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,6 +105,7 @@ export default function MyCreators() {
     const query = searchQuery.trim().toLowerCase();
     return collaborations.filter((c) => {
       if (priorityFilter && c.priority !== priorityFilter) return false;
+      if (paymentFilter && c.payment_status !== paymentFilter) return false;
       if (
         query &&
         !c.creator_name.toLowerCase().includes(query) &&
@@ -106,7 +115,7 @@ export default function MyCreators() {
       }
       return true;
     });
-  }, [collaborations, priorityFilter, searchQuery]);
+  }, [collaborations, priorityFilter, paymentFilter, searchQuery]);
 
   if (user && (user.role === "marketer" || user.role === "editor")) {
     return <Navigate to="/" replace />;
@@ -226,6 +235,21 @@ export default function MyCreators() {
             className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
           >
             {PRIORITY_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
+          <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">Payment</span>
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
+          >
+            {PAYMENT_FILTERS.map((f) => (
               <option key={f.value} value={f.value}>
                 {f.label}
               </option>
