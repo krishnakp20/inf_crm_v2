@@ -15,12 +15,25 @@ class ProductUpdate(BaseModel):
     target_videos: int | None = None
 
 
+class ProductVariantCreate(BaseModel):
+    name: str
+
+
+class ProductVariantOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 class ProductOut(BaseModel):
     id: int
     name: str
     owner_id: int
     target_videos: int
     created_at: datetime
+    variants: list[ProductVariantOut] = []
 
     class Config:
         from_attributes = True

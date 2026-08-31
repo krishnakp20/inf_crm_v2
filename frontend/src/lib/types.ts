@@ -37,12 +37,18 @@ export type CollabStage =
   | "live"
   | "dead_leads";
 
+export interface ProductVariant {
+  id: number;
+  name: string;
+}
+
 export interface Product {
   id: number;
   name: string;
   owner_id: number;
   target_videos: number;
   created_at: string;
+  variants: ProductVariant[];
 }
 
 export interface ProductPerformance extends Product {
@@ -57,6 +63,8 @@ export interface CollabProduct {
   is_primary: boolean;
   is_live_attributed: boolean;
   credit: number | null;
+  variant_id: number | null;
+  variant_name: string | null;
 }
 
 export type PaymentStatus = "pending" | "partial_payment" | "payment_done";
@@ -121,6 +129,8 @@ export interface Collaboration {
   order_id: string | null;
   poc_code: string | null;
   video_link: string | null;
+  video_live_date: string | null;
+  effective_live_date: string | null;
   is_overdue: boolean;
   creator_total_collabs: number;
   creator_videos_live: number;

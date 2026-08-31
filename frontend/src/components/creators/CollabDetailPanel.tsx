@@ -61,11 +61,15 @@ export function CollabDetailPanel({
   const [orderId, setOrderId] = useState(collab.order_id ?? "");
   const [pocCode, setPocCode] = useState(collab.poc_code ?? "");
   const [videoLink, setVideoLink] = useState(collab.video_link ?? "");
+  const [videoLiveDate, setVideoLiveDate] = useState(collab.video_live_date ?? "");
   const [additionalProductIds, setAdditionalProductIds] = useState<number[]>(
     collab.products.filter((p) => !p.is_primary).map((p) => p.product_id)
   );
   const [liveAttributionProductIds, setLiveAttributionProductIds] = useState<number[]>(
     collab.products.filter((p) => p.is_live_attributed).map((p) => p.product_id)
+  );
+  const [productVariants, setProductVariants] = useState<Record<number, number>>(
+    Object.fromEntries(collab.products.filter((p) => p.variant_id != null).map((p) => [p.product_id, p.variant_id!]))
   );
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(collab.payment_status);
   const [note, setNote] = useState(collab.note ?? "");
@@ -112,10 +116,14 @@ export function CollabDetailPanel({
         order_id: orderId || null,
         poc_code: pocCode || null,
         video_link: videoLink || null,
+        video_live_date: videoLiveDate || null,
         payment_status: paymentStatus,
         note: note || null,
         additional_product_ids: additionalProductIds,
         live_attribution_product_ids: liveAttributionProductIds,
+        product_variants: Object.fromEntries(
+          Object.entries(productVariants).filter(([pid]) => linkedProductIds.includes(Number(pid)))
+        ),
       });
       await api.patch(`/creators/${collab.creator_id}`, {
         phone: creatorPhone || null,
@@ -407,6 +415,28 @@ export function CollabDetailPanel({
                 </label>
               ))}
             </div>
+            {linkedProductIds
+              .map((pid) => products.find((p) => p.id === pid))
+              .filter((p): p is Product => !!p && p.variants.length > 0)
+              .map((p) => (
+                <div key={p.id} className="mt-2">
+                  <label className="mb-1 block text-[11px] text-gray-500">{p.name} · Shade</label>
+                  <select
+                    value={productVariants[p.id] ?? ""}
+                    onChange={(e) =>
+                      setProductVariants((prev) => ({ ...prev, [p.id]: Number(e.target.value) }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs"
+                  >
+                    <option value="">No shade selected</option>
+                    {p.variants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
           </section>
 
           <section className="mb-5 rounded-card border border-[#e7e5e4] p-3">
@@ -446,6 +476,18 @@ export function CollabDetailPanel({
                   placeholder="https://instagram.com/reel/..."
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-gray-500">Video live date · Optional</label>
+                <input
+                  type="date"
+                  value={videoLiveDate}
+                  onChange={(e) => setVideoLiveDate(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Leave blank to use the date this card was moved to Live.
+                </p>
               </div>
             </div>
           </section>

@@ -31,6 +31,7 @@ from app.schemas.partnership import (
     PartnershipTicketDetailOut,
     PartnershipVerifyCloseRequest,
 )
+from app.services.collab_pipeline import effective_live_dates
 from app.services.partnership_pipeline import (
     REMARK_TAG_ADMIN_COUNTER,
     REMARK_TAG_ADMIN_REQUEST,
@@ -95,15 +96,13 @@ async def _batch_load(db: AsyncSession, tickets: list[PartnershipTicket]) -> dic
     for cid, name in products_result.all():
         products_by_collab[cid].append(name)
 
-    live_date_result = await db.execute(
-        select(CollabStageEvent.collaboration_id, CollabStageEvent.created_at)
-        .where(CollabStageEvent.collaboration_id.in_(collab_ids), CollabStageEvent.to_stage == CollabStage.live)
-        .order_by(CollabStageEvent.created_at.desc())
-    )
-    live_date_by_collab: dict[int, datetime] = {}
-    for cid, created_at in live_date_result.all():
-        if cid not in live_date_by_collab:
-            live_date_by_collab[cid] = created_at
+    # Prefers each collab's explicit video_live_date when the user set one,
+    # falling back to the first transition-to-Live event -- see
+    # collab_pipeline.effective_live_dates for the shared rule.
+    effective_dates = await effective_live_dates(db, collab_ids)
+    live_date_by_collab: dict[int, datetime] = {
+        cid: datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc) for cid, d in effective_dates.items()
+    }
 
     remarks_result = await db.execute(
         select(PartnershipRemark, User.name)

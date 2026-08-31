@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import case, func, select
+from sqlalchemy import DateTime, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.collab_stage_event import CollabStageEvent
@@ -47,9 +47,12 @@ def show_revenue_data(user: User) -> bool:
 async def _scoped_live_collab_ids(
     db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
 ) -> list[int]:
-    """Live-stage collaborations in scope whose live-transition date (first
-    CollabStageEvent.to_stage==live timestamp, the same proxy Partnership
-    Hub's _batch_load uses for live_date) falls in [range_start, range_end).
+    """Live-stage collaborations in scope whose live date falls in
+    [range_start, range_end). "Live date" prefers the user's explicit
+    Collaboration.video_live_date, falling back to the first
+    CollabStageEvent.to_stage==live timestamp when unset -- same fallback
+    rule as collab_pipeline.effective_live_dates (not reused directly here
+    since this needs a SQL-level date-range filter, not a per-id dict).
     The single source of truth for "what counts as a Live video in scope for
     this date range" -- every other section reuses this id list."""
     live_date_subq = (
@@ -61,13 +64,14 @@ async def _scoped_live_collab_ids(
         .group_by(CollabStageEvent.collaboration_id)
         .subquery()
     )
+    effective_date = func.coalesce(cast(Collaboration.video_live_date, DateTime(timezone=True)), live_date_subq.c.live_date)
     stmt = (
         select(Collaboration.id)
-        .join(live_date_subq, live_date_subq.c.collaboration_id == Collaboration.id)
+        .outerjoin(live_date_subq, live_date_subq.c.collaboration_id == Collaboration.id)
         .where(
             Collaboration.stage == CollabStage.live,
-            live_date_subq.c.live_date >= range_start,
-            live_date_subq.c.live_date < range_end,
+            effective_date >= range_start,
+            effective_date < range_end,
         )
     )
     if owner_ids is not None:

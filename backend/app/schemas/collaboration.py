@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -11,6 +11,9 @@ class CollaborationCreate(BaseModel):
     primary_product_id: int
     additional_product_ids: list[int] = []
     live_attribution_product_ids: list[int] = []
+    # Optional product_id -> variant_id map; only for products that have a
+    # shade selected. Products not in this map get variant_id=NULL.
+    product_variants: dict[int, int] = {}
     priority: CreatorStatus = CreatorStatus.active
     stage: CollabStage = CollabStage.new_lead
     note: str | None = None
@@ -39,9 +42,11 @@ class CollaborationUpdate(BaseModel):
     order_id: str | None = None
     poc_code: str | None = None
     video_link: str | None = None
+    video_live_date: date | None = None
     payment_status: PaymentStatus | None = None
     additional_product_ids: list[int] | None = None
     live_attribution_product_ids: list[int] | None = None
+    product_variants: dict[int, int] | None = None
 
 
 class CollabStageTransition(BaseModel):
@@ -57,6 +62,10 @@ class CollabStageTransition(BaseModel):
     live_attribution_product_ids: list[int] | None = None
     creator_phone: str | None = None
     creator_email: str | None = None
+    # Optional -- only meaningful when to_stage=="live". Left blank, the
+    # date this move actually happens is used instead (see
+    # collab_pipeline.effective_live_dates).
+    video_live_date: date | None = None
 
 
 class StageRequirementError(BaseModel):
@@ -70,6 +79,8 @@ class CollabProductOut(BaseModel):
     is_primary: bool
     is_live_attributed: bool
     credit: float | None
+    variant_id: int | None = None
+    variant_name: str | None = None
 
 
 class CollaborationOut(BaseModel):
@@ -96,6 +107,8 @@ class CollaborationOut(BaseModel):
     order_id: str | None
     poc_code: str | None
     video_link: str | None
+    video_live_date: date | None  # explicit value, if the user set one
+    effective_live_date: date | None  # video_live_date, or the stage-move date if unset
     is_overdue: bool
     creator_total_collabs: int
     creator_videos_live: int

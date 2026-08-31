@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -36,6 +36,13 @@ class Collaboration(Base):
     # rows against these two fields, not collab_code/tracking_link.
     poc_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
     video_link: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # Optional, user-entered actual live date. Never required -- every
+    # consumer of "when did this go live" (Analytics scoping, Partnership
+    # Hub, Campaigns, Database table, creator lifecycle) falls back to the
+    # collaboration's first transition-to-Live CollabStageEvent when this
+    # is null. See collab_pipeline.effective_live_dates, the single shared
+    # source of truth for that fallback logic.
+    video_live_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     views_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     comments_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Populated by Metric Upload (Settings) only -- see app/services/metric_upload.py.

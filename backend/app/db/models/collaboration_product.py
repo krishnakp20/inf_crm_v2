@@ -13,3 +13,10 @@ class CollaborationProduct(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
     is_live_attributed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Which shade/variant of the product, if the product has any defined and
+    # one was picked. SET NULL on variant delete -- removing a shade from
+    # the admin-curated list shouldn't corrupt or block already-recorded
+    # collaborations, just clear which shade they point to.
+    variant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True
+    )

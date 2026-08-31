@@ -1,4 +1,4 @@
-import { Briefcase } from "lucide-react";
+import { Briefcase, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
@@ -11,12 +11,45 @@ export function ProductsPanel() {
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shadeDrafts, setShadeDrafts] = useState<Record<number, string>>({});
+  const [addingShadeFor, setAddingShadeFor] = useState<number | null>(null);
+  const [removingVariantId, setRemovingVariantId] = useState<number | null>(null);
 
   function loadProducts() {
     api.get<Product[]>("/products").then((res) => setProducts(res.data));
   }
 
   useEffect(loadProducts, []);
+
+  async function handleAddShade(productId: number) {
+    const shadeName = (shadeDrafts[productId] ?? "").trim();
+    if (!shadeName) return;
+    setError(null);
+    setAddingShadeFor(productId);
+    try {
+      await api.post(`/products/${productId}/variants`, { name: shadeName });
+      setShadeDrafts((prev) => ({ ...prev, [productId]: "" }));
+      loadProducts();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not add this shade.");
+    } finally {
+      setAddingShadeFor(null);
+    }
+  }
+
+  async function handleRemoveShade(productId: number, variantId: number, variantName: string) {
+    if (!confirm(`Remove shade "${variantName}"?`)) return;
+    setError(null);
+    setRemovingVariantId(variantId);
+    try {
+      await api.delete(`/products/${productId}/variants/${variantId}`);
+      loadProducts();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not remove this shade.");
+    } finally {
+      setRemovingVariantId(null);
+    }
+  }
 
   async function handleAdd() {
     if (!name.trim() || !user) return;
@@ -91,18 +124,62 @@ export function ProductsPanel() {
         <p className="mb-3 mt-0.5 text-xs text-gray-500">{products.length} universal product names</p>
         <div className="flex flex-col gap-2">
           {products.map((p) => (
-            <div key={p.id} className="flex items-center justify-between rounded-card border border-[#e7e5e4] p-4">
-              <div>
-                <div className="text-sm font-semibold text-ink">{p.name}</div>
-                <div className="text-xs text-gray-500">Available to all users</div>
+            <div key={p.id} className="rounded-card border border-[#e7e5e4] p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-ink">{p.name}</div>
+                  <div className="text-xs text-gray-500">Available to all users</div>
+                </div>
+                <button
+                  onClick={() => handleRemove(p)}
+                  disabled={removingId === p.id}
+                  className="text-sm font-semibold text-[#cf4e43] hover:underline disabled:opacity-50"
+                >
+                  {removingId === p.id ? "Removing..." : "Remove"}
+                </button>
               </div>
-              <button
-                onClick={() => handleRemove(p)}
-                disabled={removingId === p.id}
-                className="text-sm font-semibold text-[#cf4e43] hover:underline disabled:opacity-50"
-              >
-                {removingId === p.id ? "Removing..." : "Remove"}
-              </button>
+
+              <div className="mt-3 border-t border-[#e7e5e4] pt-3">
+                <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                  Shades / variants
+                </div>
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {p.variants.map((v) => (
+                    <span
+                      key={v.id}
+                      className="flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-ink"
+                    >
+                      {v.name}
+                      <button
+                        onClick={() => handleRemoveShade(p.id, v.id, v.name)}
+                        disabled={removingVariantId === v.id}
+                        title={`Remove ${v.name}`}
+                        className="text-gray-400 hover:text-[#cf4e43] disabled:opacity-50"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                  {p.variants.length === 0 && <span className="text-xs text-gray-400">No shades added yet</span>}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={shadeDrafts[p.id] ?? ""}
+                    onChange={(e) => setShadeDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddShade(p.id)}
+                    placeholder="e.g. Rose Gold"
+                    className="flex-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs"
+                  />
+                  <button
+                    onClick={() => handleAddShade(p.id)}
+                    disabled={!(shadeDrafts[p.id] ?? "").trim() || addingShadeFor === p.id}
+                    className="flex items-center gap-1 rounded-md border border-[#e7e5e4] px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-surface disabled:opacity-50"
+                  >
+                    <Plus size={12} />
+                    {addingShadeFor === p.id ? "Adding..." : "Add shade"}
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
           {products.length === 0 && <p className="text-sm text-gray-400">No products yet.</p>}

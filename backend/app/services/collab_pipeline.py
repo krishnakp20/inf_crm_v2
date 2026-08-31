@@ -1,7 +1,7 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.collab_stage_event import CollabStageEvent
@@ -68,6 +68,48 @@ def is_video_live(stage: CollabStage) -> bool:
     it sorts after Live in COLLAB_STAGE_ORDER for column-rendering purposes.
     """
     return stage == CollabStage.live
+
+
+async def effective_live_dates(db: AsyncSession, collab_ids: list[int]) -> dict[int, date]:
+    """The real "video went live" date for each collaboration: the
+    explicit Collaboration.video_live_date if the user entered one,
+    otherwise the date of this collab's first transition to CollabStage.live
+    (the same event-derived proxy every "live date" display in this app --
+    Analytics, Partnership Hub, Campaigns, the Database table, creator
+    lifecycle -- already used before this field existed). Single shared
+    source of truth so all of those stay consistent with each other and
+    with the explicit override once it's set.
+
+    Standardizes on the FIRST live transition where a proxy is needed --
+    a couple of call sites previously used the most recent one instead,
+    which only differs for a collaboration that left and re-entered Live,
+    an edge case where "first" is the more meaningful "when did this video
+    actually go live" answer anyway.
+    """
+    if not collab_ids:
+        return {}
+    event_rows = (
+        await db.execute(
+            select(CollabStageEvent.collaboration_id, func.min(CollabStageEvent.created_at))
+            .where(CollabStageEvent.collaboration_id.in_(collab_ids), CollabStageEvent.to_stage == CollabStage.live)
+            .group_by(CollabStageEvent.collaboration_id)
+        )
+    ).all()
+    event_date_by_collab = {cid: created_at.date() for cid, created_at in event_rows}
+
+    manual_rows = (
+        await db.execute(
+            select(Collaboration.id, Collaboration.video_live_date).where(
+                Collaboration.id.in_(collab_ids), Collaboration.video_live_date.is_not(None)
+            )
+        )
+    ).all()
+    manual_date_by_collab = dict(manual_rows)
+
+    return {
+        cid: manual_date_by_collab.get(cid, event_date_by_collab.get(cid))
+        for cid in set(event_date_by_collab) | set(manual_date_by_collab)
+    }
 
 
 # Fixed (non-admin-configurable) aging thresholds for the "Overdue" badge on

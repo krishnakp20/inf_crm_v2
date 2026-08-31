@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
@@ -35,6 +35,7 @@ from app.services.campaign_pipeline import (
     next_campaign_code,
     scoped_campaign_ids,
 )
+from app.services.collab_pipeline import effective_live_dates
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"], dependencies=[Depends(require_campaign_access)])
 
@@ -230,16 +231,13 @@ async def list_ads(
         for collab_id, name in product_rows.all():
             products_by_collab[collab_id].append(name)
 
-    live_date_by_collab: dict[int, datetime] = {}
-    if collab_ids:
-        live_date_rows = await db.execute(
-            select(CollabStageEvent.collaboration_id, CollabStageEvent.created_at)
-            .where(CollabStageEvent.collaboration_id.in_(collab_ids), CollabStageEvent.to_stage == CollabStage.live)
-            .order_by(CollabStageEvent.created_at.desc())
-        )
-        for collab_id, created_at in live_date_rows.all():
-            if collab_id not in live_date_by_collab:
-                live_date_by_collab[collab_id] = created_at
+    # Prefers each collab's explicit video_live_date when the user set one,
+    # falling back to the first transition-to-Live event -- see
+    # collab_pipeline.effective_live_dates for the shared rule.
+    live_date_by_collab: dict[int, datetime] = {
+        collab_id: datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc)
+        for collab_id, d in (await effective_live_dates(db, collab_ids)).items()
+    }
 
     return [
         CampaignAdOut(

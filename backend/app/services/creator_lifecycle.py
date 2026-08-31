@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +22,7 @@ from app.schemas.creator_lifecycle import (
     OwnershipHistoryEntry,
     VideoHistoryRow,
 )
-from app.services.collab_pipeline import COLLAB_STAGE_INDEX, COLLAB_STAGE_ORDER, is_video_live
+from app.services.collab_pipeline import COLLAB_STAGE_INDEX, COLLAB_STAGE_ORDER, effective_live_dates, is_video_live
 
 # Labels for the read-only lifecycle stepper shown in the Database page's
 # "view creator" drawer -- deliberately separate from COLLAB_STAGE_LABELS
@@ -79,20 +81,13 @@ async def get_creator_lifecycle(db: AsyncSession, creator_id: int) -> CreatorLif
             if is_primary or cid not in primary_product_by_collab:
                 primary_product_by_collab[cid] = name
 
-    went_live_at: dict[int, object] = {}
-    if collab_ids:
-        live_events = (
-            await db.execute(
-                select(CollabStageEvent.collaboration_id, CollabStageEvent.created_at)
-                .where(
-                    CollabStageEvent.collaboration_id.in_(collab_ids),
-                    CollabStageEvent.to_stage == CollabStage.live,
-                )
-                .order_by(CollabStageEvent.created_at.desc())
-            )
-        ).all()
-        for cid, created_at in live_events:
-            went_live_at.setdefault(cid, created_at)
+    # Prefers each collab's explicit video_live_date when the user set one,
+    # falling back to the first transition-to-Live event -- see
+    # collab_pipeline.effective_live_dates for the shared rule.
+    went_live_at: dict[int, datetime] = {
+        cid: datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc)
+        for cid, d in (await effective_live_dates(db, collab_ids)).items()
+    }
 
     non_dead = [c for c in collabs if c.stage != CollabStage.dead_leads]
     primary_collab = non_dead[0] if non_dead else (collabs[0] if collabs else None)
@@ -119,7 +114,7 @@ async def get_creator_lifecycle(db: AsyncSession, creator_id: int) -> CreatorLif
     # --- Summary ---
     videos_delivered = sum(1 for c in collabs if is_video_live(c.stage))
     live_collabs = [c for c in collabs if c.stage == CollabStage.live]
-    last_video_live_at = max((c.last_activity_at for c in live_collabs), default=None)
+    last_video_live_at = max((went_live_at[c.id] for c in live_collabs if c.id in went_live_at), default=None)
     with_cost = [c for c in collabs if c.commercial_amount is not None]
     last_locked_collab = max(with_cost, key=lambda c: c.last_activity_at) if with_cost else None
     current_stage_label = (

@@ -16,6 +16,7 @@ from app.db.models.partnership_remark import PartnershipRemark
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.product_target import ProductTarget
+from app.db.models.product_variant import ProductVariant
 from app.db.models.stage_deadline_rule import StageDeadlineRule
 from app.db.models.stage_event import StageEvent
 from app.db.models.user import User
@@ -39,6 +40,7 @@ __all__ = [
     "PartnershipTicket",
     "Product",
     "ProductTarget",
+    "ProductVariant",
     "StageDeadlineRule",
     "StageEvent",
     "User",

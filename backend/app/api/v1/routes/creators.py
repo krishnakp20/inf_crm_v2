@@ -18,7 +18,6 @@ from app.core.deps import (
     require_creator_workspace_access,
     scoped_owner_ids,
 )
-from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
@@ -52,7 +51,7 @@ from app.schemas.creator import (
 from app.schemas.creator_file import CreatorFileOut
 from app.schemas.creator_lifecycle import CreatorLifecycle
 from app.schemas.message import MessageCreate, MessageOut
-from app.services.collab_pipeline import COLLAB_STAGE_INDEX, COLLAB_STAGE_LABELS, is_video_live
+from app.services.collab_pipeline import COLLAB_STAGE_INDEX, COLLAB_STAGE_LABELS, effective_live_dates, is_video_live
 from app.services.creator_lifecycle import get_creator_lifecycle
 from app.services.pipeline import STAGE_INDEX, STAGE_LABELS, STAGE_ORDER
 
@@ -232,23 +231,29 @@ async def list_creators_table(
         for collab, product_name in collab_result.all():
             collabs_by_creator[collab.creator_id].append((collab, product_name))
 
+    # "Last video live" per creator: the most recent (by effective live
+    # date -- explicit video_live_date if set, else first transition to
+    # Live, see collab_pipeline.effective_live_dates) of their primary-
+    # product Live collaborations, reusing collabs_by_creator above rather
+    # than a second query.
+    live_collab_ids = [
+        c.id for collabs in collabs_by_creator.values() for c, _ in collabs if c.stage == CollabStage.live
+    ]
+    effective_dates = await effective_live_dates(db, live_collab_ids)
     last_live_by_creator: dict[int, tuple[datetime, str, int | None]] = {}
-    if creator_ids:
-        live_result = await db.execute(
-            select(CollabStageEvent.created_at, Collaboration.creator_id, Product.name, Collaboration.comments_count)
-            .join(Collaboration, Collaboration.id == CollabStageEvent.collaboration_id)
-            .join(CollaborationProduct, CollaborationProduct.collaboration_id == Collaboration.id)
-            .join(Product, Product.id == CollaborationProduct.product_id)
-            .where(
-                Collaboration.creator_id.in_(creator_ids),
-                CollabStageEvent.to_stage == CollabStage.live,
-                CollaborationProduct.is_primary.is_(True),
+    for creator_id_, collabs in collabs_by_creator.items():
+        candidates = [
+            (effective_dates[c.id], c, product_name)
+            for c, product_name in collabs
+            if c.stage == CollabStage.live and c.id in effective_dates
+        ]
+        if candidates:
+            best_date, best_collab, best_product = max(candidates, key=lambda t: t[0])
+            last_live_by_creator[creator_id_] = (
+                datetime.combine(best_date, datetime.min.time(), tzinfo=timezone.utc),
+                best_product,
+                best_collab.comments_count,
             )
-            .order_by(CollabStageEvent.created_at.desc())
-        )
-        for created_at, creator_id_, product_name, comments_count in live_result.all():
-            if creator_id_ not in last_live_by_creator:
-                last_live_by_creator[creator_id_] = (created_at, product_name, comments_count)
 
     rows: list[CreatorTableRow] = []
     for creator in creators:

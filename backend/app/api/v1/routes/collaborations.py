@@ -17,6 +17,7 @@ from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
 from app.db.models.enums import CollabStage
 from app.db.models.product import Product
+from app.db.models.product_variant import ProductVariant
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.collaboration import (
@@ -33,6 +34,7 @@ from app.services.collab_pipeline import (
     STAGE_REQUIRED_FIELDS,
     STARTABLE_STAGES,
     apply_stage_transition,
+    effective_live_dates,
     is_video_live,
 )
 
@@ -78,6 +80,33 @@ async def _creator_aggregates(db: AsyncSession, creator_ids: list[int]) -> dict[
     return aggregates
 
 
+async def _validate_product_variants(
+    db: AsyncSession, product_variants: dict[int, int], linked_product_ids: set[int]
+) -> dict[int, int]:
+    """Confirms every product_id in the map is actually linked to this
+    collaboration and every variant_id genuinely belongs to that product --
+    returns the map unchanged if valid, otherwise 400s."""
+    if not product_variants:
+        return {}
+    unknown_products = set(product_variants) - linked_product_ids
+    if unknown_products:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A shade was set for a product that isn't linked to this collaboration.",
+        )
+    variants = (
+        (await db.execute(select(ProductVariant).where(ProductVariant.id.in_(product_variants.values()))))
+        .scalars()
+        .all()
+    )
+    variant_by_id = {v.id: v for v in variants}
+    for product_id, variant_id in product_variants.items():
+        variant = variant_by_id.get(variant_id)
+        if variant is None or variant.product_id != product_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid shade for this product.")
+    return product_variants
+
+
 async def _load_products_for_collabs(db: AsyncSession, collab_ids: list[int]) -> dict[int, list[CollabProductOut]]:
     if not collab_ids:
         return {}
@@ -88,19 +117,24 @@ async def _load_products_for_collabs(db: AsyncSession, collab_ids: list[int]) ->
             Product.name,
             CollaborationProduct.is_primary,
             CollaborationProduct.is_live_attributed,
+            CollaborationProduct.variant_id,
+            ProductVariant.name,
         )
         .join(Product, Product.id == CollaborationProduct.product_id)
+        .outerjoin(ProductVariant, ProductVariant.id == CollaborationProduct.variant_id)
         .where(CollaborationProduct.collaboration_id.in_(collab_ids))
     )
     rows = result.all()
 
-    by_collab: dict[int, list[tuple[int, str, bool, bool]]] = {}
-    for collab_id, product_id, product_name, is_primary, is_live_attributed in rows:
-        by_collab.setdefault(collab_id, []).append((product_id, product_name, is_primary, is_live_attributed))
+    by_collab: dict[int, list[tuple[int, str, bool, bool, int | None, str | None]]] = {}
+    for collab_id, product_id, product_name, is_primary, is_live_attributed, variant_id, variant_name in rows:
+        by_collab.setdefault(collab_id, []).append(
+            (product_id, product_name, is_primary, is_live_attributed, variant_id, variant_name)
+        )
 
     out: dict[int, list[CollabProductOut]] = {}
     for collab_id, links in by_collab.items():
-        live_count = sum(1 for _, _, _, live in links if live)
+        live_count = sum(1 for _, _, _, live, _, _ in links if live)
         out[collab_id] = [
             CollabProductOut(
                 product_id=pid,
@@ -108,8 +142,10 @@ async def _load_products_for_collabs(db: AsyncSession, collab_ids: list[int]) ->
                 is_primary=is_primary,
                 is_live_attributed=is_live,
                 credit=(1 / live_count) if is_live and live_count else None,
+                variant_id=variant_id,
+                variant_name=variant_name,
             )
-            for pid, name, is_primary, is_live in sorted(links, key=lambda l: not l[2])
+            for pid, name, is_primary, is_live, variant_id, variant_name in sorted(links, key=lambda l: not l[2])
         ]
     return out
 
@@ -148,6 +184,7 @@ def _to_out(
     products: list[CollabProductOut],
     agg: tuple[int, int],
     approval: tuple[str, str] | None = None,
+    effective_live_date: date | None = None,
 ) -> CollaborationOut:
     total, live = agg
     return CollaborationOut(
@@ -176,6 +213,8 @@ def _to_out(
         order_id=collab.order_id,
         poc_code=collab.poc_code,
         video_link=collab.video_link,
+        video_live_date=collab.video_live_date,
+        effective_live_date=effective_live_date or collab.video_live_date,
         is_overdue=_is_overdue(collab),
         creator_total_collabs=total,
         creator_videos_live=live,
@@ -234,9 +273,16 @@ async def list_collaborations(
     aggregates = await _creator_aggregates(db, list({row[1].id for row in rows}))
     products_by_collab = await _load_products_for_collabs(db, [row[0].id for row in rows])
     approvals_by_collab = await _latest_approval_by_collab(db, [row[0].id for row in rows])
+    live_dates_by_collab = await effective_live_dates(db, [row[0].id for row in rows])
     return [
         _to_out(
-            c, creator, owner, products_by_collab.get(c.id, []), aggregates[creator.id], approvals_by_collab.get(c.id)
+            c,
+            creator,
+            owner,
+            products_by_collab.get(c.id, []),
+            aggregates[creator.id],
+            approvals_by_collab.get(c.id),
+            live_dates_by_collab.get(c.id),
         )
         for c, creator, owner in rows
     ]
@@ -315,6 +361,8 @@ async def create_collaboration(
             detail="Live attribution can only include products already linked to this collaboration.",
         )
 
+    variant_by_product = await _validate_product_variants(db, payload.product_variants, set(all_product_ids))
+
     owner_ids = await scoped_owner_ids(user, db)
     if owner_ids is not None and payload.owner_id is not None and payload.owner_id not in owner_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid owner within your team.")
@@ -353,6 +401,7 @@ async def create_collaboration(
             product_id=payload.primary_product_id,
             is_primary=True,
             is_live_attributed=payload.primary_product_id in live_attribution_ids,
+            variant_id=variant_by_product.get(payload.primary_product_id),
         )
     )
     for pid in additional_ids:
@@ -362,6 +411,7 @@ async def create_collaboration(
                 product_id=pid,
                 is_primary=False,
                 is_live_attributed=pid in live_attribution_ids,
+                variant_id=variant_by_product.get(pid),
             )
         )
 
@@ -371,7 +421,10 @@ async def create_collaboration(
 
     aggregates = await _creator_aggregates(db, [creator.id])
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
-    return _to_out(collab, creator, owner, products_by_collab.get(collab.id, []), aggregates[creator.id])
+    live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    return _to_out(
+        collab, creator, owner, products_by_collab.get(collab.id, []), aggregates[creator.id], None, live_date
+    )
 
 
 @router.patch("/{collab_id}", response_model=CollaborationOut)
@@ -385,11 +438,12 @@ async def update_collaboration(
     update_data = payload.model_dump(exclude_unset=True)
     additional_product_ids = update_data.pop("additional_product_ids", None)
     live_attribution_product_ids = update_data.pop("live_attribution_product_ids", None)
+    product_variants = update_data.pop("product_variants", None)
 
     for field, value in update_data.items():
         setattr(collab, field, value)
 
-    if additional_product_ids is not None or live_attribution_product_ids is not None:
+    if additional_product_ids is not None or live_attribution_product_ids is not None or product_variants is not None:
         existing_links = (
             (
                 await db.execute(
@@ -435,6 +489,13 @@ async def update_collaboration(
             for link in existing_links:
                 link.is_live_attributed = link.product_id in live_attribution_product_ids
 
+        if product_variants is not None:
+            linked_ids = {link.product_id for link in existing_links}
+            variant_by_product = await _validate_product_variants(db, product_variants, linked_ids)
+            links_by_product = {link.product_id: link for link in existing_links}
+            for product_id, link in links_by_product.items():
+                link.variant_id = variant_by_product.get(product_id)
+
     collab.last_activity_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(collab)
@@ -443,7 +504,16 @@ async def update_collaboration(
     owner = await db.get(User, collab.owner_id)
     aggregates = await _creator_aggregates(db, [collab.creator_id])
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
-    return _to_out(collab, creator, owner, products_by_collab.get(collab.id, []), aggregates[collab.creator_id])
+    live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    return _to_out(
+        collab,
+        creator,
+        owner,
+        products_by_collab.get(collab.id, []),
+        aggregates[collab.creator_id],
+        None,
+        live_date,
+    )
 
 
 @router.post("/{collab_id}/stage", response_model=CollaborationOut)
@@ -540,6 +610,9 @@ async def transition_collab_stage(
             for link in links:
                 link.is_live_attributed = link.product_id in payload.live_attribution_product_ids
 
+    if payload.video_live_date is not None:
+        collab.video_live_date = payload.video_live_date
+
     await apply_stage_transition(db, collab, creator, payload.to_stage, user.id, payload.note, bump_activity=True)
 
     await db.commit()
@@ -549,4 +622,13 @@ async def transition_collab_stage(
     owner = await db.get(User, collab.owner_id)
     aggregates = await _creator_aggregates(db, [collab.creator_id])
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
-    return _to_out(collab, creator, owner, products_by_collab.get(collab.id, []), aggregates[collab.creator_id])
+    live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    return _to_out(
+        collab,
+        creator,
+        owner,
+        products_by_collab.get(collab.id, []),
+        aggregates[collab.creator_id],
+        None,
+        live_date,
+    )

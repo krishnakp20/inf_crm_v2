@@ -125,6 +125,7 @@ export function CollabKanbanCard({
               className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600"
             >
               {p.product_name}
+              {p.variant_name ? ` — ${p.variant_name}` : ""}
               {collab.stage === "live" && p.is_live_attributed && p.credit != null && p.credit < 1
                 ? ` ${formatCredit(p.credit)}`
                 : ""}

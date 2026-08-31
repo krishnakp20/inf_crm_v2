@@ -84,6 +84,7 @@ export function AddCollaborationModal({
   const [orderId, setOrderId] = useState("");
   const [additionalProductIds, setAdditionalProductIds] = useState<number[]>([]);
   const [liveAttributionProductIds, setLiveAttributionProductIds] = useState<number[]>([]);
+  const [productVariants, setProductVariants] = useState<Record<number, number>>({});
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -197,11 +198,16 @@ export function AddCollaborationModal({
         return;
       }
 
+      const activeVariants = Object.fromEntries(
+        Object.entries(productVariants).filter(([pid]) => linkedProductIds.includes(Number(pid)))
+      );
+
       await api.post("/collaborations", {
         creator_id: creatorId,
         primary_product_id: productId,
         additional_product_ids: additionalProductIds,
         live_attribution_product_ids: liveAttributionProductIds,
+        product_variants: activeVariants,
         owner_id: canAssignOwner ? ownerId : undefined,
         priority,
         stage,
@@ -459,6 +465,27 @@ export function AddCollaborationModal({
               ))}
             </select>
             <p className="mt-1 text-[11px] text-gray-400">Synced product master · no free-text duplicates</p>
+            {(() => {
+              const selected = products.find((p) => p.id === productId);
+              if (!selected || selected.variants.length === 0) return null;
+              return (
+                <select
+                  value={productId ? productVariants[productId] ?? "" : ""}
+                  onChange={(e) =>
+                    productId &&
+                    setProductVariants((prev) => ({ ...prev, [productId]: Number(e.target.value) }))
+                  }
+                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="">No shade selected</option>
+                  {selected.variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              );
+            })()}
           </div>
 
           {canAssignOwner && (
@@ -587,6 +614,28 @@ export function AddCollaborationModal({
                 </label>
               ))}
             </div>
+            {additionalProductIds
+              .map((pid) => products.find((p) => p.id === pid))
+              .filter((p): p is Product => !!p && p.variants.length > 0)
+              .map((p) => (
+                <div key={p.id} className="mt-2">
+                  <label className="mb-1 block text-[11px] text-gray-500">{p.name} · Shade</label>
+                  <select
+                    value={productVariants[p.id] ?? ""}
+                    onChange={(e) =>
+                      setProductVariants((prev) => ({ ...prev, [p.id]: Number(e.target.value) }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs"
+                  >
+                    <option value="">No shade selected</option>
+                    {p.variants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
           </div>
         )}
 
