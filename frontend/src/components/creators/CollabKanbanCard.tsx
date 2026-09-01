@@ -1,5 +1,6 @@
 import { Copy, ShieldCheck } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { initials } from "../../lib/format";
 import type { Collaboration, CollabStage } from "../../lib/types";
@@ -65,8 +66,11 @@ export function CollabKanbanCard({
   onClone: (collabId: number) => Promise<void>;
   compact?: boolean;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const priority = PRIORITY_STYLES[collab.priority];
   const isDead = collab.stage === "dead_leads";
+  const isLockedDead = isDead && !isAdmin;
   const [cloning, setCloning] = useState(false);
 
   return (
@@ -198,7 +202,9 @@ export function CollabKanbanCard({
       </div>
 
       {isDead && (
-        <div className="mt-2 rounded-md bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-500">Dead lead</div>
+        <div className="mt-2 rounded-md bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-500">
+          Dead lead{isLockedDead ? " · Locked, admin can move" : ""}
+        </div>
       )}
 
       {nextStage && !isDead && (
@@ -214,11 +220,15 @@ export function CollabKanbanCard({
       )}
       <select
         value=""
+        disabled={isLockedDead}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => {
           if (e.target.value) onAdvance(collab.id, e.target.value as CollabStage);
         }}
-        className="mt-2 w-full rounded-lg border border-[#e7e5e4] bg-white px-2 py-1.5 text-xs text-gray-500"
+        title={isLockedDead ? "Only an admin can move a card out of Dead Leads" : undefined}
+        className={`mt-2 w-full rounded-lg border border-[#e7e5e4] px-2 py-1.5 text-xs ${
+          isLockedDead ? "cursor-not-allowed bg-gray-100 text-gray-300" : "bg-white text-gray-500"
+        }`}
       >
         <option value="">Jump to stage...</option>
         {COLLAB_STAGE_ORDER.filter((s) => s.key !== collab.stage).map((s) => (

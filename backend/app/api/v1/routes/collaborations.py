@@ -16,7 +16,7 @@ from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
-from app.db.models.enums import CollabStage
+from app.db.models.enums import CollabStage, UserRole
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.product_variant import ProductVariant
@@ -598,6 +598,12 @@ async def transition_collab_stage(
 ) -> CollaborationOut:
     collab = await _get_collaboration_or_404(collab_id, db, user)
     creator = await db.get(Creator, collab.creator_id)
+
+    if collab.stage == CollabStage.dead_leads and payload.to_stage != CollabStage.dead_leads and user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an admin can move a card out of Dead Leads.",
+        )
 
     is_forward_move = COLLAB_STAGE_INDEX[payload.to_stage] > COLLAB_STAGE_INDEX[collab.stage]
     if is_forward_move:

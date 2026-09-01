@@ -599,7 +599,9 @@ export function CollabDetailPanel({
               <button
                 type="button"
                 onClick={() => setTargetStage((v) => (v === "" ? COLLAB_STAGE_ORDER[0].key : ""))}
-                className="rounded-lg border border-[#e7e5e4] px-3 py-2 text-xs font-semibold text-ink hover:bg-surface"
+                disabled={isDead && !isAdmin}
+                title={isDead && !isAdmin ? "Only an admin can move a card out of Dead Leads" : undefined}
+                className="rounded-lg border border-[#e7e5e4] px-3 py-2 text-xs font-semibold text-ink hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Move stage
               </button>
