@@ -9,7 +9,7 @@ import { OwnershipCheck } from "../components/creators/OwnershipCheck";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import type { BulkUploadResult, BulkUploadRowResult, CreatorTableRow, User } from "../lib/types";
+import type { BulkUploadResult, BulkUploadRowResult, CreatorTableRow, Product, User } from "../lib/types";
 
 const SORT_OPTIONS = [
   { label: "Creator name", value: "name" },
@@ -37,6 +37,7 @@ export default function Database() {
   const [total, setTotal] = useState(0);
   const [tabCounts, setTabCounts] = useState({ all: 0, archived: 0 });
   const [users, setUsers] = useState<User[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [ownerId, setOwnerId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"all" | "archived">("all");
   const [sortBy, setSortBy] = useState("created_at");
@@ -59,6 +60,7 @@ export default function Database() {
 
   useEffect(() => {
     api.get<User[]>("/users").then((res) => setUsers(res.data));
+    api.get<Product[]>("/products").then((res) => setProducts(res.data));
   }, []);
 
   const owners = useMemo(() => Object.fromEntries(users.map((u) => [u.id, u.name])), [users]);
@@ -485,6 +487,7 @@ export default function Database() {
         <CreatorTable
           creators={creators}
           owners={owners}
+          products={products}
           total={total}
           limit={pageSize}
           offset={offset}

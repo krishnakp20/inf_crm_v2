@@ -1,9 +1,10 @@
-import { Eye } from "lucide-react";
+import { ArrowRightCircle, Eye } from "lucide-react";
 import { useState } from "react";
 import { compactNumber, initials, instagramUrl, maskPhone } from "../../lib/format";
 import type { SortDirection } from "../../lib/sort";
 import { SortableHeader } from "../shared/SortableHeader";
-import type { CreatorStatus, CreatorTableRow } from "../../lib/types";
+import type { CreatorStatus, CreatorTableRow, Product } from "../../lib/types";
+import { BulkMoveToMyCreatorsModal } from "./BulkMoveToMyCreatorsModal";
 
 const STATUS_STYLES: Record<CreatorStatus, { label: string; className: string }> = {
   overdue: { label: "Overdue", className: "rounded-md bg-[#fff0ed] px-1.5 py-0.5 text-[7px] font-extrabold text-[#ca4d43]" },
@@ -38,6 +39,7 @@ const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d
 export function CreatorTable({
   creators,
   owners,
+  products,
   total,
   limit,
   offset,
@@ -49,6 +51,7 @@ export function CreatorTable({
 }: {
   creators: CreatorTableRow[];
   owners: Record<number, string>;
+  products: Product[];
   total: number;
   limit: number;
   offset: number;
@@ -61,6 +64,7 @@ export function CreatorTable({
   const page = Math.floor(offset / limit) + 1;
   const totalPages = Math.max(Math.ceil(total / limit), 1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBulkMove, setShowBulkMove] = useState(false);
 
   const allSelected = creators.length > 0 && creators.every((c) => selectedIds.has(c.id));
 
@@ -82,10 +86,27 @@ export function CreatorTable({
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between border-b border-[#e7e5e4] bg-surface px-4 py-2 text-xs">
           <span className="font-semibold text-ink">{selectedIds.size} creator{selectedIds.size !== 1 ? "s" : ""} selected</span>
-          <button onClick={() => setSelectedIds(new Set())} className="font-semibold text-brand-600 hover:text-brand-700">
-            Clear
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowBulkMove(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#c8c6f5] bg-white px-3 py-1.5 font-bold text-brand-600 hover:bg-brand-50"
+            >
+              <ArrowRightCircle size={13} />
+              Move to My Creators
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="font-semibold text-brand-600 hover:text-brand-700">
+              Clear
+            </button>
+          </div>
         </div>
+      )}
+      {showBulkMove && (
+        <BulkMoveToMyCreatorsModal
+          creatorIds={[...selectedIds]}
+          products={products}
+          onClose={() => setShowBulkMove(false)}
+          onDone={() => setSelectedIds(new Set())}
+        />
       )}
       <div className="overflow-x-auto">
         <table className="w-full">
