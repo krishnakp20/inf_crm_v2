@@ -1,12 +1,13 @@
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
     get_current_user,
     owner_scope_filter,
+    require_admin,
     require_creator_workspace_access,
     scoped_owner_ids,
 )
@@ -16,6 +17,7 @@ from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
 from app.db.models.enums import CollabStage
+from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.product_variant import ProductVariant
 from app.db.models.user import User
@@ -474,6 +476,28 @@ async def clone_collaboration(
         order_id=source.order_id,
     )
     return await _create_collaboration(db, payload, user)
+
+
+@router.delete("/{collab_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_collaboration(
+    collab_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> None:
+    """Admin-only. Deletes exactly this one Collab ID, at any stage --
+    the creator record and any of its other collaboration cards are
+    untouched (a creator can hold several collab cards, see the
+    clone-card feature)."""
+    collab = await db.get(Collaboration, collab_id)
+    if collab is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
+
+    await db.execute(delete(PartnershipTicket).where(PartnershipTicket.collaboration_id == collab_id))
+    await db.execute(delete(ApprovalRequest).where(ApprovalRequest.collaboration_id == collab_id))
+    await db.execute(delete(CollabStageEvent).where(CollabStageEvent.collaboration_id == collab_id))
+    await db.execute(delete(CollaborationProduct).where(CollaborationProduct.collaboration_id == collab_id))
+    await db.delete(collab)
+    await db.commit()
 
 
 @router.patch("/{collab_id}", response_model=CollaborationOut)

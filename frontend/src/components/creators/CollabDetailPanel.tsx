@@ -1,5 +1,6 @@
-import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, Check, ShieldCheck, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { initials } from "../../lib/format";
@@ -86,12 +87,17 @@ export function CollabDetailPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collab.creator_id]);
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [showApproval, setShowApproval] = useState(false);
   const [movingStage, setMovingStage] = useState(false);
   const [targetStage, setTargetStage] = useState<CollabStage | "">("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [markingDead, setMarkingDead] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const linkedProductIds = useMemo(
     () => [...(primaryProductId ? [primaryProductId] : []), ...additionalProductIds],
@@ -171,6 +177,17 @@ export function CollabDetailPanel({
       onClose();
     } finally {
       setMarkingDead(false);
+    }
+  }
+
+  async function deleteCollaboration() {
+    setDeleting(true);
+    try {
+      await api.delete(`/collaborations/${collab.id}`);
+      onChanged();
+      onClose();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -548,15 +565,28 @@ export function CollabDetailPanel({
             </div>
           )}
           <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={markDead}
-              disabled={isDead || markingDead}
-              className="flex items-center gap-1.5 rounded-lg border border-[#f5d3d0] px-3 py-2 text-xs font-semibold text-[#cf4e43] hover:bg-[#fff0ed] disabled:opacity-40"
-            >
-              <AlertTriangle size={13} />
-              Mark Dead
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={markDead}
+                disabled={isDead || markingDead}
+                className="flex items-center gap-1.5 rounded-lg border border-[#f5d3d0] px-3 py-2 text-xs font-semibold text-[#cf4e43] hover:bg-[#fff0ed] disabled:opacity-40"
+              >
+                <AlertTriangle size={13} />
+                Mark Dead
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Admin only · permanently deletes this Collab ID"
+                  className="flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold text-gray-400 hover:border-[#f5d3d0] hover:bg-[#fff0ed] hover:text-[#cf4e43]"
+                >
+                  <Trash2 size={13} />
+                  Delete card
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -588,6 +618,39 @@ export function CollabDetailPanel({
 
       {showApproval && (
         <RequestApprovalModal collab={collab} onClose={() => setShowApproval(false)} onSent={() => {}} />
+      )}
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
+          onClick={() => !deleting && setShowDeleteConfirm(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-[380px] rounded-card bg-white p-5 shadow-lg">
+            <h3 className="text-sm font-semibold text-ink">Delete {collab.collab_code}?</h3>
+            <p className="mt-1.5 text-xs text-muted">
+              This permanently deletes only this Collab ID. {collab.creator_name} and any other collaboration
+              cards for them are not affected. This cannot be undone.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={deleteCollaboration}
+                disabled={deleting}
+                className="rounded-md bg-[#cf4e43] px-4 py-2 text-sm font-medium text-white hover:bg-[#b8362b] disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete card"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
