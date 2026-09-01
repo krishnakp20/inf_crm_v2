@@ -9,6 +9,7 @@ export function CollabKanbanBoard({
   onAddCard,
   onOpenDetail,
   onRequestApproval,
+  onClone,
   compact = false,
 }: {
   collaborations: Collaboration[];
@@ -16,6 +17,7 @@ export function CollabKanbanBoard({
   onAddCard: (stage: CollabStage) => void;
   onOpenDetail: (collabId: number) => void;
   onRequestApproval: (collab: Collaboration) => void;
+  onClone: (collabId: number) => Promise<void>;
   compact?: boolean;
 }) {
   return (
@@ -56,6 +58,7 @@ export function CollabKanbanBoard({
                     onAdvance={onAdvance}
                     onOpenDetail={onOpenDetail}
                     onRequestApproval={onRequestApproval}
+                    onClone={onClone}
                     compact={compact}
                   />
                 ))}

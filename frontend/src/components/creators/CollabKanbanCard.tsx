@@ -1,4 +1,5 @@
-import { ShieldCheck } from "lucide-react";
+import { Copy, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { initials } from "../../lib/format";
 import type { Collaboration, CollabStage } from "../../lib/types";
@@ -53,6 +54,7 @@ export function CollabKanbanCard({
   onAdvance,
   onOpenDetail,
   onRequestApproval,
+  onClone,
   compact = false,
 }: {
   collab: Collaboration;
@@ -60,10 +62,12 @@ export function CollabKanbanCard({
   onAdvance: (collabId: number, nextStage: CollabStage) => void;
   onOpenDetail: (collabId: number) => void;
   onRequestApproval: (collab: Collaboration) => void;
+  onClone: (collabId: number) => Promise<void>;
   compact?: boolean;
 }) {
   const priority = PRIORITY_STYLES[collab.priority];
   const isDead = collab.stage === "dead_leads";
+  const [cloning, setCloning] = useState(false);
 
   return (
     <div
@@ -78,6 +82,23 @@ export function CollabKanbanCard({
               {priority.label}
             </span>
           )}
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (cloning) return;
+              setCloning(true);
+              try {
+                await onClone(collab.id);
+              } finally {
+                setCloning(false);
+              }
+            }}
+            disabled={cloning}
+            title="Clone this card for another deliverable from the same creator"
+            className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-surface hover:text-brand-600 disabled:opacity-50"
+          >
+            <Copy size={12} />
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();

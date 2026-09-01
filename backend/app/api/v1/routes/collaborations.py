@@ -321,6 +321,12 @@ async def create_collaboration(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CollaborationOut:
+    return await _create_collaboration(db, payload, user)
+
+
+async def _create_collaboration(
+    db: AsyncSession, payload: CollaborationCreate, user: User
+) -> CollaborationOut:
     if payload.stage not in STARTABLE_STAGES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -425,6 +431,49 @@ async def create_collaboration(
     return _to_out(
         collab, creator, owner, products_by_collab.get(collab.id, []), aggregates[creator.id], None, live_date
     )
+
+
+@router.post("/{collab_id}/clone", response_model=CollaborationOut, status_code=status.HTTP_201_CREATED)
+async def clone_collaboration(
+    collab_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CollaborationOut:
+    """Duplicates a collaboration for a second (or third...) deliverable
+    from the same creator -- same creator, products/shades, priority,
+    commercial terms, deal/content type, tracking info, and note, but a
+    fresh collab_code/id and reset to New leads, since the clone needs to
+    walk its own pipeline (reply, negotiation, delivery, live) rather than
+    inheriting the source card's stage, video link, live date or payment
+    status."""
+    source = await _get_collaboration_or_404(collab_id, db, user)
+    products = (await _load_products_for_collabs(db, [source.id])).get(source.id, [])
+    if not products:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source collaboration has no linked products.")
+    primary = next((p for p in products if p.is_primary), products[0])
+    additional = [p for p in products if p.product_id != primary.product_id]
+
+    payload = CollaborationCreate(
+        creator_id=source.creator_id,
+        owner_id=source.owner_id,
+        primary_product_id=primary.product_id,
+        additional_product_ids=[p.product_id for p in additional],
+        live_attribution_product_ids=[],
+        product_variants={p.product_id: p.variant_id for p in products if p.variant_id is not None},
+        priority=source.priority,
+        stage=CollabStage.new_lead,
+        note=source.note,
+        creator_reply=source.creator_reply,
+        commercial_quoted=source.commercial_quoted,
+        counter_quote_agent=source.counter_quote_agent,
+        counter_quote_creator=source.counter_quote_creator,
+        commercial_amount=source.commercial_amount,
+        deal_type=source.deal_type,
+        content_type=source.content_type,
+        tracking_link=source.tracking_link,
+        order_id=source.order_id,
+    )
+    return await _create_collaboration(db, payload, user)
 
 
 @router.patch("/{collab_id}", response_model=CollaborationOut)

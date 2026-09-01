@@ -135,6 +135,11 @@ export default function MyCreators() {
     }
   }
 
+  async function handleClone(collabId: number) {
+    await api.post(`/collaborations/${collabId}/clone`);
+    if (selectedOwnerId) loadBoard(selectedOwnerId);
+  }
+
   function handleAddCard(stage: CollabStage) {
     setAddCardStage(stage);
     setShowAddCollab(true);
@@ -321,6 +326,7 @@ export default function MyCreators() {
         onAddCard={handleAddCard}
         onOpenDetail={handleOpenDetail}
         onRequestApproval={setApprovalCollab}
+        onClone={handleClone}
         compact={compact}
       />
 
