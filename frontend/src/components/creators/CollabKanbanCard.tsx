@@ -79,7 +79,10 @@ export function CollabKanbanCard({
       className={`dashboard-card cursor-pointer p-3 hover:border-brand-100 ${isDead ? "opacity-50" : ""}`}
     >
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[10px] font-medium text-gray-400">{collab.collab_code}</span>
+        <span className="text-[10px] font-medium text-gray-400">
+          {collab.collab_code} ·{" "}
+          {new Date(collab.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}
+        </span>
         <div className="flex items-center gap-1">
           {priority && (
             <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold ${priority.className}`}>
