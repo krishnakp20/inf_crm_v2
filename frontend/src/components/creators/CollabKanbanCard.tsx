@@ -2,7 +2,7 @@ import { Copy, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import { initials } from "../../lib/format";
+import { initials, instagramUrl } from "../../lib/format";
 import type { Collaboration, CollabStage } from "../../lib/types";
 
 function formatCredit(credit: number): string {
@@ -126,7 +126,15 @@ export function CollabKanbanCard({
         </div>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-ink">{collab.creator_name}</div>
-          <div className="truncate text-xs text-gray-500">@{collab.creator_handle}</div>
+          <a
+            href={instagramUrl(collab.creator_handle)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="block truncate text-xs text-gray-500 hover:text-brand-600 hover:underline"
+          >
+            @{collab.creator_handle}
+          </a>
         </div>
       </div>
 

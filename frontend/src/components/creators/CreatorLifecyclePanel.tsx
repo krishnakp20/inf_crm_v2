@@ -17,7 +17,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSort } from "../../hooks/useSort";
 import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/csv";
-import { compactNumber, formatCurrency, initials } from "../../lib/format";
+import { compactNumber, formatCurrency, initials, instagramUrl } from "../../lib/format";
 import { SortableHeader } from "../shared/SortableHeader";
 import type {
   ActivityLogEntry,
@@ -331,7 +331,15 @@ export function CreatorLifecyclePanel({
             <div>
               <div className="text-base font-semibold text-ink">{data.creator_name}</div>
               <div className="text-xs text-gray-500">
-                @{data.creator_handle} · {compactNumber(data.followers_count)} followers
+                <a
+                  href={instagramUrl(data.creator_handle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-500 hover:text-brand-600 hover:underline"
+                >
+                  @{data.creator_handle}
+                </a>{" "}
+                · {compactNumber(data.followers_count)} followers
               </div>
               <div className="text-xs text-gray-400">User: {data.owner_name}</div>
             </div>

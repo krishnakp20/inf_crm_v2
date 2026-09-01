@@ -92,18 +92,12 @@ export default function Database() {
     const base: Record<string, string | number | boolean> = { limit: 1, offset: 0 };
     if (ownerId) base.owner_id = ownerId;
     if (search) base.search = search;
-    if (user?.role === "admin") {
-      Promise.all([
-        api.get("/creators/table", { params: { ...base, is_archived: false } }),
-        api.get("/creators/table", { params: { ...base, is_archived: true } }),
-      ]).then(([allRes, archivedRes]) => {
-        setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total });
-      });
-    } else {
-      api.get("/creators/table", { params: { ...base, is_archived: false } }).then((res) => {
-        setTabCounts({ all: res.data.total, archived: 0 });
-      });
-    }
+    Promise.all([
+      api.get("/creators/table", { params: { ...base, is_archived: false } }),
+      api.get("/creators/table", { params: { ...base, is_archived: true } }),
+    ]).then(([allRes, archivedRes]) => {
+      setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total });
+    });
   }
 
   useEffect(loadCreators, [ownerId, activeTab, sortBy, sortDir, search, offset, pageSize]);
@@ -379,17 +373,15 @@ export default function Database() {
           >
             All creators <span className="text-gray-400">{tabCounts.all}</span>
           </button>
-          {user?.role === "admin" && (
-            <button
-              onClick={() => {
-                setActiveTab("archived");
-                setOffset(0);
-              }}
-              className={`text-[10px] font-bold ${activeTab === "archived" ? "text-brand-600" : "text-[#77727d]"}`}
-            >
-              Archived leads <span className="text-gray-400">{tabCounts.archived}</span>
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setActiveTab("archived");
+              setOffset(0);
+            }}
+            className={`text-[10px] font-bold ${activeTab === "archived" ? "text-brand-600" : "text-[#77727d]"}`}
+          >
+            Archived leads <span className="text-gray-400">{tabCounts.archived}</span>
+          </button>
         </div>
         {(user?.role === "admin" || user?.role === "supervisor") && (
           <label className="flex items-center gap-2">

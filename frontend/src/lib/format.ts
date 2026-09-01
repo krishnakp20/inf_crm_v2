@@ -47,6 +47,10 @@ export function formatCurrency(amount: number | null): string {
   return `₹${Math.round(amount).toLocaleString("en-IN")}`;
 }
 
+export function instagramUrl(handle: string): string {
+  return `https://instagram.com/${handle.replace(/^@/, "").trim()}`;
+}
+
 export function maskPhone(phone: string | null): string {
   if (!phone) return "—";
   const match = phone.match(/^(\+\d+)\s*(\d+)$/);

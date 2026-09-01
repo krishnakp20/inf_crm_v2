@@ -1,7 +1,8 @@
-import { Eye, Users } from "lucide-react";
+import { Eye, Lock, Users } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
-import { initials } from "../../lib/format";
+import { initials, instagramUrl } from "../../lib/format";
 import type { SortDirection } from "../../lib/sort";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { CreatorTableRow, User } from "../../lib/types";
@@ -48,6 +49,8 @@ export function ArchivedLeadsTable({
   onView: (creatorId: number) => void;
   onAssigned: () => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const page = Math.floor(offset / limit) + 1;
   const totalPages = Math.max(Math.ceil(total / limit), 1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -90,7 +93,13 @@ export function ArchivedLeadsTable({
 
   return (
     <div className="dashboard-card overflow-hidden p-0">
-      {selectedIds.size > 0 && (
+      {!isAdmin && (
+        <div className="flex items-center gap-1.5 border-b border-[#e7e5e4] bg-surface px-4 py-2 text-xs text-gray-500">
+          <Lock size={12} />
+          Archived leads are locked — only an admin can open or reassign them.
+        </div>
+      )}
+      {isAdmin && selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e7e5e4] bg-surface px-4 py-2 text-xs">
           <span className="font-semibold text-ink">
             {selectedIds.size} creator{selectedIds.size !== 1 ? "s" : ""} selected
@@ -133,13 +142,15 @@ export function ArchivedLeadsTable({
           <thead>
             <tr className="border-b border-[#e7e5e4] bg-surface text-left">
               <th className="w-8 py-2.5 pl-4">
-                <input
-                  aria-label="Select all archived leads"
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="h-3.5 w-3.5 rounded"
-                />
+                {isAdmin && (
+                  <input
+                    aria-label="Select all archived leads"
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-3.5 w-3.5 rounded"
+                  />
+                )}
               </th>
               <SortableHeader label="Creator" field="name" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className={TH}>Previous user</th>
@@ -157,12 +168,14 @@ export function ArchivedLeadsTable({
               return (
                 <tr key={creator.id} className="border-t border-gray-100">
                   <td className="py-2.5 pl-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(creator.id)}
-                      onChange={() => toggleOne(creator.id)}
-                      className="h-3.5 w-3.5 rounded"
-                    />
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(creator.id)}
+                        onChange={() => toggleOne(creator.id)}
+                        className="h-3.5 w-3.5 rounded"
+                      />
+                    )}
                   </td>
                   <td className="py-2.5 pr-3">
                     <div className="flex items-center gap-2.5">
@@ -172,13 +185,31 @@ export function ArchivedLeadsTable({
                         {initials(creator.name)}
                       </div>
                       <div>
-                        <button
-                          onClick={() => onView(creator.id)}
-                          className="text-left text-[9px] font-extrabold text-ink hover:text-brand-600"
+                        {isAdmin ? (
+                          <button
+                            onClick={() => onView(creator.id)}
+                            className="text-left text-[9px] font-extrabold text-ink hover:text-brand-600"
+                          >
+                            {creator.name}
+                          </button>
+                        ) : (
+                          <span
+                            title="Archived — only an admin can open this lead"
+                            className="flex items-center gap-1 text-[9px] font-extrabold text-gray-400"
+                          >
+                            <Lock size={9} />
+                            {creator.name}
+                          </span>
+                        )}
+                        <a
+                          href={instagramUrl(creator.instagram_handle)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="block text-[7px] text-[#97939d] hover:text-brand-600 hover:underline"
                         >
-                          {creator.name}
-                        </button>
-                        <div className="text-[7px] text-[#97939d]">@{creator.instagram_handle}</div>
+                          @{creator.instagram_handle}
+                        </a>
                       </div>
                     </div>
                   </td>
@@ -201,13 +232,22 @@ export function ArchivedLeadsTable({
                   </td>
                   <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{creator.archive_reason ?? "—"}</td>
                   <td className="py-2.5 pr-4">
-                    <button
-                      onClick={() => onView(creator.id)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface hover:text-brand-600"
-                      title={`View archived lifecycle for ${creator.name}`}
-                    >
-                      <Eye size={16} />
-                    </button>
+                    {isAdmin ? (
+                      <button
+                        onClick={() => onView(creator.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface hover:text-brand-600"
+                        title={`View archived lifecycle for ${creator.name}`}
+                      >
+                        <Eye size={16} />
+                      </button>
+                    ) : (
+                      <span
+                        title="Only an admin can open an archived lead"
+                        className="flex h-8 w-8 items-center justify-center text-gray-300"
+                      >
+                        <Lock size={14} />
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

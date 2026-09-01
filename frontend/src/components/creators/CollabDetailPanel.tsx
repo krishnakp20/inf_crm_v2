@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import { initials } from "../../lib/format";
+import { initials, instagramUrl } from "../../lib/format";
 import type { Collaboration, CollabStage, ContentType, DealType, PaymentStatus, Product } from "../../lib/types";
 import { RequestApprovalModal } from "./RequestApprovalModal";
 
@@ -213,7 +213,15 @@ export function CollabDetailPanel({
                 </span>
               </div>
               <div className="text-xs text-gray-500">
-                @{collab.creator_handle} · {collab.creator_total_collabs} collaboration
+                <a
+                  href={instagramUrl(collab.creator_handle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-500 hover:text-brand-600 hover:underline"
+                >
+                  @{collab.creator_handle}
+                </a>{" "}
+                · {collab.creator_total_collabs} collaboration
                 {collab.creator_total_collabs !== 1 ? "s" : ""} · {collab.creator_videos_live} video
                 {collab.creator_videos_live !== 1 ? "s" : ""} live
               </div>

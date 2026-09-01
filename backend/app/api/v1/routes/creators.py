@@ -70,6 +70,13 @@ async def _get_creator_or_404(creator_id: int, db: AsyncSession, user: User | No
         owner_ids = await scoped_owner_ids(user, db)
         if owner_ids is not None and creator.owner_id not in owner_ids:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
+        # Archived leads are visible in the Database list to everyone, but
+        # opening one (detail, lifecycle, messages, edits, ...) is admin-only.
+        if creator.is_archived and user.role != UserRole.admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This lead is archived -- only an admin can open it.",
+            )
     return creator
 
 
@@ -205,10 +212,9 @@ async def list_creators_table(
     if sort_by not in SORTABLE_FIELDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
     owner_ids = await owner_scope_filter(user, db, owner_id)
-    if user.role != UserRole.admin:
-        # Archived leads are admin-only, regardless of what's requested.
-        is_archived = False
-
+    # Archived leads are visible in this list to every role (scoped to their
+    # normal owner_ids like any other row here) -- opening one is what's
+    # admin-gated, enforced separately in _get_creator_or_404.
     stmt = select(Creator).where(Creator.is_archived == is_archived)
     if owner_ids is not None:
         stmt = stmt.where(Creator.owner_id.in_(owner_ids))

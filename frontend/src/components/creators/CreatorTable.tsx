@@ -1,6 +1,6 @@
 import { Eye } from "lucide-react";
 import { useState } from "react";
-import { compactNumber, initials, maskPhone } from "../../lib/format";
+import { compactNumber, initials, instagramUrl, maskPhone } from "../../lib/format";
 import type { SortDirection } from "../../lib/sort";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { CreatorStatus, CreatorTableRow } from "../../lib/types";
@@ -143,7 +143,15 @@ export function CreatorTable({
                         >
                           {creator.name}
                         </button>
-                        <div className="text-[7px] text-[#97939d]">@{creator.instagram_handle}</div>
+                        <a
+                          href={instagramUrl(creator.instagram_handle)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="block text-[7px] text-[#97939d] hover:text-brand-600 hover:underline"
+                        >
+                          @{creator.instagram_handle}
+                        </a>
                         <div className="text-[7px] font-semibold text-brand-600">User: {ownerName}</div>
                       </div>
                     </div>
