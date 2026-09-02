@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, exists, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import (
@@ -62,6 +63,20 @@ async def _get_collaboration_or_404(collab_id: int, db: AsyncSession, user: User
         if owner_ids is not None and collab.owner_id not in owner_ids:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collaboration not found")
     return collab
+
+
+async def _next_collab_code(db: AsyncSession, year: int) -> str:
+    """Next CLB-{year}-XXXX code, based on the highest number actually in
+    use for this year rather than a total row count -- COUNT(*) silently
+    goes stale (and starts colliding with existing codes) the moment any
+    collaboration is ever deleted, since the count then undercounts the
+    highest number already issued."""
+    prefix = f"CLB-{year}-"
+    codes = (
+        await db.execute(select(Collaboration.collab_code).where(Collaboration.collab_code.like(f"{prefix}%")))
+    ).scalars().all()
+    max_num = max((int(suffix) for code in codes if (suffix := code[len(prefix) :]).isdigit()), default=0)
+    return f"{prefix}{max_num + 1:04d}"
 
 
 async def _creator_aggregates(db: AsyncSession, creator_ids: list[int]) -> dict[int, tuple[int, int]]:
@@ -380,28 +395,35 @@ async def _create_collaboration(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Owner not found")
 
     year = datetime.now(timezone.utc).year
-    count = (await db.execute(select(func.count(Collaboration.id)))).scalar_one()
-    collab_code = f"CLB-{year}-{count + 1:04d}"
-
-    collab = Collaboration(
-        collab_code=collab_code,
-        creator_id=payload.creator_id,
-        owner_id=owner_id,
-        stage=payload.stage,
-        priority=payload.priority,
-        note=payload.note,
-        creator_reply=payload.creator_reply,
-        commercial_quoted=payload.commercial_quoted,
-        counter_quote_agent=payload.counter_quote_agent,
-        counter_quote_creator=payload.counter_quote_creator,
-        commercial_amount=payload.commercial_amount,
-        deal_type=payload.deal_type,
-        content_type=payload.content_type,
-        tracking_link=payload.tracking_link,
-        order_id=payload.order_id,
-    )
-    db.add(collab)
-    await db.flush()
+    for attempt in range(3):
+        collab_code = await _next_collab_code(db, year)
+        collab = Collaboration(
+            collab_code=collab_code,
+            creator_id=payload.creator_id,
+            owner_id=owner_id,
+            stage=payload.stage,
+            priority=payload.priority,
+            note=payload.note,
+            creator_reply=payload.creator_reply,
+            commercial_quoted=payload.commercial_quoted,
+            counter_quote_agent=payload.counter_quote_agent,
+            counter_quote_creator=payload.counter_quote_creator,
+            commercial_amount=payload.commercial_amount,
+            deal_type=payload.deal_type,
+            content_type=payload.content_type,
+            tracking_link=payload.tracking_link,
+            order_id=payload.order_id,
+        )
+        db.add(collab)
+        try:
+            await db.flush()
+            break
+        except IntegrityError:
+            # Two requests computed the same next number at once -- roll
+            # back and recompute against current state, up to 3 tries.
+            await db.rollback()
+            if attempt == 2:
+                raise
 
     db.add(
         CollaborationProduct(
