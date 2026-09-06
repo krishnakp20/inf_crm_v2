@@ -9,6 +9,7 @@ from app.db.models.product_variant import ProductVariant
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.product import (
+    ProductBulkToggle,
     ProductCreate,
     ProductOut,
     ProductUpdate,
@@ -33,10 +34,14 @@ async def _variants_by_product(db: AsyncSession, product_ids: list[int]) -> dict
 
 @router.get("", response_model=list[ProductOut])
 async def list_products(
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> list[ProductOut]:
-    products = (await db.execute(select(Product).order_by(Product.name))).scalars().all()
+    stmt = select(Product).order_by(Product.name)
+    if not include_inactive:
+        stmt = stmt.where(Product.is_active.is_(True))
+    products = (await db.execute(stmt)).scalars().all()
     variants_by_product = await _variants_by_product(db, [p.id for p in products])
     return [
         ProductOut(
@@ -44,6 +49,7 @@ async def list_products(
             name=p.name,
             owner_id=p.owner_id,
             target_videos=p.target_videos,
+            is_active=p.is_active,
             created_at=p.created_at,
             variants=variants_by_product.get(p.id, []),
         )
@@ -70,6 +76,7 @@ async def create_product(
         name=product.name,
         owner_id=product.owner_id,
         target_videos=product.target_videos,
+        is_active=product.is_active,
         created_at=product.created_at,
         variants=[],
     )
@@ -96,9 +103,37 @@ async def update_product(
         name=product.name,
         owner_id=product.owner_id,
         target_videos=product.target_videos,
+        is_active=product.is_active,
         created_at=product.created_at,
         variants=variants,
     )
+
+
+@router.post("/bulk-toggle", response_model=list[ProductOut])
+async def bulk_toggle_products(
+    payload: ProductBulkToggle,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> list[ProductOut]:
+    products = (await db.execute(select(Product).where(Product.id.in_(payload.product_ids)))).scalars().all()
+    for product in products:
+        product.is_active = payload.is_active
+    await db.commit()
+    for product in products:
+        await db.refresh(product)
+    variants_by_product = await _variants_by_product(db, [p.id for p in products])
+    return [
+        ProductOut(
+            id=p.id,
+            name=p.name,
+            owner_id=p.owner_id,
+            target_videos=p.target_videos,
+            is_active=p.is_active,
+            created_at=p.created_at,
+            variants=variants_by_product.get(p.id, []),
+        )
+        for p in products
+    ]
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)

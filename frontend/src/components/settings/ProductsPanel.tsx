@@ -1,8 +1,16 @@
-import { Briefcase, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Briefcase, Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import type { Product } from "../../lib/types";
+
+const STATUS_FILTERS = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Disabled", value: "disabled" },
+] as const;
+
+type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 
 export function ProductsPanel() {
   const { user } = useAuth();
@@ -10,16 +18,54 @@ export function ProductsPanel() {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shadeDrafts, setShadeDrafts] = useState<Record<number, string>>({});
   const [addingShadeFor, setAddingShadeFor] = useState<number | null>(null);
   const [removingVariantId, setRemovingVariantId] = useState<number | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkToggling, setBulkToggling] = useState(false);
+
   function loadProducts() {
-    api.get<Product[]>("/products").then((res) => setProducts(res.data));
+    api.get<Product[]>("/products", { params: { include_inactive: true } }).then((res) => setProducts(res.data));
   }
 
   useEffect(loadProducts, []);
+
+  const filteredProducts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return products.filter((p) => {
+      if (statusFilter === "active" && !p.is_active) return false;
+      if (statusFilter === "disabled" && p.is_active) return false;
+      if (query && !p.name.toLowerCase().includes(query)) return false;
+      return true;
+    });
+  }, [products, search, statusFilter]);
+
+  const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id));
+
+  function toggleAllFiltered() {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev);
+        filteredProducts.forEach((p) => next.delete(p.id));
+        return next;
+      }
+      return new Set([...prev, ...filteredProducts.map((p) => p.id)]);
+    });
+  }
+
+  function toggleOne(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function handleAddShade(productId: number) {
     const shadeName = (shadeDrafts[productId] ?? "").trim();
@@ -80,6 +126,34 @@ export function ProductsPanel() {
     }
   }
 
+  async function handleToggleOne(product: Product) {
+    setError(null);
+    setTogglingId(product.id);
+    try {
+      await api.patch(`/products/${product.id}`, { is_active: !product.is_active });
+      loadProducts();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not update this product.");
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function handleBulkToggle(is_active: boolean) {
+    if (selectedIds.size === 0) return;
+    setError(null);
+    setBulkToggling(true);
+    try {
+      await api.post("/products/bulk-toggle", { product_ids: [...selectedIds], is_active });
+      setSelectedIds(new Set());
+      loadProducts();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not update these products.");
+    } finally {
+      setBulkToggling(false);
+    }
+  }
+
   return (
     <div className="dashboard-card p-5">
       <div className="flex items-start justify-between">
@@ -120,23 +194,121 @@ export function ProductsPanel() {
       </div>
 
       <div className="mt-5">
-        <h3 className="text-sm font-semibold text-ink">Available products</h3>
-        <p className="mb-3 mt-0.5 text-xs text-gray-500">{products.length} universal product names</p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Available products</h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {products.length} universal product names · {products.filter((p) => !p.is_active).length} disabled
+            </p>
+          </div>
+          <p className="text-xs text-gray-400">
+            Disabled products are hidden from every product picker and filter, but stay fully intact on any
+            collaboration that already uses them.
+          </p>
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="flex h-9 w-full max-w-[320px] items-center gap-2 rounded-lg border border-[#e7e5e4] bg-white px-2.5">
+            <Search size={14} className="shrink-0 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products..."
+              className="w-full text-xs text-ink placeholder:text-gray-400 focus:outline-none"
+            />
+          </div>
+          <div className="flex h-9 items-center gap-1 rounded-lg border border-[#e7e5e4] bg-white p-1">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                  statusFilter === f.value ? "bg-brand-50 text-brand-600" : "text-gray-500 hover:bg-surface"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex h-9 items-center gap-1.5 rounded-lg border border-[#e7e5e4] bg-white px-2.5 text-xs text-gray-600">
+            <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="h-3.5 w-3.5 rounded" />
+            Select all {statusFilter !== "all" ? statusFilter : "shown"}
+          </label>
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-card border border-[#e7e5e4] bg-surface px-4 py-2 text-xs">
+            <span className="font-semibold text-ink">
+              {selectedIds.size} product{selectedIds.size !== 1 ? "s" : ""} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleBulkToggle(false)}
+                disabled={bulkToggling}
+                className="rounded-lg border border-[#f5d3d0] bg-white px-3 py-1.5 font-bold text-[#cf4e43] hover:bg-[#fff0ed] disabled:opacity-50"
+              >
+                {bulkToggling ? "Working..." : "Disable selected"}
+              </button>
+              <button
+                onClick={() => handleBulkToggle(true)}
+                disabled={bulkToggling}
+                className="rounded-lg border border-[#c8c6f5] bg-white px-3 py-1.5 font-bold text-brand-600 hover:bg-brand-50 disabled:opacity-50"
+              >
+                {bulkToggling ? "Working..." : "Enable selected"}
+              </button>
+              <button onClick={() => setSelectedIds(new Set())} className="font-semibold text-gray-500 hover:text-ink">
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2">
-          {products.map((p) => (
-            <div key={p.id} className="rounded-card border border-[#e7e5e4] p-4">
+          {filteredProducts.map((p) => (
+            <div
+              key={p.id}
+              className={`rounded-card border p-4 ${p.is_active ? "border-[#e7e5e4]" : "border-[#e7e5e4] bg-surface opacity-60"}`}
+            >
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-ink">{p.name}</div>
-                  <div className="text-xs text-gray-500">Available to all users</div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(p.id)}
+                    onChange={() => toggleOne(p.id)}
+                    className="h-3.5 w-3.5 rounded"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+                      {p.name}
+                      {!p.is_active && (
+                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                          Disabled
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {p.is_active ? "Available to all users" : "Hidden from pickers and filters"}
+                    </div>
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleRemove(p)}
-                  disabled={removingId === p.id}
-                  className="text-sm font-semibold text-[#cf4e43] hover:underline disabled:opacity-50"
-                >
-                  {removingId === p.id ? "Removing..." : "Remove"}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleToggleOne(p)}
+                    disabled={togglingId === p.id}
+                    className={`text-sm font-semibold hover:underline disabled:opacity-50 ${
+                      p.is_active ? "text-[#cf4e43]" : "text-brand-600"
+                    }`}
+                  >
+                    {togglingId === p.id ? "Working..." : p.is_active ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    onClick={() => handleRemove(p)}
+                    disabled={removingId === p.id}
+                    className="text-sm font-semibold text-[#cf4e43] hover:underline disabled:opacity-50"
+                  >
+                    {removingId === p.id ? "Removing..." : "Remove"}
+                  </button>
+                </div>
               </div>
 
               <div className="mt-3 border-t border-[#e7e5e4] pt-3">
@@ -182,7 +354,7 @@ export function ProductsPanel() {
               </div>
             </div>
           ))}
-          {products.length === 0 && <p className="text-sm text-gray-400">No products yet.</p>}
+          {filteredProducts.length === 0 && <p className="text-sm text-gray-400">No products match.</p>}
         </div>
       </div>
     </div>

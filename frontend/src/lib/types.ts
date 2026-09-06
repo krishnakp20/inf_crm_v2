@@ -47,6 +47,7 @@ export interface Product {
   name: string;
   owner_id: number;
   target_videos: number;
+  is_active: boolean;
   created_at: string;
   variants: ProductVariant[];
 }
