@@ -308,14 +308,36 @@ async def list_collaborations(
 @router.get("/board-stats", response_model=CollabBoardStats)
 async def collab_board_stats(
     owner_id: int | None = None,
+    product_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CollabBoardStats:
+    """Same filters as GET /collaborations (owner/product/date range) so
+    this stats row never disagrees with what the board below it is
+    actually showing -- it used to ignore product/date filters entirely
+    and always reflect the all-time total, which read as "the date filter
+    doesn't do anything" even though the card list itself was filtering
+    correctly."""
     owner_ids = await owner_scope_filter(user, db, owner_id)
 
     stmt = select(Collaboration)
     if owner_ids is not None:
         stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if product_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(CollaborationProduct.id).where(
+                    CollaborationProduct.collaboration_id == Collaboration.id,
+                    CollaborationProduct.product_id == product_id,
+                )
+            )
+        )
+    if date_from is not None:
+        stmt = stmt.where(Collaboration.created_at >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(Collaboration.created_at < date_to + timedelta(days=1))
     result = await db.execute(stmt)
     collabs = list(result.scalars().all())
 

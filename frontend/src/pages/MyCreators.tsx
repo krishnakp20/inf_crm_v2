@@ -106,7 +106,14 @@ export default function MyCreators() {
       })
       .then((res) => setCollaborations(res.data));
     api
-      .get<CollabBoardStats>("/collaborations/board-stats", { params: { owner_id: ownerParam } })
+      .get<CollabBoardStats>("/collaborations/board-stats", {
+        params: {
+          owner_id: ownerParam,
+          product_id: productFilter || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        },
+      })
       .then((res) => setStats(res.data));
   }
 
