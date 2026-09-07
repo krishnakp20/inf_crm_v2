@@ -57,7 +57,9 @@ COLLAB_FUNNEL_BUCKETS: list[tuple[str, str, list[CollabStage]]] = [
     ("locked", "Locked", [CollabStage.commercial_locked]),
     ("product_sent", "Product sent", [CollabStage.product_sent]),
     ("product_delivered", "Product delivered", [CollabStage.product_delivered]),
-    ("content_live", "Content live", [CollabStage.first_draft, CollabStage.approved, CollabStage.live]),
+    ("first_draft", "First Draft", [CollabStage.first_draft]),
+    ("approved", "Approved", [CollabStage.approved]),
+    ("content_live", "Content live", [CollabStage.live]),
 ]
 
 
@@ -127,10 +129,6 @@ COLLAB_OVERDUE_MAX_DAYS: dict[CollabStage, int | None] = {
     CollabStage.live: None,
     CollabStage.dead_leads: None,
 }
-
-
-def bucket_min_index(stages: list[CollabStage]) -> int:
-    return min(COLLAB_STAGE_INDEX[s] for s in stages)
 
 
 # Cumulative required "backfill" fields per Starting stage -- confirmed live

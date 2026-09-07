@@ -28,11 +28,9 @@ from app.schemas.dashboard import (
 from app.schemas.product import ProductPerformance
 from app.services.collab_pipeline import (
     COLLAB_FUNNEL_BUCKETS,
-    COLLAB_STAGE_INDEX,
     COLLAB_STAGE_LABELS,
     get_video_credit_by_product_and_owner,
 )
-from app.services.collab_pipeline import bucket_min_index as collab_bucket_min_index
 from app.services.partnership_pipeline import scoped_ticket_ids
 
 
@@ -131,22 +129,23 @@ async def get_kpis(
 
 
 async def get_collab_funnel(db: AsyncSession, owner_ids: list[int] | None = None) -> list[FunnelStage]:
+    """Each bucket is the exact count of cards CURRENTLY sitting in that
+    stage (a real Kanban-column snapshot) -- not "reached this stage or
+    beyond". A card moving forward is subtracted from its old stage's count
+    and added to the new one, same as the board itself."""
     counts: list[int] = []
     for _, _, stages in COLLAB_FUNNEL_BUCKETS:
-        min_index = collab_bucket_min_index(stages)
-        at_or_beyond = [
-            s for s, i in COLLAB_STAGE_INDEX.items() if i >= min_index and s != CollabStage.dead_leads
-        ]
-        stmt = select(func.count(Collaboration.id)).where(Collaboration.stage.in_(at_or_beyond))
+        stmt = select(func.count(Collaboration.id)).where(Collaboration.stage.in_(stages))
         if owner_ids is not None:
             stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
         count = (await db.execute(stmt)).scalar_one()
         counts.append(count)
 
-    # 8th funnel stage: Ads live -- Partnership Hub tickets verified Closed &
-    # Live. Not a CollabStage value (every Closed & Live collab is already
-    # counted in Content live above), so computed as its own query rather
-    # than folded into COLLAB_FUNNEL_BUCKETS' stage-index cumulative logic.
+    # Final funnel stage: Ads live -- Partnership Hub tickets verified
+    # Closed & Live. Not a CollabStage value (every Closed & Live collab is
+    # still sitting at CollabStage.live and already counted in Content live
+    # above), so computed as its own query rather than a COLLAB_FUNNEL_BUCKETS
+    # entry.
     ads_live_stmt = (
         select(func.count(PartnershipTicket.id))
         .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)

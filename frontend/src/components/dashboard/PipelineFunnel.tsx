@@ -1,7 +1,18 @@
 import { List } from "lucide-react";
 import type { FunnelStage } from "../../lib/types";
 
-const STAGE_COLORS = ["#5B5CE2", "#696AE8", "#797AEF", "#8B8BF2", "#A1A0F5", "#AEADF6", "#BCBAF8", "#CAC9FA"];
+const STAGE_COLORS = [
+  "#5B5CE2",
+  "#696AE8",
+  "#797AEF",
+  "#8B8BF2",
+  "#A1A0F5",
+  "#AEADF6",
+  "#BCBAF8",
+  "#CAC9FA",
+  "#D6D5FB",
+  "#E3E2FD",
+];
 
 export function PipelineFunnel({
   funnel,
@@ -35,12 +46,12 @@ export function PipelineFunnel({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-8 gap-1">
+      <div className="mt-4 flex gap-1 overflow-x-auto">
         {funnel.map((stage, i) => {
           const color = STAGE_COLORS[i % STAGE_COLORS.length];
           const barWidth = Math.max(Math.sqrt(stage.count / maxCount) * 100, stage.count > 0 ? 6 : 0);
           return (
-            <button key={stage.stage} className="flex flex-col items-start pr-2 text-left">
+            <button key={stage.stage} className="flex w-[110px] shrink-0 flex-col items-start pr-2 text-left">
               <div className="mb-1.5 flex items-center gap-1 self-stretch">
                 <span
                   className="grid h-[25px] w-[25px] shrink-0 place-items-center rounded-full text-[7px] font-bold text-white"
