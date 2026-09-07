@@ -104,8 +104,17 @@ async def partnership_stats(db: AsyncSession, user: User) -> PartnershipStats:
         return stmt.where(PartnershipTicket.id.in_(scope)) if scope is not None else stmt
 
     video_register = (await db.execute(scoped(select(func.count(PartnershipTicket.id))))).scalar_one()
+    # Matches the Open tab's own filter: a ticket only counts as "open" once
+    # an admin/marketer has actually taken action on it, not from the
+    # moment it's auto-created (see list_open in routes/partnership.py).
     open_tickets = (
-        await db.execute(scoped(select(func.count(PartnershipTicket.id)).where(PartnershipTicket.ticket_status != TicketStatus.closed_and_live)))
+        await db.execute(
+            scoped(
+                select(func.count(PartnershipTicket.id)).where(
+                    PartnershipTicket.ticket_status.notin_([TicketStatus.open, TicketStatus.closed_and_live])
+                )
+            )
+        )
     ).scalar_one()
     closed_and_live = (
         await db.execute(scoped(select(func.count(PartnershipTicket.id)).where(PartnershipTicket.ticket_status == TicketStatus.closed_and_live)))

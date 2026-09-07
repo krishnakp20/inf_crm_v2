@@ -1,7 +1,10 @@
 import type { PartnershipCollabStatus, TicketStatus } from "./types";
 
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
-  open: "Open",
+  // Auto-created default -- no admin/marketer has taken action yet, so it
+  // lives on Overview only (not the Open tab). Labeled distinctly from the
+  // Open tab so this doesn't read as if it's already "Open".
+  open: "Not started",
   pending_at_user: "Pending at User",
   pending_at_admin: "Pending at Admin",
   closed_and_live: "Closed & Live",

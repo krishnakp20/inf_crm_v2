@@ -257,7 +257,14 @@ async def list_open(
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOpenRow]:
     tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
-    tickets = [t for t in tickets if t.ticket_status != TicketStatus.closed_and_live]
+    # A ticket lands here only once an admin/marketer has actually taken
+    # action on it (Take Action -> pending_at_user, or the advisor/editor's
+    # response bouncing it back -> pending_at_admin). A freshly auto-created
+    # ticket sits at the default TicketStatus.open with no action taken yet
+    # -- it belongs on Overview only, not here.
+    tickets = [
+        t for t in tickets if t.ticket_status not in (TicketStatus.open, TicketStatus.closed_and_live)
+    ]
     batch = await _batch_load(db, tickets)
     return [_to_open_row(t, batch, user) for t in tickets]
 
