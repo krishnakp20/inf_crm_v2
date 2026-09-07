@@ -109,7 +109,7 @@ export default function PartnershipHub() {
     });
   }
 
-  const canTakeAction = user?.role === "admin" || user?.role === "marketer";
+  const canTakeAction = user?.role === "admin";
   const showCommercial = user?.role === "admin" || user?.role === "advisor";
 
   const singleTicket = takeActionIds && takeActionIds.length === 1 ? overviewRows.find((r) => r.ticket_id === takeActionIds[0]) : null;

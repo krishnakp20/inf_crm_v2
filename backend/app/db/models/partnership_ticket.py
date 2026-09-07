@@ -51,5 +51,9 @@ class PartnershipTicket(Base):
     # Stamped once on the ticket's first-ever Take Action; source for the
     # Open tab's aging bucket. Never touched again after that first stamp.
     first_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Stamped once by verify_close -- the anchor ad_right_expires_at is
+    # computed from (duration is counted from when the video actually went
+    # Closed & Live, not from whenever the agent happened to respond).
+    closed_and_live_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

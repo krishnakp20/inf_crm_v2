@@ -587,6 +587,7 @@ export interface PartnershipTicketDetail {
   response_due_at: string | null;
   aging_bucket: string | null;
   aging_days: number | null;
+  closed_and_live_at: string | null;
   remarks: PartnershipRemark[];
 }
 

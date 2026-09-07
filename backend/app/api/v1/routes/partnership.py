@@ -1,7 +1,7 @@
 import csv
 import io
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -408,6 +408,7 @@ async def get_ticket_detail(
         response_due_at=ticket.response_due_at,
         aging_bucket=bucket,
         aging_days=days,
+        closed_and_live_at=ticket.closed_and_live_at,
         remarks=remarks,
     )
     if should_redact_commercial(user):
@@ -415,9 +416,23 @@ async def get_ticket_detail(
     return PartnershipTicketDetailOut(**data)
 
 
+def _guard_not_closed(ticket: PartnershipTicket) -> None:
+    """Once Closed & Live, a ticket is permanently locked -- no request,
+    response, counter, change or metadata edit can touch it again."""
+    if ticket.ticket_status == TicketStatus.closed_and_live:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This ticket is Closed & Live -- no further changes can be made.",
+        )
+
+
 def _apply_take_action(ticket: PartnershipTicket, payload: PartnershipTakeActionRequest, actor: User, db: AsyncSession) -> None:
-    ticket.requested_ad_rights = payload.requested_ad_rights
     ticket.requested_ad_code = payload.requested_ad_code
+    # Ad-code and ad-rights always travel together -- requesting Ad code
+    # alone still activates the ad-rights commercial negotiation, so this is
+    # never independently false just because the client didn't also send
+    # requested_ad_rights.
+    ticket.requested_ad_rights = payload.requested_ad_code or payload.requested_ad_rights
     ticket.requested_cta_link = payload.requested_cta_link
     ticket.collab_status = payload.collab_status
     ticket.response_due_at = payload.response_due_at
@@ -434,9 +449,10 @@ async def take_action(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if user.role not in (UserRole.admin, UserRole.marketer):
+    if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
     ticket, _ = await _get_ticket_or_404(ticket_id, db, user)
+    _guard_not_closed(ticket)
     _apply_take_action(ticket, payload, user, db)
     await db.commit()
     return await get_ticket_detail(ticket_id, db, user)
@@ -448,11 +464,12 @@ async def take_action_bulk(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, int]:
-    if user.role not in (UserRole.admin, UserRole.marketer):
+    if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
     updated = 0
     for ticket_id in payload.ticket_ids:
         ticket, _ = await _get_ticket_or_404(ticket_id, db, user)
+        _guard_not_closed(ticket)
         _apply_take_action(ticket, payload, user, db)
         updated += 1
     await db.commit()
@@ -482,8 +499,6 @@ async def respond_to_ticket(
             ticket.ad_code = payload.ad_code
         if payload.ad_right_duration_days is not None:
             ticket.ad_right_duration_days = payload.ad_right_duration_days
-        if payload.ad_right_expires_at is not None:
-            ticket.ad_right_expires_at = payload.ad_right_expires_at
         if payload.ad_rights_agent_counter is not None:
             ticket.ad_rights_agent_counter = payload.ad_rights_agent_counter
         db.add(PartnershipRemark(ticket_id=ticket.id, author_id=user.id, body=payload.remark, tag=REMARK_TAG_AGENT_RESPONSE))
@@ -505,6 +520,7 @@ async def send_counter(
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     ticket, _ = await _get_ticket_or_404(ticket_id, db, user)
+    _guard_not_closed(ticket)
     ticket.ad_rights_admin_counter = payload.ad_rights_admin_counter
     if payload.collab_status is not None:
         ticket.collab_status = payload.collab_status
@@ -524,6 +540,7 @@ async def request_change(
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     ticket, _ = await _get_ticket_or_404(ticket_id, db, user)
+    _guard_not_closed(ticket)
     if payload.collab_status is not None:
         ticket.collab_status = payload.collab_status
     ticket.ticket_status = TicketStatus.pending_at_user
@@ -542,6 +559,7 @@ async def update_metadata(
     if user.role not in (UserRole.admin, UserRole.advisor):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
     ticket, _ = await _get_ticket_or_404(ticket_id, db, user)
+    _guard_not_closed(ticket)
     ticket.content_bucket = payload.content_bucket
     ticket.language = payload.language
     await db.commit()
@@ -558,12 +576,22 @@ async def verify_close(
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     ticket, _ = await _get_ticket_or_404(ticket_id, db, user)
+    _guard_not_closed(ticket)
     if ticket.requested_ad_rights and payload.ad_rights_amount is None and ticket.ad_rights_amount is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A locked commercial amount is required to close.")
+    if ticket.requested_ad_code and (not ticket.ad_code or ticket.ad_right_duration_days is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Ad code and rights duration are required before closing."
+        )
+    if ticket.requested_cta_link and not ticket.cta_link:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A CTA link is required before closing.")
     if payload.ad_rights_amount is not None:
         ticket.ad_rights_amount = payload.ad_rights_amount
     ticket.ticket_status = TicketStatus.closed_and_live
     ticket.collab_status = PartnershipCollabStatus.closed_and_live
+    ticket.closed_and_live_at = datetime.now(timezone.utc)
+    if ticket.ad_right_duration_days is not None:
+        ticket.ad_right_expires_at = ticket.closed_and_live_at.date() + timedelta(days=ticket.ad_right_duration_days)
     if payload.remark:
         db.add(PartnershipRemark(ticket_id=ticket.id, author_id=user.id, body=payload.remark, tag=REMARK_TAG_VERIFIED_CLOSED))
     await db.commit()

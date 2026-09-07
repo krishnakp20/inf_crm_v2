@@ -428,7 +428,6 @@ async def get_dashboard_approval_requests(
 
 
 _PARTNERSHIP_NOTIFICATION_SUBTITLES: dict[TicketStatus, str] = {
-    TicketStatus.open: "New partnership ticket · needs first action",
     TicketStatus.pending_at_admin: "Advisor responded · awaiting your review",
     TicketStatus.pending_at_user: "Awaiting your response",
 }
@@ -486,10 +485,15 @@ async def get_dashboard_notifications(
 ) -> list[NotificationOut]:
     """Merges pending approval requests with Partnership Hub tickets
     currently awaiting this user's action into one bell-dropdown feed.
-    Admin/marketer see tickets sitting at "open" or "pending_at_admin";
-    advisors/supervisors see their own tickets at "pending_at_user" --
-    mirrors the exact same role split the Partnership Hub routes already
-    enforce (see partnership.py's take_action/respond_to_ticket).
+    Admin/marketer see tickets sitting at "pending_at_admin" (an agent has
+    responded and it's back on their plate) -- a freshly auto-created ticket
+    at the default "open" status is deliberately excluded, matching the Open
+    tab's own definition of "awaiting action" (see list_open in
+    routes/partnership.py); notifying admin about every untouched Live video
+    would flood the bell. Advisor/Editor/supervisor see their own tickets at
+    "pending_at_user" -- including Editor, whose entire job here is
+    responding to requested_cta_link tickets (scoped_ticket_ids already
+    restricts Editor to exactly those).
     """
     approvals = await get_dashboard_approval_requests(db, owner_ids, limit=50, user=user)
     items: list[NotificationOut] = [
@@ -506,40 +510,35 @@ async def get_dashboard_notifications(
         for a in approvals
     ]
 
-    if user.role != UserRole.editor:
-        is_admin_side = user.role in (UserRole.admin, UserRole.marketer)
-        wanted_statuses = (
-            [TicketStatus.open, TicketStatus.pending_at_admin]
-            if is_admin_side
-            else [TicketStatus.pending_at_user]
-        )
-        ticket_scope = await scoped_ticket_ids(user, db)
-        stmt = (
-            select(PartnershipTicket, Collaboration, Creator)
-            .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
-            .join(Creator, Creator.id == Collaboration.creator_id)
-            .where(PartnershipTicket.ticket_status.in_(wanted_statuses))
-        )
-        if ticket_scope is not None:
-            stmt = stmt.where(PartnershipTicket.id.in_(ticket_scope))
-        stmt = stmt.order_by(PartnershipTicket.created_at.desc()).limit(50)
-        rows = (await db.execute(stmt)).all()
+    is_admin_side = user.role in (UserRole.admin, UserRole.marketer)
+    wanted_statuses = [TicketStatus.pending_at_admin] if is_admin_side else [TicketStatus.pending_at_user]
+    ticket_scope = await scoped_ticket_ids(user, db)
+    stmt = (
+        select(PartnershipTicket, Collaboration, Creator)
+        .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
+        .join(Creator, Creator.id == Collaboration.creator_id)
+        .where(PartnershipTicket.ticket_status.in_(wanted_statuses))
+    )
+    if ticket_scope is not None:
+        stmt = stmt.where(PartnershipTicket.id.in_(ticket_scope))
+    stmt = stmt.order_by(PartnershipTicket.created_at.desc()).limit(50)
+    rows = (await db.execute(stmt)).all()
 
-        for ticket, collab, creator in rows:
-            items.append(
-                NotificationOut(
-                    kind="partnership",
-                    id=ticket.id,
-                    creator_name=creator.name,
-                    creator_handle=creator.instagram_handle,
-                    subtitle=f"{collab.collab_code} · {_PARTNERSHIP_NOTIFICATION_SUBTITLES[ticket.ticket_status]}",
-                    priority="normal" if ticket.ticket_status == TicketStatus.open else "high",
-                    created_at=ticket.created_at,
-                    link="/partnership",
-                )
+    for ticket, collab, creator in rows:
+        items.append(
+            NotificationOut(
+                kind="partnership",
+                id=ticket.id,
+                creator_name=creator.name,
+                creator_handle=creator.instagram_handle,
+                subtitle=f"{collab.collab_code} · {_PARTNERSHIP_NOTIFICATION_SUBTITLES[ticket.ticket_status]}",
+                priority="high",
+                created_at=ticket.created_at,
+                link="/partnership",
             )
+        )
 
-        items.extend(await _deadline_warning_notifications(db, owner_ids))
+    items.extend(await _deadline_warning_notifications(db, owner_ids))
 
     items.sort(key=lambda n: n.created_at, reverse=True)
     return items

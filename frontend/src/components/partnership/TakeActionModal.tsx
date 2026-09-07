@@ -17,7 +17,6 @@ export function TakeActionModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [adRights, setAdRights] = useState(false);
   const [adCode, setAdCode] = useState(false);
   const [ctaLink, setCtaLink] = useState(false);
   const [collabStatus, setCollabStatus] = useState<PartnershipCollabStatus>("open");
@@ -31,8 +30,8 @@ export function TakeActionModal({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!adRights && !adCode && !ctaLink) {
-      setError("Choose at least one actionable field.");
+    if (!adCode && !ctaLink) {
+      setError("Choose Ad code or CTA link.");
       return;
     }
     if (!remark.trim()) {
@@ -42,7 +41,7 @@ export function TakeActionModal({
     setSubmitting(true);
     try {
       const payload = {
-        requested_ad_rights: adRights,
+        requested_ad_rights: adCode,
         requested_ad_code: adCode,
         requested_cta_link: ctaLink,
         collab_status: collabStatus,
@@ -81,12 +80,8 @@ export function TakeActionModal({
         </p>
 
         <label className="mb-1 block text-sm font-medium text-gray-700">Request action</label>
-        <p className="mb-2 text-xs text-gray-400">Choose one or more actionable fields for this ticket.</p>
+        <p className="mb-2 text-xs text-gray-400">Choose Ad code, CTA link, or both.</p>
         <div className="mb-3 flex flex-col gap-1.5">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={adRights} onChange={(e) => setAdRights(e.target.checked)} />
-            Ad rights
-          </label>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input type="checkbox" checked={adCode} onChange={(e) => setAdCode(e.target.checked)} />
             Ad code
@@ -96,9 +91,9 @@ export function TakeActionModal({
             CTA link
           </label>
         </div>
-        {adRights && (
+        {adCode && (
           <p className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
-            Ad-right requests automatically include creator commercial negotiation.
+            Ad code requests automatically include the ad-rights commercial negotiation.
           </p>
         )}
 

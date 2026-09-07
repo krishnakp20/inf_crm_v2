@@ -67,11 +67,16 @@ def should_redact_commercial(user: User) -> bool:
 
 
 def requested_chips(ticket) -> list[str]:
+    """Ad code and Ad rights always travel together going forward (see
+    _apply_take_action), so a ticket requesting Ad code shows one merged
+    chip rather than two redundant ones. A bare "Ad rights" chip only
+    remains possible on a legacy row from before that pairing was enforced
+    (requested_ad_rights=True, requested_ad_code=False)."""
     chips = []
-    if ticket.requested_ad_rights:
-        chips.append("Ad rights")
     if ticket.requested_ad_code:
-        chips.append("Ad code")
+        chips.append("Ad code & rights")
+    elif ticket.requested_ad_rights:
+        chips.append("Ad rights")
     if ticket.requested_cta_link:
         chips.append("CTA link")
     return chips

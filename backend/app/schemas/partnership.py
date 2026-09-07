@@ -32,7 +32,6 @@ class PartnershipRespondRequest(BaseModel):
 
     ad_code: str | None = None
     ad_right_duration_days: int | None = None
-    ad_right_expires_at: date | None = None
     ad_rights_agent_counter: float | None = None
     cta_link: str | None = None
     remark: str
@@ -161,6 +160,7 @@ class PartnershipTicketDetailOut(BaseModel):
     response_due_at: date | None
     aging_bucket: str | None
     aging_days: int | None
+    closed_and_live_at: datetime | None
     remarks: list[PartnershipRemarkOut]
 
 

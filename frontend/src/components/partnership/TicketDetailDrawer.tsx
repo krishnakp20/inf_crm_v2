@@ -36,7 +36,6 @@ export function TicketDetailDrawer({
   // Respond (advisor)
   const [adCode, setAdCode] = useState("");
   const [duration, setDuration] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
   const [agentCounter, setAgentCounter] = useState("");
   // Respond (editor) / shared
   const [ctaLink, setCtaLink] = useState("");
@@ -66,7 +65,6 @@ export function TicketDetailDrawer({
     setError(null);
     setAdCode("");
     setDuration("");
-    setExpiresAt("");
     setAgentCounter("");
     setCtaLink("");
     setRemark("");
@@ -91,7 +89,6 @@ export function TicketDetailDrawer({
       } else {
         if (adCode) payload.ad_code = adCode;
         if (duration) payload.ad_right_duration_days = Number(duration);
-        if (expiresAt) payload.ad_right_expires_at = expiresAt;
         if (agentCounter) payload.ad_rights_agent_counter = Number(agentCounter);
       }
       await api.post(`/partnership/${ticketId}/respond`, payload);
@@ -196,7 +193,7 @@ export function TicketDetailDrawer({
     ticket.ticket_status === "pending_at_user" &&
     ((isAdvisor && !editorView) || (isEditor && editorView));
   const canAdminAct = isAdmin && ticket.ticket_status !== "closed_and_live";
-  const canEditMetadata = !editorView && (isAdmin || isAdvisor);
+  const canEditMetadata = !editorView && (isAdmin || isAdvisor) && full.ticket_status !== "closed_and_live";
 
   function openMetadataPanel() {
     setMetaContentBucket(full.content_bucket ?? "");
@@ -221,6 +218,9 @@ export function TicketDetailDrawer({
               </span>
               {!editorView && (
                 <span className="text-xs text-gray-400">{COLLAB_STATUS_LABELS[full.collab_status]}</span>
+              )}
+              {!editorView && full.closed_and_live_at && (
+                <span className="text-xs text-gray-400">· Closed &amp; Live since {formatDate(full.closed_and_live_at)}</span>
               )}
             </div>
           </div>
@@ -323,7 +323,11 @@ export function TicketDetailDrawer({
                 <div className="rounded-card border border-[#e7e5e4] p-3">
                   <div className="text-[10px] text-muted">Ad right duration</div>
                   <div className="mt-1 text-sm font-bold text-ink">
-                    {full.ad_right_duration_days ? `${full.ad_right_duration_days}d · exp ${formatDate(full.ad_right_expires_at)}` : "—"}
+                    {full.ad_right_duration_days
+                      ? full.ad_right_expires_at
+                        ? `${full.ad_right_duration_days}d · exp ${formatDate(full.ad_right_expires_at)}`
+                        : `${full.ad_right_duration_days}d · expires once Closed & Live`
+                      : "—"}
                   </div>
                 </div>
               </div>
@@ -391,26 +395,14 @@ export function TicketDetailDrawer({
                         onChange={(e) => setAdCode(e.target.value)}
                         className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                       />
-                      <div className="mb-3 grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-700">Duration (days)</label>
-                          <input
-                            type="number"
-                            value={duration}
-                            onChange={(e) => setDuration(e.target.value)}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-700">Expires on</label>
-                          <input
-                            type="date"
-                            value={expiresAt}
-                            onChange={(e) => setExpiresAt(e.target.value)}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                          />
-                        </div>
-                      </div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Duration (days)</label>
+                      <p className="mb-1 text-[11px] text-gray-400">Counted from when the video is verified Closed &amp; Live, not from today.</p>
+                      <input
+                        type="number"
+                        value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      />
                       <label className="mb-1 block text-xs font-medium text-gray-700">Your counter (₹)</label>
                       <input
                         type="number"
