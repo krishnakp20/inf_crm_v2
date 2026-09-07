@@ -114,21 +114,42 @@ async def effective_live_dates(db: AsyncSession, collab_ids: list[int]) -> dict[
     }
 
 
-# Fixed (non-admin-configurable) aging thresholds for the "Overdue" badge on
-# collaboration cards -- the Settings page's stage-deadline panel governs
-# CreatorStage lead aging instead (see pipeline.py), not these.
-COLLAB_OVERDUE_MAX_DAYS: dict[CollabStage, int | None] = {
-    CollabStage.new_lead: 2,
-    CollabStage.replied: 2,
-    CollabStage.negotiating: 3,
-    CollabStage.commercial_locked: 2,
-    CollabStage.product_sent: 4,
-    CollabStage.product_delivered: 4,
-    CollabStage.first_draft: 3,
-    CollabStage.approved: 3,
-    CollabStage.live: None,
-    CollabStage.dead_leads: None,
-}
+# Stages the Settings > Stage deadlines panel lets an admin configure --
+# every real stage a lead passes through on its way to Live. Dead Leads is
+# terminal, not a stage a lead "waits in", so it's excluded (matches
+# STARTABLE_STAGES exactly, same underlying set for a different purpose).
+CONFIGURABLE_DEADLINE_STAGES: list[CollabStage] = COLLAB_STAGE_ORDER[:-1]
+
+
+async def load_stage_deadline_days(db: AsyncSession) -> dict[CollabStage, int | None]:
+    """Admin-configured "days a lead can sit in this stage before it needs
+    attention" (Settings > Stage deadlines). A stage with no row, or an
+    explicit null, means no deadline. This single number drives both the
+    Kanban card's Overdue badge and the dead-zone sweep's per-stage
+    auto-archive trigger (see dead_zone.py) -- one number, one meaning."""
+    from app.db.models.stage_deadline_rule import StageDeadlineRule  # local import avoids a circular import
+
+    result = await db.execute(select(StageDeadlineRule))
+    configured = {rule.stage: rule.max_days for rule in result.scalars().all()}
+    return {stage: configured.get(stage) for stage in CONFIGURABLE_DEADLINE_STAGES}
+
+
+def is_stage_deadline_exceeded(collab: Collaboration, deadline_days: dict[CollabStage, int | None]) -> bool:
+    max_days = deadline_days.get(collab.stage)
+    if max_days is None:
+        return False
+    age = datetime.now(timezone.utc) - collab.last_activity_at
+    return age > timedelta(days=max_days)
+
+
+def days_until_stage_deadline(collab: Collaboration, deadline_days: dict[CollabStage, int | None]) -> float | None:
+    """Days remaining before this card's current stage deadline is hit, or
+    None if this stage has no configured deadline. Negative once exceeded."""
+    max_days = deadline_days.get(collab.stage)
+    if max_days is None:
+        return None
+    age = datetime.now(timezone.utc) - collab.last_activity_at
+    return timedelta(days=max_days).total_seconds() / 86400 - age.total_seconds() / 86400
 
 
 # Cumulative required "backfill" fields per Starting stage -- confirmed live

@@ -27,23 +27,3 @@ STAGE_LABELS: dict[CreatorStage, str] = {
     CreatorStage.payment_pending: "Payment",
     CreatorStage.paid: "Paid",
 }
-
-# Settings' "Stage deadlines" panel configures aging thresholds for these 5
-# early lead stages (verified live: Outreach sent, Replied, Negotiating,
-# Locked, Product sent). Content live onward has no deadline -- it's the
-# terminal/completed state for lead aging purposes.
-CONFIGURABLE_DEADLINE_STAGES: list[CreatorStage] = [
-    CreatorStage.outreach_sent,
-    CreatorStage.replied,
-    CreatorStage.negotiating,
-    CreatorStage.commercial_locked,
-    CreatorStage.product_sent,
-]
-
-DEADLINE_STAGE_LABELS: dict[CreatorStage, str] = {
-    CreatorStage.outreach_sent: "Outreach sent",
-    CreatorStage.replied: "Replied",
-    CreatorStage.negotiating: "Negotiating",
-    CreatorStage.commercial_locked: "Locked",
-    CreatorStage.product_sent: "Product sent",
-}

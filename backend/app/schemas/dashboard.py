@@ -7,7 +7,7 @@ from app.schemas.product import ProductPerformance
 
 
 class NotificationOut(BaseModel):
-    kind: str  # "approval" | "partnership"
+    kind: str  # "approval" | "partnership" | "deadline_warning"
     id: int  # source row id -- unique within kind, not across kinds
     creator_name: str
     creator_handle: str

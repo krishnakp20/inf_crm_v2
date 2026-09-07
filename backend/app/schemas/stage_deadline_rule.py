@@ -1,16 +1,16 @@
 from pydantic import BaseModel
 
-from app.db.models.enums import CreatorStage
+from app.db.models.enums import CollabStage
 
 
 class StageDeadlineRuleOut(BaseModel):
-    stage: CreatorStage
+    stage: CollabStage
     label: str
     max_days: int | None
 
 
 class StageDeadlineRuleUpdate(BaseModel):
-    stage: CreatorStage
+    stage: CollabStage
     max_days: int | None
 
 

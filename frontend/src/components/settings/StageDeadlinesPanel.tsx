@@ -49,7 +49,9 @@ export function StageDeadlinesPanel() {
     <div className="dashboard-card p-5">
       <h2 className="mb-1 text-base font-semibold text-ink">Stage deadlines</h2>
       <p className="mb-4 text-sm text-gray-500">
-        Set how long a lead can remain in each stage before it needs attention.
+        Set how long a card can remain in each My Creators stage with no activity. Once a stage's deadline is set,
+        the card gets the Overdue badge, the owner is warned 2 days and 1 day before the deadline, and once it's
+        exceeded the card is automatically moved to Dead Leads with ownership revoked.
       </p>
 
       <div className="overflow-x-auto">
@@ -58,7 +60,7 @@ export function StageDeadlinesPanel() {
             <tr className="text-left text-xs uppercase text-gray-400">
               <th className="pb-2">Stage</th>
               <th className="pb-2">Maximum time in stage</th>
-              <th className="pb-2">Dashboard result</th>
+              <th className="pb-2">Result</th>
             </tr>
           </thead>
           <tbody>
@@ -80,15 +82,10 @@ export function StageDeadlinesPanel() {
                   </div>
                 </td>
                 <td className="py-3 text-xs text-gray-500">
-                  {draft[r.stage] ? `Highlight after ${draft[r.stage]} days` : "No deadline"}
+                  {draft[r.stage] ? `Overdue after ${draft[r.stage]} days, then auto-archived` : "No deadline"}
                 </td>
               </tr>
             ))}
-            <tr className="border-t border-gray-100">
-              <td className="py-3 text-ink">{rules.length + 1}. Content live</td>
-              <td className="py-3 text-xs text-gray-400">No deadline</td>
-              <td className="py-3 text-xs text-gray-400">Completed</td>
-            </tr>
           </tbody>
         </table>
       </div>

@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -29,7 +30,9 @@ from app.schemas.product import ProductPerformance
 from app.services.collab_pipeline import (
     COLLAB_FUNNEL_BUCKETS,
     COLLAB_STAGE_LABELS,
+    days_until_stage_deadline,
     get_video_credit_by_product_and_owner,
+    load_stage_deadline_days,
 )
 from app.services.partnership_pipeline import scoped_ticket_ids
 
@@ -431,6 +434,53 @@ _PARTNERSHIP_NOTIFICATION_SUBTITLES: dict[TicketStatus, str] = {
 }
 
 
+async def _deadline_warning_notifications(db: AsyncSession, owner_ids: list[int] | None) -> list[NotificationOut]:
+    """Cards within 2 days of their Settings > Stage deadline (see
+    collab_pipeline.load_stage_deadline_days) -- the "2 days and 1 day
+    before it moves to Dead Leads" warning. Computed live from
+    last_activity_at on every request rather than a persisted/dispatched
+    notification, so it always reflects the current deadline settings and
+    never needs a "already sent" table to avoid re-notifying."""
+    deadline_days = await load_stage_deadline_days(db)
+    configured_stages = [stage for stage, days in deadline_days.items() if days is not None]
+    if not configured_stages:
+        return []
+
+    stmt = (
+        select(Collaboration, Creator)
+        .join(Creator, Creator.id == Collaboration.creator_id)
+        .where(Collaboration.stage.in_(configured_stages))
+    )
+    if owner_ids is not None:
+        stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    rows = (await db.execute(stmt)).all()
+
+    now = datetime.now(timezone.utc)
+    items: list[NotificationOut] = []
+    for collab, creator in rows:
+        days_left = days_until_stage_deadline(collab, deadline_days)
+        if days_left is None or not (0 < days_left <= 2):
+            continue
+        days_left_rounded = max(1, math.ceil(days_left))
+        stage_label = COLLAB_STAGE_LABELS[collab.stage]
+        items.append(
+            NotificationOut(
+                kind="deadline_warning",
+                id=collab.id,
+                creator_name=creator.name,
+                creator_handle=creator.instagram_handle,
+                subtitle=(
+                    f"{collab.collab_code} · {days_left_rounded} day{'s' if days_left_rounded != 1 else ''} left "
+                    f"in {stage_label} -- will move to Dead Leads if no action is taken"
+                ),
+                priority="high" if days_left_rounded <= 1 else "normal",
+                created_at=now,
+                link=f"/my-creators?collab={collab.id}",
+            )
+        )
+    return items
+
+
 async def get_dashboard_notifications(
     db: AsyncSession, user: User, owner_ids: list[int] | None
 ) -> list[NotificationOut]:
@@ -488,6 +538,8 @@ async def get_dashboard_notifications(
                     link="/partnership",
                 )
             )
+
+        items.extend(await _deadline_warning_notifications(db, owner_ids))
 
     items.sort(key=lambda n: n.created_at, reverse=True)
     return items

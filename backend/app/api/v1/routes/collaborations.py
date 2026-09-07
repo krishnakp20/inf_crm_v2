@@ -32,26 +32,19 @@ from app.schemas.collaboration import (
     CollaborationUpdate,
 )
 from app.services.collab_pipeline import (
-    COLLAB_OVERDUE_MAX_DAYS,
     COLLAB_STAGE_INDEX,
     STAGE_REQUIRED_FIELDS,
     STARTABLE_STAGES,
     apply_stage_transition,
     effective_live_dates,
+    is_stage_deadline_exceeded,
     is_video_live,
+    load_stage_deadline_days,
 )
 
 router = APIRouter(
     prefix="/collaborations", tags=["collaborations"], dependencies=[Depends(require_creator_workspace_access)]
 )
-
-
-def _is_overdue(collab: Collaboration) -> bool:
-    max_days = COLLAB_OVERDUE_MAX_DAYS.get(collab.stage)
-    if max_days is None:
-        return False
-    age = datetime.now(timezone.utc) - collab.last_activity_at
-    return age > timedelta(days=max_days)
 
 
 async def _get_collaboration_or_404(collab_id: int, db: AsyncSession, user: User | None = None) -> Collaboration:
@@ -200,6 +193,7 @@ def _to_out(
     owner: User,
     products: list[CollabProductOut],
     agg: tuple[int, int],
+    deadline_days: dict[CollabStage, int | None],
     approval: tuple[str, str] | None = None,
     effective_live_date: date | None = None,
 ) -> CollaborationOut:
@@ -232,7 +226,7 @@ def _to_out(
         video_link=collab.video_link,
         video_live_date=collab.video_live_date,
         effective_live_date=effective_live_date or collab.video_live_date,
-        is_overdue=_is_overdue(collab),
+        is_overdue=is_stage_deadline_exceeded(collab, deadline_days),
         creator_total_collabs=total,
         creator_videos_live=live,
         created_at=collab.created_at,
@@ -291,6 +285,7 @@ async def list_collaborations(
     products_by_collab = await _load_products_for_collabs(db, [row[0].id for row in rows])
     approvals_by_collab = await _latest_approval_by_collab(db, [row[0].id for row in rows])
     live_dates_by_collab = await effective_live_dates(db, [row[0].id for row in rows])
+    deadline_days = await load_stage_deadline_days(db)
     return [
         _to_out(
             c,
@@ -298,6 +293,7 @@ async def list_collaborations(
             owner,
             products_by_collab.get(c.id, []),
             aggregates[creator.id],
+            deadline_days,
             approvals_by_collab.get(c.id),
             live_dates_by_collab.get(c.id),
         )
@@ -372,12 +368,14 @@ async def get_collaboration(
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     approvals_by_collab = await _latest_approval_by_collab(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    deadline_days = await load_stage_deadline_days(db)
     return _to_out(
         collab,
         creator,
         owner,
         products_by_collab.get(collab.id, []),
         aggregates[collab.creator_id],
+        deadline_days,
         approvals_by_collab.get(collab.id),
         live_date,
     )
@@ -503,8 +501,16 @@ async def _create_collaboration(
     aggregates = await _creator_aggregates(db, [creator.id])
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    deadline_days = await load_stage_deadline_days(db)
     return _to_out(
-        collab, creator, owner, products_by_collab.get(collab.id, []), aggregates[creator.id], None, live_date
+        collab,
+        creator,
+        owner,
+        products_by_collab.get(collab.id, []),
+        aggregates[creator.id],
+        deadline_days,
+        None,
+        live_date,
     )
 
 
@@ -654,12 +660,14 @@ async def update_collaboration(
     aggregates = await _creator_aggregates(db, [collab.creator_id])
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    deadline_days = await load_stage_deadline_days(db)
     return _to_out(
         collab,
         creator,
         owner,
         products_by_collab.get(collab.id, []),
         aggregates[collab.creator_id],
+        deadline_days,
         None,
         live_date,
     )
@@ -778,12 +786,14 @@ async def transition_collab_stage(
     aggregates = await _creator_aggregates(db, [collab.creator_id])
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    deadline_days = await load_stage_deadline_days(db)
     return _to_out(
         collab,
         creator,
         owner,
         products_by_collab.get(collab.id, []),
         aggregates[collab.creator_id],
+        deadline_days,
         None,
         live_date,
     )

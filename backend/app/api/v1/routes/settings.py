@@ -9,8 +9,8 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.metric_upload import MetricImportOut, MetricUploadResult
 from app.schemas.stage_deadline_rule import StageDeadlineRuleOut, StageDeadlineRulesUpdate
+from app.services.collab_pipeline import COLLAB_STAGE_LABELS, CONFIGURABLE_DEADLINE_STAGES
 from app.services.metric_upload import process_metric_upload
-from app.services.pipeline import CONFIGURABLE_DEADLINE_STAGES, DEADLINE_STAGE_LABELS
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -23,7 +23,7 @@ async def list_stage_deadlines(
     result = await db.execute(select(StageDeadlineRule))
     existing = {rule.stage: rule.max_days for rule in result.scalars().all()}
     return [
-        StageDeadlineRuleOut(stage=stage, label=DEADLINE_STAGE_LABELS[stage], max_days=existing.get(stage))
+        StageDeadlineRuleOut(stage=stage, label=COLLAB_STAGE_LABELS[stage], max_days=existing.get(stage))
         for stage in CONFIGURABLE_DEADLINE_STAGES
     ]
 
@@ -50,7 +50,7 @@ async def update_stage_deadlines(
     result = await db.execute(select(StageDeadlineRule))
     updated = {rule.stage: rule.max_days for rule in result.scalars().all()}
     return [
-        StageDeadlineRuleOut(stage=stage, label=DEADLINE_STAGE_LABELS[stage], max_days=updated.get(stage))
+        StageDeadlineRuleOut(stage=stage, label=COLLAB_STAGE_LABELS[stage], max_days=updated.get(stage))
         for stage in CONFIGURABLE_DEADLINE_STAGES
     ]
 
