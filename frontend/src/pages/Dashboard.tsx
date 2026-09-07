@@ -163,16 +163,14 @@ export default function Dashboard() {
           tone="amber"
           label="Partnership pending"
           value={kpis.partnership_pending.toLocaleString()}
-          meta="Phase 2"
-          subtext="Connection will be added next phase"
+          subtext="Open tickets in Partnership Hub"
         />
         <KpiCard
           icon={Bell}
           tone="coral"
           label="Ads live"
           value={kpis.ads_live.toLocaleString()}
-          meta="Phase 2"
-          subtext="Connection will be added next phase"
+          subtext="Closed & Live in Partnership Hub"
         />
       </div>
 
