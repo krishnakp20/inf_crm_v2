@@ -54,6 +54,7 @@ export default function MyCreators() {
     null
   );
   const [showSetTarget, setShowSetTarget] = useState(false);
+  const [justClonedId, setJustClonedId] = useState<number | null>(null);
 
   const advisors = users.filter((u) => u.role === "advisor");
   const activeAdvisors = advisors.filter((a) => a.is_active);
@@ -161,8 +162,11 @@ export default function MyCreators() {
   }
 
   async function handleClone(collabId: number) {
-    await api.post(`/collaborations/${collabId}/clone`);
+    const res = await api.post<Collaboration>(`/collaborations/${collabId}/clone`);
     if (selectedOwnerId) loadBoard(selectedOwnerId);
+    const newId = res.data.id;
+    setJustClonedId(newId);
+    setTimeout(() => setJustClonedId((cur) => (cur === newId ? null : cur)), 4000);
   }
 
   function handleAddCard(stage: CollabStage) {
@@ -356,6 +360,7 @@ export default function MyCreators() {
         onRequestApproval={setApprovalCollab}
         onClone={handleClone}
         compact={compact}
+        highlightedCollabId={justClonedId}
       />
 
       {approvalCollab && (

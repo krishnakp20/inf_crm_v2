@@ -57,6 +57,7 @@ export function CollabKanbanCard({
   onRequestApproval,
   onClone,
   compact = false,
+  highlighted = false,
 }: {
   collab: Collaboration;
   nextStage: CollabStage | null;
@@ -65,6 +66,7 @@ export function CollabKanbanCard({
   onRequestApproval: (collab: Collaboration) => void;
   onClone: (collabId: number) => Promise<void>;
   compact?: boolean;
+  highlighted?: boolean;
 }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -76,7 +78,9 @@ export function CollabKanbanCard({
   return (
     <div
       onClick={() => onOpenDetail(collab.id)}
-      className={`dashboard-card cursor-pointer p-3 hover:border-brand-100 ${isDead ? "opacity-50" : ""}`}
+      className={`dashboard-card cursor-pointer p-3 transition-shadow duration-500 hover:border-brand-100 ${
+        isDead ? "opacity-50" : ""
+      } ${highlighted ? "border-brand-300 bg-brand-50 ring-2 ring-brand-300" : ""}`}
     >
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[10px] font-medium text-gray-400">

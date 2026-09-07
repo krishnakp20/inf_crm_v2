@@ -516,27 +516,30 @@ async def clone_collaboration(
 ) -> CollaborationOut:
     """Duplicates a collaboration for a second (or third...) deliverable
     from the same creator -- same creator, products/shades, priority,
-    commercial terms, deal/content type, tracking info, and note, but a
-    fresh collab_code/id and reset to New leads, since the clone needs to
-    walk its own pipeline (reply, negotiation, delivery, live) rather than
-    inheriting the source card's stage, video link, live date or payment
-    status."""
+    commercial terms, deal/content type, tracking info, and note, landing
+    on the SAME stage as the source card (so the new card keeps stepping
+    through the pipeline alongside it) rather than resetting to New leads.
+    Dead Leads is the one exception -- it isn't a valid starting stage for
+    a brand-new card, so a clone of a dead-leads card starts at New leads
+    instead. Video link, live date and payment status are never copied --
+    those belong to this specific deliverable, not the clone."""
     source = await _get_collaboration_or_404(collab_id, db, user)
     products = (await _load_products_for_collabs(db, [source.id])).get(source.id, [])
     if not products:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source collaboration has no linked products.")
     primary = next((p for p in products if p.is_primary), products[0])
     additional = [p for p in products if p.product_id != primary.product_id]
+    target_stage = source.stage if source.stage != CollabStage.dead_leads else CollabStage.new_lead
 
     payload = CollaborationCreate(
         creator_id=source.creator_id,
         owner_id=source.owner_id,
         primary_product_id=primary.product_id,
         additional_product_ids=[p.product_id for p in additional],
-        live_attribution_product_ids=[],
+        live_attribution_product_ids=[p.product_id for p in products if p.is_live_attributed],
         product_variants={p.product_id: p.variant_id for p in products if p.variant_id is not None},
         priority=source.priority,
-        stage=CollabStage.new_lead,
+        stage=target_stage,
         note=source.note,
         creator_reply=source.creator_reply,
         commercial_quoted=source.commercial_quoted,

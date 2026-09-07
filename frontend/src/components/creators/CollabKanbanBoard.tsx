@@ -11,6 +11,7 @@ export function CollabKanbanBoard({
   onRequestApproval,
   onClone,
   compact = false,
+  highlightedCollabId = null,
 }: {
   collaborations: Collaboration[];
   onAdvance: (collabId: number, nextStage: CollabStage) => void;
@@ -19,6 +20,7 @@ export function CollabKanbanBoard({
   onRequestApproval: (collab: Collaboration) => void;
   onClone: (collabId: number) => Promise<void>;
   compact?: boolean;
+  highlightedCollabId?: number | null;
 }) {
   return (
     <div>
@@ -60,6 +62,7 @@ export function CollabKanbanBoard({
                     onRequestApproval={onRequestApproval}
                     onClone={onClone}
                     compact={compact}
+                    highlighted={collab.id === highlightedCollabId}
                   />
                 ))}
                 {columnCollabs.length === 0 && (
