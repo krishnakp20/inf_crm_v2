@@ -128,16 +128,29 @@ async def get_kpis(
     )
 
 
-async def get_collab_funnel(db: AsyncSession, owner_ids: list[int] | None = None) -> list[FunnelStage]:
+async def get_collab_funnel(
+    db: AsyncSession,
+    owner_ids: list[int] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> list[FunnelStage]:
     """Each bucket is the exact count of cards CURRENTLY sitting in that
     stage (a real Kanban-column snapshot) -- not "reached this stage or
     beyond". A card moving forward is subtracted from its old stage's count
-    and added to the new one, same as the board itself."""
+    and added to the new one, same as the board itself.
+
+    date_from/date_to (when given) scope every bucket, including Ads live,
+    to cards created in that window -- same created_at semantics the rest
+    of the app already uses for "date filter" (My Creators' board/stats)."""
     counts: list[int] = []
     for _, _, stages in COLLAB_FUNNEL_BUCKETS:
         stmt = select(func.count(Collaboration.id)).where(Collaboration.stage.in_(stages))
         if owner_ids is not None:
             stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+        if date_from is not None:
+            stmt = stmt.where(Collaboration.created_at >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(Collaboration.created_at < date_to)
         count = (await db.execute(stmt)).scalar_one()
         counts.append(count)
 
@@ -153,6 +166,10 @@ async def get_collab_funnel(db: AsyncSession, owner_ids: list[int] | None = None
     )
     if owner_ids is not None:
         ads_live_stmt = ads_live_stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if date_from is not None:
+        ads_live_stmt = ads_live_stmt.where(Collaboration.created_at >= date_from)
+    if date_to is not None:
+        ads_live_stmt = ads_live_stmt.where(Collaboration.created_at < date_to)
     counts.append((await db.execute(ads_live_stmt)).scalar_one())
 
     bucket_labels = [(key, label) for key, label, _ in COLLAB_FUNNEL_BUCKETS] + [("ads_live", "Ads live")]
@@ -285,7 +302,12 @@ async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | No
     return rows
 
 
-async def get_product_performance(db: AsyncSession, owner_ids: list[int] | None = None) -> list[ProductPerformance]:
+async def get_product_performance(
+    db: AsyncSession,
+    owner_ids: list[int] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> list[ProductPerformance]:
     # Product.owner_id is just whoever's account created/imported the
     # product row -- not a performance signal (confirmed: 122 of 130
     # products in this dataset are attributed to the one admin account the
@@ -293,7 +315,9 @@ async def get_product_performance(db: AsyncSession, owner_ids: list[int] | None 
     # from who actually owns the collaborations that delivered each
     # product's live videos, which get_video_credit_by_product_and_owner
     # computes directly from Collaboration.owner_id.
-    credit_by_product_and_owner = await get_video_credit_by_product_and_owner(db, owner_ids)
+    credit_by_product_and_owner = await get_video_credit_by_product_and_owner(
+        db, owner_ids, date_from.date() if date_from else None, date_to.date() if date_to else None
+    )
     all_owner_ids = {oid for by_owner in credit_by_product_and_owner.values() for oid in by_owner}
     owner_names = (
         {u.id: u.name for u in (await db.execute(select(User).where(User.id.in_(all_owner_ids)))).scalars().all()}
@@ -346,8 +370,16 @@ async def _primary_products_by_collab(db: AsyncSession, collab_ids: list[int]) -
 
 
 async def get_dashboard_approval_requests(
-    db: AsyncSession, owner_ids: list[int] | None = None, limit: int = 10, user: User | None = None
+    db: AsyncSession,
+    owner_ids: list[int] | None = None,
+    limit: int = 10,
+    user: User | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> list[ApprovalRequestOut]:
+    # date_from/date_to stay unused by the notification bell (it never
+    # passes them -- that's a live "needs action now" queue, not a report)
+    # and only get applied on the Dashboard's own Approval requests panel.
     stmt = (
         select(ApprovalRequest, Collaboration, Creator, User)
         .join(Collaboration, Collaboration.id == ApprovalRequest.collaboration_id)
@@ -357,6 +389,10 @@ async def get_dashboard_approval_requests(
     )
     if owner_ids is not None:
         stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if date_from is not None:
+        stmt = stmt.where(ApprovalRequest.created_at >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(ApprovalRequest.created_at < date_to)
     if user is not None and user.role == UserRole.supervisor:
         # Same rule as approval_requests.py's list endpoint: a supervisor's
         # queue only shows requests actually routed to them.
@@ -491,11 +527,13 @@ async def get_dashboard(
     now = datetime.now(timezone.utc)
     return DashboardResponse(
         kpis=await get_kpis(db, now, owner_ids, range_start, range_end),
-        funnel=await get_collab_funnel(db, owner_ids),
+        funnel=await get_collab_funnel(db, owner_ids, range_start, range_end),
         funnel_moved_this_week=await _collab_moved_in_range(db, now, owner_ids, range_start, range_end),
         targets=await get_targets(db, now, owner_ids),
-        product_performance=await get_product_performance(db, owner_ids),
-        approval_requests=await get_dashboard_approval_requests(db, owner_ids, user=user),
+        product_performance=await get_product_performance(db, owner_ids, range_start, range_end),
+        approval_requests=await get_dashboard_approval_requests(
+            db, owner_ids, user=user, date_from=range_start, date_to=range_end
+        ),
         activity=await _activity(db, owner_ids),
         announcement=await _latest_announcement(db, owner_ids),
     )

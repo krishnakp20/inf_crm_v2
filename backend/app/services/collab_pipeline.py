@@ -1,7 +1,7 @@
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import DateTime, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.collab_stage_event import CollabStageEvent
@@ -153,7 +153,10 @@ for _stage in COLLAB_STAGE_ORDER:
 
 
 async def get_video_credit_by_product_and_owner(
-    db: AsyncSession, owner_ids: list[int] | None = None
+    db: AsyncSession,
+    owner_ids: list[int] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> dict[int, dict[int, float]]:
     """Per-product fractional video-live credit for the Dashboard's
     Product-wise performance panel, keyed by (product_id -> {collaboration
@@ -169,7 +172,12 @@ async def get_video_credit_by_product_and_owner(
     (confirmed: 122 of 130 products in this dataset are attributed to the
     one admin account the bulk import ran under), which is why the
     Dashboard's per-user filter used to show almost nothing for any advisor
-    other than that one account."""
+    other than that one account.
+
+    date_from/date_to scope to collabs whose effective live date (explicit
+    video_live_date, else first transition to Live -- same rule as
+    effective_live_dates) falls in range; same SQL-level pattern as
+    analytics.py's _scoped_live_collab_ids."""
     stmt = (
         select(
             CollaborationProduct.collaboration_id,
@@ -183,6 +191,24 @@ async def get_video_credit_by_product_and_owner(
     )
     if owner_ids is not None:
         stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if date_from is not None or date_to is not None:
+        live_date_subq = (
+            select(
+                CollabStageEvent.collaboration_id.label("collaboration_id"),
+                func.min(CollabStageEvent.created_at).label("live_date"),
+            )
+            .where(CollabStageEvent.to_stage == CollabStage.live)
+            .group_by(CollabStageEvent.collaboration_id)
+            .subquery()
+        )
+        stmt = stmt.outerjoin(live_date_subq, live_date_subq.c.collaboration_id == Collaboration.id)
+        effective_date = func.coalesce(
+            cast(Collaboration.video_live_date, DateTime(timezone=True)), live_date_subq.c.live_date
+        )
+        if date_from is not None:
+            stmt = stmt.where(effective_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(effective_date < date_to + timedelta(days=1))
     rows = (await db.execute(stmt)).all()
 
     by_collab: dict[int, list[tuple[int, bool, bool]]] = defaultdict(list)
