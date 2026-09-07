@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -38,3 +39,18 @@ class ChangePasswordRequest(BaseModel):
 
 class UserLimits(BaseModel):
     max_active_advisors: int
+
+
+class DeactivationImpact(BaseModel):
+    # Only what actually needs a decision -- already-archived creators and
+    # Dead Leads collabs stay exactly as they are either way.
+    creator_count: int
+    active_collab_count: int
+
+
+class DeactivateUserRequest(BaseModel):
+    # None when there's nothing to move (deactivation impact was zero) --
+    # the frontend skips the prompt entirely in that case.
+    action: Literal["archive", "reassign"] | None = None
+    reason: str | None = None
+    new_owner_id: int | None = None

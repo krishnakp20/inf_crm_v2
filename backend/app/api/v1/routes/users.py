@@ -1,14 +1,27 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_user, require_admin
 from app.core.security import hash_password, verify_password
-from app.db.models.enums import UserRole
+from app.db.models.collaboration import Collaboration
+from app.db.models.creator import Creator
+from app.db.models.enums import CollabStage, OwnershipEventType, UserRole
+from app.db.models.ownership_event import OwnershipEvent
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.user import ChangePasswordRequest, UserCreate, UserLimits, UserOut, UserUpdate
+from app.schemas.user import (
+    ChangePasswordRequest,
+    DeactivateUserRequest,
+    DeactivationImpact,
+    UserCreate,
+    UserLimits,
+    UserOut,
+    UserUpdate,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -104,17 +117,97 @@ async def update_user(
     return target
 
 
-@router.post("/{user_id}/deactivate", response_model=UserOut)
-async def deactivate_user(
+@router.get("/{user_id}/deactivation-impact", response_model=DeactivationImpact)
+async def deactivation_impact(
     user_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
+) -> DeactivationImpact:
+    """What deactivating this user would leave stranded -- their still-active
+    creators and collaborations, i.e. exactly what needs either archiving or
+    reassigning. Already-archived creators and Dead Leads collabs need no
+    decision, so they're not counted."""
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    creator_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Creator)
+            .where(Creator.owner_id == user_id, Creator.is_archived.is_(False))
+        )
+    ).scalar_one()
+    active_collab_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Collaboration)
+            .where(Collaboration.owner_id == user_id, Collaboration.stage != CollabStage.dead_leads)
+        )
+    ).scalar_one()
+    return DeactivationImpact(creator_count=creator_count, active_collab_count=active_collab_count)
+
+
+@router.post("/{user_id}/deactivate", response_model=UserOut)
+async def deactivate_user(
+    user_id: int,
+    payload: DeactivateUserRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ) -> User:
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if target.role == UserRole.admin:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Admin accounts can't be deactivated.")
+
+    now = datetime.now(timezone.utc)
+
+    if payload.action == "archive":
+        if not payload.reason or not payload.reason.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="A note is required to archive their leads."
+            )
+        reason = payload.reason.strip()
+        creators = (
+            await db.execute(select(Creator).where(Creator.owner_id == user_id, Creator.is_archived.is_(False)))
+        ).scalars().all()
+        for creator in creators:
+            creator.is_archived = True
+            creator.archived_at = now
+            creator.archive_reason = reason
+            db.add(
+                OwnershipEvent(
+                    creator_id=creator.id,
+                    user_id=creator.owner_id,
+                    event_type=OwnershipEventType.revoked,
+                    actor_id=user.id,
+                    note=reason,
+                )
+            )
+    elif payload.action == "reassign":
+        if payload.new_owner_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose an advisor to reassign to.")
+        new_owner = await db.get(User, payload.new_owner_id)
+        if new_owner is None or new_owner.role != UserRole.advisor or not new_owner.is_active or new_owner.id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a different, active advisor to reassign to."
+            )
+        creators = (await db.execute(select(Creator).where(Creator.owner_id == user_id))).scalars().all()
+        for creator in creators:
+            creator.owner_id = new_owner.id
+            db.add(
+                OwnershipEvent(
+                    creator_id=creator.id,
+                    user_id=new_owner.id,
+                    event_type=OwnershipEventType.admin_assigned,
+                    actor_id=user.id,
+                )
+            )
+        await db.execute(
+            update(Collaboration)
+            .where(Collaboration.owner_id == user_id)
+            .values(owner_id=new_owner.id, last_activity_at=now)
+        )
 
     target.is_active = False
     await db.commit()

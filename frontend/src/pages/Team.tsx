@@ -24,6 +24,17 @@ export default function Team() {
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [reassigningId, setReassigningId] = useState<number | null>(null);
 
+  const [deactivationTarget, setDeactivationTarget] = useState<User | null>(null);
+  const [deactivationImpact, setDeactivationImpact] = useState<{
+    creator_count: number;
+    active_collab_count: number;
+  } | null>(null);
+  const [deactivationAction, setDeactivationAction] = useState<"archive" | "reassign">("reassign");
+  const [archiveReason, setArchiveReason] = useState("");
+  const [reassignTargetId, setReassignTargetId] = useState<string>("");
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivationError, setDeactivationError] = useState<string | null>(null);
+
   function loadUsers() {
     api.get<User[]>("/users").then((res) => setUsers(res.data));
   }
@@ -67,14 +78,70 @@ export default function Team() {
 
   async function toggleActive(target: User) {
     setToggleError(null);
+    if (!target.is_active) {
+      setTogglingId(target.id);
+      try {
+        await api.post(`/users/${target.id}/activate`);
+        loadUsers();
+      } catch (err: any) {
+        setToggleError(err.response?.data?.detail ?? "Could not update this user.");
+      } finally {
+        setTogglingId(null);
+      }
+      return;
+    }
+
+    // Deactivating: check what's still under this advisor before doing
+    // anything -- if there's nothing active, just deactivate directly with
+    // no prompt.
     setTogglingId(target.id);
     try {
-      await api.post(`/users/${target.id}/${target.is_active ? "deactivate" : "activate"}`);
-      loadUsers();
+      const { data } = await api.get<{ creator_count: number; active_collab_count: number }>(
+        `/users/${target.id}/deactivation-impact`
+      );
+      if (data.creator_count === 0 && data.active_collab_count === 0) {
+        await api.post(`/users/${target.id}/deactivate`, {});
+        loadUsers();
+        return;
+      }
+      setDeactivationTarget(target);
+      setDeactivationImpact(data);
+      setDeactivationAction("reassign");
+      setArchiveReason("");
+      setReassignTargetId("");
+      setDeactivationError(null);
     } catch (err: any) {
       setToggleError(err.response?.data?.detail ?? "Could not update this user.");
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function confirmDeactivation() {
+    if (!deactivationTarget) return;
+    setDeactivationError(null);
+    if (deactivationAction === "archive" && !archiveReason.trim()) {
+      setDeactivationError("A note is required to archive their leads.");
+      return;
+    }
+    if (deactivationAction === "reassign" && !reassignTargetId) {
+      setDeactivationError("Choose an advisor to reassign to.");
+      return;
+    }
+    setDeactivating(true);
+    try {
+      await api.post(`/users/${deactivationTarget.id}/deactivate`, {
+        action: deactivationAction,
+        reason: deactivationAction === "archive" ? archiveReason.trim() : undefined,
+        new_owner_id: deactivationAction === "reassign" ? Number(reassignTargetId) : undefined,
+      });
+      setDeactivationTarget(null);
+      setDeactivationImpact(null);
+      loadUsers();
+    } catch (err: any) {
+      setDeactivationError(err.response?.data?.detail ?? "Could not deactivate this user.");
+    } finally {
+      setDeactivating(false);
     }
   }
 
@@ -235,6 +302,116 @@ export default function Team() {
           </div>
         </div>
       </div>
+
+      {deactivationTarget && deactivationImpact && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          onClick={() => !deactivating && setDeactivationTarget(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-[420px] rounded-card bg-white p-5 shadow-lg">
+            <h3 className="text-sm font-semibold text-ink">Deactivate {deactivationTarget.name}?</h3>
+            <p className="mt-1.5 text-xs text-muted">
+              They still own{" "}
+              {deactivationImpact.creator_count > 0 && (
+                <strong>
+                  {deactivationImpact.creator_count} creator{deactivationImpact.creator_count !== 1 ? "s" : ""}
+                </strong>
+              )}
+              {deactivationImpact.creator_count > 0 && deactivationImpact.active_collab_count > 0 && " and "}
+              {deactivationImpact.active_collab_count > 0 && (
+                <strong>
+                  {deactivationImpact.active_collab_count} active card
+                  {deactivationImpact.active_collab_count !== 1 ? "s" : ""}
+                </strong>
+              )}
+              . Choose what happens to them before deactivating.
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDeactivationAction("reassign")}
+                className={`rounded-lg border px-3 py-2 text-left text-xs ${
+                  deactivationAction === "reassign" ? "border-brand-200 bg-brand-50" : "border-[#e7e5e4]"
+                }`}
+              >
+                <div className="font-semibold text-ink">Reassign</div>
+                <div className="text-gray-500">Hand everything to another advisor</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeactivationAction("archive")}
+                className={`rounded-lg border px-3 py-2 text-left text-xs ${
+                  deactivationAction === "archive" ? "border-brand-200 bg-brand-50" : "border-[#e7e5e4]"
+                }`}
+              >
+                <div className="font-semibold text-ink">Archive their leads</div>
+                <div className="text-gray-500">Creators move to Archived Leads</div>
+              </button>
+            </div>
+
+            {deactivationAction === "reassign" && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-gray-700">Reassign to · Required</label>
+                <select
+                  value={reassignTargetId}
+                  onChange={(e) => setReassignTargetId(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs"
+                >
+                  <option value="">Choose an advisor...</option>
+                  {users
+                    .filter((u) => u.role === "advisor" && u.is_active && u.id !== deactivationTarget.id)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Moves both their creator records and their active Kanban cards.
+                </p>
+              </div>
+            )}
+
+            {deactivationAction === "archive" && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-gray-700">Reason for archiving · Required</label>
+                <input
+                  autoFocus
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  placeholder="e.g. Advisor left the team, leads paused for now"
+                  className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Their active Kanban cards are left as-is; only their creator records move to Archived Leads.
+                </p>
+              </div>
+            )}
+
+            {deactivationError && <p className="mt-2 text-xs text-red-600">{deactivationError}</p>}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeactivationTarget(null)}
+                disabled={deactivating}
+                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeactivation}
+                disabled={deactivating}
+                className="rounded-md bg-[#cf4e43] px-4 py-2 text-sm font-medium text-white hover:bg-[#b8362b] disabled:opacity-50"
+              >
+                {deactivating ? "Deactivating..." : "Deactivate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
