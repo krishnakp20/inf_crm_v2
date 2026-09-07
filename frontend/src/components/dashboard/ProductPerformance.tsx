@@ -41,7 +41,15 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
         {visible.map((product, idx) => {
           const color = ROW_COLORS[idx % ROW_COLORS.length];
           const videosLive = userFilter ? product.credit_by_owner?.[userFilter] ?? 0 : product.videos_live;
-          const pct = product.target_videos > 0 ? Math.min((videosLive / product.target_videos) * 100, 100) : 0;
+          // No target set (target_videos = 0) isn't "0% progress" -- with
+          // nothing to divide by, any live video already exceeds it, so the
+          // bar shows full rather than permanently stuck empty.
+          const pct =
+            product.target_videos > 0
+              ? Math.min((videosLive / product.target_videos) * 100, 100)
+              : videosLive > 0
+                ? 100
+                : 0;
           return (
             <div key={product.id}>
               <div className="mb-1 flex items-center justify-between">
