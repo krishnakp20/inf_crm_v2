@@ -48,8 +48,9 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
           </select>
         )}
       </div>
-      <table className="mt-4 w-full text-[13px]">
-        <thead>
+      <div className="mt-4 max-h-[520px] overflow-y-auto">
+      <table className="w-full text-[13px]">
+        <thead className="sticky top-0 z-10 bg-white">
           <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
             <SortableHeader label="Name" field="name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
             <SortableHeader label="Weekly target" field="weekly_pct" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
@@ -99,6 +100,7 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

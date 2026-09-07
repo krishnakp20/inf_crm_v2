@@ -37,7 +37,7 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
           </select>
         )}
       </div>
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="mt-4 flex max-h-[520px] flex-col gap-3 overflow-y-auto pr-1">
         {visible.map((product, idx) => {
           const color = ROW_COLORS[idx % ROW_COLORS.length];
           const videosLive = userFilter ? product.credit_by_owner?.[userFilter] ?? 0 : product.videos_live;
