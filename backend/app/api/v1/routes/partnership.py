@@ -1,7 +1,10 @@
+import csv
+import io
 from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +35,7 @@ from app.schemas.partnership import (
     PartnershipVerifyCloseRequest,
 )
 from app.services.collab_pipeline import effective_live_dates
+from app.services.metric_upload import REQUIRED_COLUMNS as METRIC_UPLOAD_COLUMNS
 from app.services.partnership_pipeline import (
     REMARK_TAG_ADMIN_COUNTER,
     REMARK_TAG_ADMIN_REQUEST,
@@ -285,6 +289,55 @@ async def list_closed(
     tickets = [t for t in tickets if t.ticket_status == TicketStatus.closed_and_live]
     batch = await _batch_load(db, tickets)
     return [_to_overview_row(t, batch, user) for t in tickets]
+
+
+@router.get("/export")
+async def export_metrics_template(
+    owner_id: int | None = None,
+    product_id: int | None = None,
+    platform: Platform | None = None,
+    content_bucket: str | None = None,
+    language: str | None = None,
+    category: str | None = None,
+    search: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """A ready-to-edit sheet for every video in the current Overview filter,
+    in the exact column shape Settings > Upload metrics expects (POC Code +
+    Video Link pre-filled so an admin never has to type them by hand,
+    current Views/Likes/Comments/Revenue/Ad Spend/ROAS pre-filled so they
+    can see and only change what's actually different) -- fill it in and
+    upload the same file straight back through that same import."""
+    if user.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
+
+    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    batch = await _batch_load(db, tickets)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(METRIC_UPLOAD_COLUMNS)
+    for ticket in tickets:
+        collab, _, _ = batch["collabs"][ticket.collaboration_id]
+        writer.writerow(
+            [
+                collab.poc_code or "",
+                collab.video_link or "",
+                collab.views_count if collab.views_count is not None else "",
+                collab.likes_count if collab.likes_count is not None else "",
+                collab.comments_count if collab.comments_count is not None else "",
+                collab.revenue if collab.revenue is not None else "",
+                collab.ad_spend if collab.ad_spend is not None else "",
+                collab.roas if collab.roas is not None else "",
+            ]
+        )
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=partnership-metrics-export.csv"},
+    )
 
 
 @router.get("/{ticket_id}")

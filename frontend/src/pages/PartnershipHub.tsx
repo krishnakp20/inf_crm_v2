@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PartnershipClosedTable } from "../components/partnership/PartnershipClosedTable";
 import { PartnershipFilters } from "../components/partnership/PartnershipFilters";
@@ -70,6 +71,16 @@ export default function PartnershipHub() {
     api.get<PartnershipStats>("/partnership/stats").then((res) => setStats(res.data));
   }
 
+  async function exportMetricsTemplate() {
+    const res = await api.get("/partnership/export", { params, responseType: "blob" });
+    const url = URL.createObjectURL(res.data as Blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "partnership-metrics-export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(loadOverview, [search, ownerId, productId, platform, contentBucket, language, category]);
   useEffect(loadOpen, [search, ownerId, productId, platform, contentBucket, language, category]);
   useEffect(loadClosed, [search, ownerId, productId, platform, contentBucket, language, category]);
@@ -109,6 +120,18 @@ export default function PartnershipHub() {
         eyebrow="PARTNERSHIP WORKSPACE"
         title="Partnership Hub"
         subtitle="Track ad rights, ad codes and CTA links for every video that's gone live."
+        actions={
+          user?.role === "admin" ? (
+            <button
+              onClick={exportMetricsTemplate}
+              title="Downloads a metrics sheet for the videos currently shown, with POC Code and Video Link pre-filled -- fill in the numbers and upload it back through Settings > Upload metrics."
+              className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] bg-white px-3 py-2.5 text-xs font-bold text-ink hover:bg-surface"
+            >
+              <Download size={14} />
+              Export for metrics upload
+            </button>
+          ) : undefined
+        }
       />
 
       {stats && <PartnershipStatsRow stats={stats} />}
