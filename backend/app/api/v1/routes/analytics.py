@@ -28,6 +28,7 @@ from app.services.analytics import (
     target_vs_achieved,
     what_is_working,
 )
+from app.services.dashboard import get_collab_funnel
 
 router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_analytics_access)])
 
@@ -102,6 +103,7 @@ async def get_analytics(
         what_is_working=await what_is_working(db, live_ids),
         pipeline_velocity=await pipeline_velocity(db, owner_ids, range_start, range_end),
         target_vs_achieved=await target_vs_achieved(db, owner_ids, range_start, range_end),
+        funnel=await get_collab_funnel(db, owner_ids, range_start, range_end),
         show_cpv=show_cost,
         show_cost_efficiency=show_cost,
         show_revenue=show_revenue,

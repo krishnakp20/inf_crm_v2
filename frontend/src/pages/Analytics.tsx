@@ -5,6 +5,7 @@ import { AnalyticsTabs, type AnalyticsTab } from "../components/analytics/Analyt
 import { BusinessImpactRow } from "../components/analytics/BusinessImpactRow";
 import { CommercialLockedPanel } from "../components/analytics/CommercialLockedPanel";
 import { CostEfficiencyPanel } from "../components/analytics/CostEfficiencyPanel";
+import { FunnelTrendChart } from "../components/analytics/FunnelTrendChart";
 import { PerformanceOverviewRow } from "../components/analytics/PerformanceOverviewRow";
 import { PipelineVelocityPanel } from "../components/analytics/PipelineVelocityPanel";
 import { ProductPerformanceTable } from "../components/analytics/ProductPerformanceTable";
@@ -177,6 +178,7 @@ export default function Analytics() {
           {data.cost_efficiency && <CostEfficiencyPanel data={data.cost_efficiency} />}
           {data.commercial_locked && <CommercialLockedPanel data={data.commercial_locked} />}
           <WhatIsWorkingPanel data={data.what_is_working} />
+          <FunnelTrendChart funnel={data.funnel} />
           <PipelineVelocityPanel rows={data.pipeline_velocity} />
           <TargetVsAchievedPanel rows={data.target_vs_achieved} />
         </>

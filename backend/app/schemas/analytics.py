@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.dashboard import FunnelStage
+
 
 class AnalyticsBusinessImpact(BaseModel):
     revenue: float | None  # Admin-only; null = not-yet-wired Metric Upload placeholder
@@ -81,6 +83,7 @@ class AnalyticsResponse(BaseModel):
     what_is_working: AnalyticsWhatIsWorking
     pipeline_velocity: list[AnalyticsPipelineVelocityRow]
     target_vs_achieved: list[AnalyticsTargetRow]
+    funnel: list[FunnelStage]
     show_cpv: bool
     show_cost_efficiency: bool
     show_revenue: bool

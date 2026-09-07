@@ -691,6 +691,7 @@ export interface AnalyticsResponse {
   what_is_working: AnalyticsWhatIsWorking;
   pipeline_velocity: AnalyticsPipelineVelocityRow[];
   target_vs_achieved: AnalyticsTargetRow[];
+  funnel: FunnelStage[];
   show_cpv: boolean;
   show_cost_efficiency: boolean;
   show_revenue: boolean;
