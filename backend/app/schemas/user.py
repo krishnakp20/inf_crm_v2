@@ -29,6 +29,7 @@ class UserOut(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    role: UserRole | None = None
     supervisor_id: int | None = None
 
 

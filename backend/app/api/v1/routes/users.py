@@ -99,19 +99,53 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> User:
+    """Also how a promotion/demotion is done -- someone moving from
+    Influencer Agent to Supervisor (or any other role change) has their
+    existing role updated in place rather than needing a brand-new
+    account. Admin accounts are exempt entirely, matching the existing
+    "can't be deactivated" protection."""
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if target.role != UserRole.advisor:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Only Influencer Agents can have a supervisor."
-        )
-    if payload.supervisor_id is not None:
-        if payload.supervisor_id == target.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A user can't supervise themselves.")
-        await _validate_supervisor_id(db, payload.supervisor_id)
 
-    target.supervisor_id = payload.supervisor_id
+    fields_set = payload.model_fields_set
+
+    if "role" in fields_set and payload.role is not None and payload.role != target.role:
+        if target.role == UserRole.admin or payload.role == UserRole.admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Admin accounts can't be changed here."
+            )
+        if (
+            payload.role == UserRole.advisor
+            and target.is_active
+            and await _active_advisor_count(db) >= settings.max_active_advisors
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Maximum of {settings.max_active_advisors} active advisors reached. Deactivate one first.",
+            )
+        if target.role == UserRole.supervisor:
+            # Moving them off Supervisor -- don't leave any Influencer
+            # Agents pointing at a supervisor_id that's no longer one.
+            await db.execute(update(User).where(User.supervisor_id == target.id).values(supervisor_id=None))
+        target.role = payload.role
+        if payload.role != UserRole.advisor:
+            target.supervisor_id = None
+
+    if "supervisor_id" in fields_set:
+        effective_role = payload.role if "role" in fields_set and payload.role is not None else target.role
+        if effective_role != UserRole.advisor:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Only Influencer Agents can have a supervisor."
+            )
+        if payload.supervisor_id is not None:
+            if payload.supervisor_id == target.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="A user can't supervise themselves."
+                )
+            await _validate_supervisor_id(db, payload.supervisor_id)
+        target.supervisor_id = payload.supervisor_id
+
     await db.commit()
     await db.refresh(target)
     return target

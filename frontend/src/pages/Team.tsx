@@ -23,6 +23,7 @@ export default function Team() {
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [reassigningId, setReassigningId] = useState<number | null>(null);
+  const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
 
   const [deactivationTarget, setDeactivationTarget] = useState<User | null>(null);
   const [deactivationImpact, setDeactivationImpact] = useState<{
@@ -145,6 +146,20 @@ export default function Team() {
     }
   }
 
+  async function changeRole(target: User, newRole: UserRole) {
+    if (newRole === target.role) return;
+    setToggleError(null);
+    setChangingRoleId(target.id);
+    try {
+      await api.patch(`/users/${target.id}`, { role: newRole });
+      loadUsers();
+    } catch (err: any) {
+      setToggleError(err.response?.data?.detail ?? "Could not change this user's role.");
+    } finally {
+      setChangingRoleId(null);
+    }
+  }
+
   async function reassignSupervisor(target: User, supervisorId: string) {
     setReassigningId(target.id);
     try {
@@ -248,9 +263,25 @@ export default function Team() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium text-ink">{u.name}</span>
-                    <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-600">
-                      {roleLabel(u.role)}
-                    </span>
+                    {u.role === "admin" ? (
+                      <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-600">
+                        {roleLabel(u.role)}
+                      </span>
+                    ) : (
+                      <select
+                        value={u.role}
+                        disabled={changingRoleId === u.id}
+                        onChange={(e) => changeRole(u, e.target.value as UserRole)}
+                        title="Change role"
+                        className="rounded-md border border-brand-100 bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-600 disabled:opacity-50"
+                      >
+                        {CREATABLE_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {roleLabel(r)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {!u.is_active && (
                       <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">
                         Deactivated
