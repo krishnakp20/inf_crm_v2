@@ -49,7 +49,7 @@ export function CollabKanbanBoard({
                   </button>
                 )}
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex max-h-[calc(100vh-520px)] min-h-[200px] flex-col gap-2 overflow-y-auto pr-1">
                 {columnCollabs.map((collab) => (
                   <CollabKanbanCard
                     key={collab.id}
