@@ -84,12 +84,25 @@ async def get_kpis(
     total_creators = (await db.execute(total_creators_stmt)).scalar_one()
     new_in_range = (await db.execute(new_in_range_stmt)).scalar_one()
 
-    active_reels_stmt = select(func.count(Collaboration.id)).where(Collaboration.stage != CollabStage.dead_leads)
+    # Active reels = videos actually in the Live stage (not "every non-dead
+    # card" -- a New Lead or a card still in Negotiation isn't a reel yet).
+    active_reels_stmt = select(func.count(Collaboration.id)).where(Collaboration.stage == CollabStage.live)
     reels_added_in_range_stmt = _in_window(select(func.count(Collaboration.id)), Collaboration.created_at)
-    partnership_pending_stmt = select(func.count(Collaboration.id)).where(
-        Collaboration.stage.in_([CollabStage.negotiating, CollabStage.commercial_locked])
+    # Partnership Pending / Ads Live both come from Partnership Hub ticket
+    # status, not the collaboration's Kanban stage -- "Pending" mirrors the
+    # Hub's Open tab (anything not yet Closed & Live), "Ads Live" mirrors
+    # its Closed & Live tab. See partnership.py's /open and /closed routes,
+    # which use this exact same ticket_status split.
+    partnership_pending_stmt = (
+        select(func.count(PartnershipTicket.id))
+        .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
+        .where(PartnershipTicket.ticket_status != TicketStatus.closed_and_live)
     )
-    ads_live_stmt = select(func.count(Collaboration.id)).where(Collaboration.stage == CollabStage.live)
+    ads_live_stmt = (
+        select(func.count(PartnershipTicket.id))
+        .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
+        .where(PartnershipTicket.ticket_status == TicketStatus.closed_and_live)
+    )
     if owner_ids is not None:
         active_reels_stmt = active_reels_stmt.where(Collaboration.owner_id.in_(owner_ids))
         reels_added_in_range_stmt = reels_added_in_range_stmt.where(Collaboration.owner_id.in_(owner_ids))
