@@ -66,8 +66,11 @@ export default function MyCreators() {
     if (user.role === "admin") {
       api.get<User[]>("/users").then((res) => {
         setUsers(res.data);
-        const advisorUsers = res.data.filter((u) => u.role === "advisor");
-        setSelectedOwnerId(advisorUsers[0]?.id ?? null);
+        // Defaults to the whole team, not one arbitrary advisor -- an admin
+        // comparing this board's totals against Analytics (which defaults
+        // to "All users") would otherwise see wildly different numbers for
+        // what looks like the same "how many videos are live" question.
+        setSelectedOwnerId("all");
       });
     } else if (user.role === "supervisor") {
       api.get<User[]>("/users").then((res) => {
