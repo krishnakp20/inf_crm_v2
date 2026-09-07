@@ -46,12 +46,15 @@ export function PipelineFunnel({
         </div>
       </div>
 
-      <div className="mt-4 flex gap-1 overflow-x-auto">
+      <div
+        className="mt-4 grid gap-1"
+        style={{ gridTemplateColumns: `repeat(${funnel.length}, minmax(0, 1fr))` }}
+      >
         {funnel.map((stage, i) => {
           const color = STAGE_COLORS[i % STAGE_COLORS.length];
           const barWidth = Math.max(Math.sqrt(stage.count / maxCount) * 100, stage.count > 0 ? 6 : 0);
           return (
-            <button key={stage.stage} className="flex w-[110px] shrink-0 flex-col items-start pr-2 text-left">
+            <button key={stage.stage} className="flex min-w-0 flex-col items-start pr-2 text-left">
               <div className="mb-1.5 flex items-center gap-1 self-stretch">
                 <span
                   className="grid h-[25px] w-[25px] shrink-0 place-items-center rounded-full text-[7px] font-bold text-white"
