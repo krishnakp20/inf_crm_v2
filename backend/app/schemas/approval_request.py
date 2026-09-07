@@ -12,6 +12,10 @@ class ApprovalRequestCreate(BaseModel):
     target: ApprovalTarget = ApprovalTarget.admin
 
 
+class ApprovalRequestReject(BaseModel):
+    note: str
+
+
 class ApprovalRequestOut(BaseModel):
     id: int
     request_code: str
@@ -28,3 +32,4 @@ class ApprovalRequestOut(BaseModel):
     target: ApprovalTarget
     created_at: datetime
     resolved_at: datetime | None
+    resolution_note: str | None = None

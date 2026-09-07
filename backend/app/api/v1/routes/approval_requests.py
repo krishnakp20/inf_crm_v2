@@ -18,7 +18,7 @@ from app.db.models.enums import ApprovalStatus, ApprovalTarget, UserRole
 from app.db.models.product import Product
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.approval_request import ApprovalRequestCreate, ApprovalRequestOut
+from app.schemas.approval_request import ApprovalRequestCreate, ApprovalRequestOut, ApprovalRequestReject
 from app.services.collab_pipeline import COLLAB_STAGE_LABELS
 
 router = APIRouter(
@@ -57,6 +57,7 @@ def _to_out(req: ApprovalRequest, collab: Collaboration, creator: Creator, produ
         target=req.target,
         created_at=req.created_at,
         resolved_at=req.resolved_at,
+        resolution_note=req.resolution_note,
     )
 
 
@@ -185,14 +186,18 @@ async def approve_request(
 @router.post("/{request_id}/reject", response_model=ApprovalRequestOut)
 async def reject_request(
     request_id: int,
+    payload: ApprovalRequestReject,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> ApprovalRequestOut:
+    if not payload.note.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A note is required to reject a request.")
     req = await _get_request_or_404(request_id, db)
     await _require_can_resolve(req, db, user)
     req.status = ApprovalStatus.rejected
     req.resolved_at = datetime.now(timezone.utc)
     req.resolved_by = user.id
+    req.resolution_note = payload.note.strip()
     await db.commit()
     await db.refresh(req)
 

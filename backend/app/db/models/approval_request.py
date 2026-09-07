@@ -30,3 +30,6 @@ class ApprovalRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Set only on reject -- the resolver's note explaining why. Never
+    # required on approve.
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)

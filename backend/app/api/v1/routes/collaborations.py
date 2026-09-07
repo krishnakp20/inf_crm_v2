@@ -332,6 +332,35 @@ async def collab_board_stats(
     )
 
 
+@router.get("/{collab_id}", response_model=CollaborationOut)
+async def get_collaboration(
+    collab_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CollaborationOut:
+    """Fetches a single Collab ID directly, regardless of the requester's
+    current My Creators board filters -- used by deep links (e.g. an
+    approval request's "Open lead") that need to open a specific card even
+    when it isn't in whatever owner/product/date-filtered list happens to
+    be loaded."""
+    collab = await _get_collaboration_or_404(collab_id, db, user)
+    creator = await db.get(Creator, collab.creator_id)
+    owner = await db.get(User, collab.owner_id)
+    aggregates = await _creator_aggregates(db, [collab.creator_id])
+    products_by_collab = await _load_products_for_collabs(db, [collab.id])
+    approvals_by_collab = await _latest_approval_by_collab(db, [collab.id])
+    live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
+    return _to_out(
+        collab,
+        creator,
+        owner,
+        products_by_collab.get(collab.id, []),
+        aggregates[collab.creator_id],
+        approvals_by_collab.get(collab.id),
+        live_date,
+    )
+
+
 @router.post("", response_model=CollaborationOut, status_code=status.HTTP_201_CREATED)
 async def create_collaboration(
     payload: CollaborationCreate,

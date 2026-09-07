@@ -25,10 +25,12 @@ export function ApprovalRequests({
   requests: ApprovalRequest[];
   canApprove: boolean;
   onApprove?: (id: number) => void;
-  onReject?: (id: number) => void;
+  onReject?: (id: number, note: string) => void;
 }) {
   const [userFilter, setUserFilter] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
 
   const users = useMemo(
     () => [...new Set(requests.map((r) => r.requested_by_name))].sort(),
@@ -98,7 +100,7 @@ export function ApprovalRequests({
               {canApprove ? (
                 <>
                   <Link
-                    to="/my-creators"
+                    to={`/my-creators?collab=${req.collaboration_id}`}
                     className="rounded-lg border border-[#e7e5e4] px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface"
                   >
                     Open lead
@@ -110,7 +112,10 @@ export function ApprovalRequests({
                     Approve
                   </button>
                   <button
-                    onClick={() => onReject?.(req.id)}
+                    onClick={() => {
+                      setRejectingId(req.id);
+                      setRejectNote("");
+                    }}
                     className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-400 hover:bg-surface hover:text-[#cf4e43]"
                   >
                     Reject
@@ -142,6 +147,48 @@ export function ApprovalRequests({
               {showAll ? "Show less" : "Show all"}
             </button>
           )}
+        </div>
+      )}
+
+      {rejectingId !== null && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
+          onClick={() => setRejectingId(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-[380px] rounded-card bg-white p-5 shadow-lg">
+            <h3 className="text-sm font-semibold text-ink">Reject this request?</h3>
+            <p className="mt-1.5 text-xs text-muted">Let the requester know why this wasn't approved.</p>
+            <div className="mt-3">
+              <label className="mb-1 block text-xs font-medium text-gray-700">Reason for rejecting · Required</label>
+              <input
+                autoFocus
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="e.g. Commercial is above the approved cap for this creator"
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectingId(null)}
+                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!rejectNote.trim()}
+                onClick={() => {
+                  onReject?.(rejectingId, rejectNote.trim());
+                  setRejectingId(null);
+                }}
+                className="rounded-md bg-[#cf4e43] px-4 py-2 text-sm font-medium text-white hover:bg-[#b8362b] disabled:opacity-50"
+              >
+                Reject request
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

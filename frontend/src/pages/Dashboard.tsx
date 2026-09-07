@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [rangePreset, setRangePreset] = useState<RangePreset>("7d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const greeting = timeBasedGreeting();
 
   function loadDashboard() {
@@ -51,6 +52,12 @@ export default function Dashboard() {
   }
 
   useEffect(loadDashboard, [rangePreset, customFrom, customTo]);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   if (!data) {
     return (
@@ -90,11 +97,13 @@ export default function Dashboard() {
 
   async function approveRequest(id: number) {
     await api.post(`/approval-requests/${id}/approve`);
+    setSuccessMessage("Request approved.");
     loadDashboard();
   }
 
-  async function rejectRequest(id: number) {
-    await api.post(`/approval-requests/${id}/reject`);
+  async function rejectRequest(id: number, note: string) {
+    await api.post(`/approval-requests/${id}/reject`, { note });
+    setSuccessMessage("Request rejected.");
     loadDashboard();
   }
 
@@ -118,6 +127,15 @@ export default function Dashboard() {
           />
         }
       />
+
+      {successMessage && (
+        <div className="mb-4 flex items-center justify-between rounded-card border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          <span>{successMessage}</span>
+          <button onClick={() => setSuccessMessage(null)} className="text-xs text-emerald-700 hover:opacity-70">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {announcement ? (
         <AnnouncementBanner

@@ -1,6 +1,6 @@
 import { LayoutGrid, List, Plus, Search, Target } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { AddCollaborationModal } from "../components/creators/AddCollaborationModal";
 import { CollabBoardStatsRow } from "../components/creators/CollabBoardStatsRow";
 import { CollabDetailPanel } from "../components/creators/CollabDetailPanel";
@@ -29,6 +29,7 @@ const PAYMENT_FILTERS = [
 
 export default function MyCreators() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<User[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | "all" | null>(null);
@@ -40,6 +41,10 @@ export default function MyCreators() {
   const [paymentFilter, setPaymentFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [detailCollabId, setDetailCollabId] = useState<number | null>(null);
+  // Fallback for a deep-linked card (e.g. an approval request's "Open lead")
+  // that isn't in the currently-filtered board list -- fetched directly by
+  // id rather than requiring it to already be loaded.
+  const [deepLinkCollab, setDeepLinkCollab] = useState<Collaboration | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -76,6 +81,16 @@ export default function MyCreators() {
     }
     api.get<Product[]>("/products").then((res) => setProducts(res.data));
   }, [user]);
+
+  useEffect(() => {
+    const collabParam = searchParams.get("collab");
+    if (!collabParam) return;
+    const id = Number(collabParam);
+    if (!Number.isFinite(id)) return;
+    setDetailCollabId(id);
+    api.get<Collaboration>(`/collaborations/${id}`).then((res) => setDeepLinkCollab(res.data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function loadBoard(ownerId: number | "all") {
     const ownerParam = ownerId === "all" ? undefined : ownerId;
@@ -149,7 +164,10 @@ export default function MyCreators() {
     setDetailCollabId(collabId);
   }
 
-  const detailCollab = detailCollabId ? collaborations.find((c) => c.id === detailCollabId) ?? null : null;
+  const detailCollab = detailCollabId
+    ? collaborations.find((c) => c.id === detailCollabId) ??
+      (deepLinkCollab?.id === detailCollabId ? deepLinkCollab : null)
+    : null;
 
   return (
     <div>
@@ -342,7 +360,14 @@ export default function MyCreators() {
         <CollabDetailPanel
           collab={detailCollab}
           products={products}
-          onClose={() => setDetailCollabId(null)}
+          onClose={() => {
+            setDetailCollabId(null);
+            setDeepLinkCollab(null);
+            if (searchParams.get("collab")) {
+              searchParams.delete("collab");
+              setSearchParams(searchParams, { replace: true });
+            }
+          }}
           onChanged={() => selectedOwnerId && loadBoard(selectedOwnerId)}
         />
       )}
