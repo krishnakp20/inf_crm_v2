@@ -85,14 +85,44 @@ async def check_ownership(
     query: str = Query(..., min_length=2),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
-) -> list[Creator]:
+) -> list[OwnershipMatch]:
     pattern = f"%{query}%"
     result = await db.execute(
         select(Creator).where(
             or_(Creator.instagram_handle.ilike(pattern), Creator.phone.ilike(pattern))
         )
     )
-    return list(result.scalars().all())
+    creators = list(result.scalars().all())
+    creator_ids = [c.id for c in creators]
+
+    # Creator.current_stage is a frozen, one-time-import value (never kept
+    # in sync with the real pipeline) -- the actual current stage lives on
+    # whichever of the creator's collaborations was most recently active,
+    # same source of truth as the Database table's current_collab_stage_label.
+    stage_label_by_creator: dict[int, str] = {}
+    if creator_ids:
+        collab_result = await db.execute(
+            select(Collaboration.creator_id, Collaboration.stage, Collaboration.last_activity_at).where(
+                Collaboration.creator_id.in_(creator_ids)
+            )
+        )
+        latest_by_creator: dict[int, tuple[CollabStage, datetime]] = {}
+        for creator_id, stage, last_activity_at in collab_result.all():
+            current = latest_by_creator.get(creator_id)
+            if current is None or last_activity_at > current[1]:
+                latest_by_creator[creator_id] = (stage, last_activity_at)
+        stage_label_by_creator = {cid: COLLAB_STAGE_LABELS[stage] for cid, (stage, _) in latest_by_creator.items()}
+
+    return [
+        OwnershipMatch(
+            id=c.id,
+            name=c.name,
+            instagram_handle=c.instagram_handle,
+            owner_id=c.owner_id,
+            current_stage_label=stage_label_by_creator.get(c.id),
+        )
+        for c in creators
+    ]
 
 
 @router.get("/board-stats", response_model=BoardStats)

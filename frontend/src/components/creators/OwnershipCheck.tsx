@@ -6,7 +6,7 @@ interface Match {
   name: string;
   instagram_handle: string;
   owner_id: number;
-  current_stage: string;
+  current_stage_label: string | null;
 }
 
 export function OwnershipCheck({ owners }: { owners: Record<number, string> }) {
@@ -63,8 +63,8 @@ export function OwnershipCheck({ owners }: { owners: Record<number, string> }) {
             <ul className="flex flex-col gap-1">
               {matches.map((m) => (
                 <li key={m.id} className="text-amber-700">
-                  @{m.instagram_handle} is already owned by {owners[m.owner_id] ?? "another advisor"} (
-                  {m.current_stage.replace("_", " ")})
+                  @{m.instagram_handle} is already owned by {owners[m.owner_id] ?? "another advisor"}
+                  {m.current_stage_label ? ` (${m.current_stage_label})` : ""}
                 </li>
               ))}
             </ul>

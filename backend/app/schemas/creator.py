@@ -126,10 +126,9 @@ class OwnershipMatch(BaseModel):
     name: str
     instagram_handle: str
     owner_id: int
-    current_stage: CreatorStage
-
-    class Config:
-        from_attributes = True
+    # The creator's real current stage, from their most recently active
+    # collaboration -- None if they have no collaborations at all yet.
+    current_stage_label: str | None = None
 
 
 class BoardStats(BaseModel):
