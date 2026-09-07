@@ -50,15 +50,23 @@ export function BusinessImpactRow({
             <ImpactCard
               icon={IndianRupee}
               label="Revenue"
-              value={data.revenue != null ? formatCurrency(data.revenue) : "Phase 2"}
-              subtext={data.revenue != null ? "Uploaded by POC code in Settings" : "Connection will be added next phase"}
+              value={data.revenue != null ? formatCurrency(data.revenue) : "—"}
+              subtext={
+                data.revenue != null
+                  ? "Uploaded by POC code in Settings"
+                  : "No revenue uploaded yet · Settings > Upload metrics"
+              }
               placeholder={data.revenue == null}
             />
             <ImpactCard
               icon={TrendingUp}
               label="ROAS"
-              value={data.roas != null ? `${data.roas}x` : "Phase 2"}
-              subtext={data.roas != null ? "Revenue ÷ uploaded ad spend" : "Connection will be added next phase"}
+              value={data.roas != null ? `${data.roas}x` : "—"}
+              subtext={
+                data.roas != null
+                  ? "Revenue ÷ uploaded ad spend"
+                  : "No ad spend uploaded yet · Settings > Upload metrics"
+              }
               placeholder={data.roas == null}
             />
           </>
