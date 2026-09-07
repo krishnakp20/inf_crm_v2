@@ -9,6 +9,7 @@ from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
 from app.db.models.creator_file import CreatorFile
 from app.db.models.follow_up import FollowUp
+from app.db.models.language import Language
 from app.db.models.message import Message
 from app.db.models.metric_import import MetricImport
 from app.db.models.ownership_event import OwnershipEvent
@@ -33,6 +34,7 @@ __all__ = [
     "Creator",
     "CreatorFile",
     "FollowUp",
+    "Language",
     "Message",
     "MetricImport",
     "OwnershipEvent",

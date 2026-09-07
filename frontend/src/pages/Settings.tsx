@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { LanguagesPanel } from "../components/settings/LanguagesPanel";
 import { MetricUploadPanel } from "../components/settings/MetricUploadPanel";
 import { ProductsPanel } from "../components/settings/ProductsPanel";
 import { StageDeadlinesPanel } from "../components/settings/StageDeadlinesPanel";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 
-type Panel = "stage-deadlines" | "products" | "metric-upload";
+type Panel = "stage-deadlines" | "products" | "languages" | "metric-upload";
 
 const PANELS: { key: Panel; label: string; hint: string }[] = [
   { key: "stage-deadlines", label: "Stage deadlines", hint: "Lead ageing rules" },
   { key: "products", label: "Products", hint: "Shared product master" },
+  { key: "languages", label: "Language", hint: "Approved language list" },
   { key: "metric-upload", label: "Upload metrics", hint: "Sync Live video results" },
 ];
 
@@ -47,6 +49,8 @@ export default function Settings() {
             <StageDeadlinesPanel />
           ) : panel === "products" ? (
             <ProductsPanel />
+          ) : panel === "languages" ? (
+            <LanguagesPanel />
           ) : (
             <MetricUploadPanel />
           )}

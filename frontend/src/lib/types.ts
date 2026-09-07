@@ -58,6 +58,12 @@ export interface ProductPerformance extends Product {
   credit_by_owner: Record<string, number>;
 }
 
+export interface Language {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
 export interface CollabProduct {
   product_id: number;
   product_name: string;
