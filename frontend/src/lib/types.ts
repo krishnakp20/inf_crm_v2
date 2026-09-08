@@ -64,6 +64,20 @@ export interface Language {
   created_at: string;
 }
 
+export interface ContentBucket {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface CreatorCategoryTier {
+  id: number;
+  name: string;
+  min_followers: number;
+  max_followers: number | null;
+  created_at: string;
+}
+
 export interface CollabProduct {
   product_id: number;
   product_name: string;

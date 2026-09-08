@@ -6,7 +6,9 @@ from app.db.models.campaign_product import CampaignProduct
 from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
+from app.db.models.content_bucket import ContentBucket
 from app.db.models.creator import Creator
+from app.db.models.creator_category_tier import CreatorCategoryTier
 from app.db.models.creator_file import CreatorFile
 from app.db.models.follow_up import FollowUp
 from app.db.models.language import Language
@@ -31,7 +33,9 @@ __all__ = [
     "CollabStageEvent",
     "Collaboration",
     "CollaborationProduct",
+    "ContentBucket",
     "Creator",
+    "CreatorCategoryTier",
     "CreatorFile",
     "FollowUp",
     "Language",
