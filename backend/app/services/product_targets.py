@@ -1,3 +1,4 @@
+from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime
 
@@ -7,6 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.enums import CollabStage
+
+
+def derive_weekly_target(monthly_target: int, at: datetime) -> int:
+    """The agent only ever sets a monthly target; this is the one place that
+    turns it into a weekly figure -- monthly spread evenly across the
+    current calendar month's actual day count, expressed as a 7-day rate.
+    Recomputed fresh on every read (never stored) so it can't go stale
+    across a month boundary (a 28-day February vs a 31-day month gives a
+    different weekly rate for the same monthly target)."""
+    days_in_month = monthrange(at.year, at.month)[1]
+    return round(monthly_target * 7 / days_in_month)
 
 
 async def get_video_credit_by_product_since(

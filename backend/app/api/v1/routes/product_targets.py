@@ -10,7 +10,7 @@ from app.db.models.product_target import ProductTarget
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.product_target import ProductTargetOut, ProductTargetSet
-from app.services.product_targets import get_video_credit_by_product_since
+from app.services.product_targets import derive_weekly_target, get_video_credit_by_product_since
 
 router = APIRouter(prefix="/product-targets", tags=["product-targets"])
 
@@ -42,8 +42,8 @@ async def list_my_targets(
             id=target.id,
             product_id=target.product_id,
             product_name=product_name,
-            weekly_target=target.weekly_target,
             monthly_target=target.monthly_target,
+            weekly_target=derive_weekly_target(target.monthly_target, now),
             weekly_progress=round(weekly_credit.get(target.product_id, 0.0), 2),
             monthly_progress=round(monthly_credit.get(target.product_id, 0.0), 2),
         )
@@ -73,7 +73,6 @@ async def set_my_target(
         existing = ProductTarget(user_id=user.id, product_id=payload.product_id)
         db.add(existing)
 
-    existing.weekly_target = payload.weekly_target
     existing.monthly_target = payload.monthly_target
     await db.commit()
     await db.refresh(existing)
@@ -89,8 +88,8 @@ async def set_my_target(
         id=existing.id,
         product_id=existing.product_id,
         product_name=product.name,
-        weekly_target=existing.weekly_target,
         monthly_target=existing.monthly_target,
+        weekly_target=derive_weekly_target(existing.monthly_target, now),
         weekly_progress=round(weekly_credit.get(existing.product_id, 0.0), 2),
         monthly_progress=round(monthly_credit.get(existing.product_id, 0.0), 2),
     )

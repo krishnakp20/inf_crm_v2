@@ -467,9 +467,11 @@ async def _live_video_credit_for_owner(
 async def target_vs_achieved(
     db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
 ) -> list[AnalyticsTargetRow]:
+    # Agents only ever set a monthly target now (see product_targets.py) --
+    # prorate that single figure by the selected range length instead of
+    # branching on a stored weekly value that no longer exists.
     range_days = (range_end - range_start).days or 1
-    use_weekly = range_days <= 10
-    proration = 1.0 if use_weekly else range_days / 30.0
+    proration = range_days / 30.0
 
     if owner_ids is not None:
         users_stmt = select(User.id, User.name).where(User.id.in_(owner_ids)).order_by(User.name)
@@ -491,18 +493,17 @@ async def target_vs_achieved(
     targets_stmt = (
         select(
             ProductTarget.user_id,
-            func.coalesce(func.sum(ProductTarget.weekly_target), 0),
             func.coalesce(func.sum(ProductTarget.monthly_target), 0),
         )
         .where(ProductTarget.user_id.in_(user_ids))
         .group_by(ProductTarget.user_id)
     )
-    targets_by_user = {row[0]: (row[1], row[2]) for row in (await db.execute(targets_stmt)).all()}
+    targets_by_user = {row[0]: row[1] for row in (await db.execute(targets_stmt)).all()}
 
     rows: list[AnalyticsTargetRow] = []
     for user_id, user_name in users:
-        weekly, monthly = targets_by_user.get(user_id, (0, 0))
-        target = float(weekly) if use_weekly else round(float(monthly) * proration, 1)
+        monthly = targets_by_user.get(user_id, 0)
+        target = round(float(monthly) * proration, 1)
         credit = await _live_video_credit_for_owner(db, user_id, range_start, range_end)
         rows.append(
             AnalyticsTargetRow(

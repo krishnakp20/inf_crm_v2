@@ -9,10 +9,12 @@ function getValue(t: ProductTarget, field: string): unknown {
   switch (field) {
     case "product_name":
       return t.product_name;
-    case "weekly_target":
-      return t.weekly_target;
     case "monthly_target":
       return t.monthly_target;
+    case "weekly_target":
+      return t.weekly_target;
+    case "weekly_progress":
+      return t.weekly_progress;
     case "monthly_progress":
       return t.monthly_progress;
     default:
@@ -30,7 +32,6 @@ export function SetTargetDrawer({
   const [targets, setTargets] = useState<ProductTarget[]>([]);
   const { sorted: sortedTargets, field, direction, toggle } = useSort(targets, getValue);
   const [productId, setProductId] = useState<number | "">(products[0]?.id ?? "");
-  const [weeklyTarget, setWeeklyTarget] = useState("");
   const [monthlyTarget, setMonthlyTarget] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,18 +44,16 @@ export function SetTargetDrawer({
 
   async function handleSave() {
     setError(null);
-    if (!productId || !weeklyTarget || !monthlyTarget) {
-      setError("Choose a product and fill in both targets.");
+    if (!productId || !monthlyTarget) {
+      setError("Choose a product and a monthly target.");
       return;
     }
     setSaving(true);
     try {
       await api.post("/product-targets", {
         product_id: productId,
-        weekly_target: Number(weeklyTarget),
         monthly_target: Number(monthlyTarget),
       });
-      setWeeklyTarget("");
       setMonthlyTarget("");
       loadTargets();
     } catch (err: any) {
@@ -77,7 +76,7 @@ export function SetTargetDrawer({
             </div>
             <div>
               <h2 className="text-base font-semibold text-ink">Set my product targets</h2>
-              <p className="text-xs text-gray-500">Only you can set targets for your own performance.</p>
+              <p className="text-xs text-gray-500">Set a monthly target -- the weekly pace is worked out for you.</p>
             </div>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface">
@@ -105,28 +104,14 @@ export function SetTargetDrawer({
               ))}
             </select>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Weekly target</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={weeklyTarget}
-                  onChange={(e) => setWeeklyTarget(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Monthly target</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={monthlyTarget}
-                  onChange={(e) => setMonthlyTarget(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">Monthly target</label>
+            <input
+              type="number"
+              min={0}
+              value={monthlyTarget}
+              onChange={(e) => setMonthlyTarget(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
 
             {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
@@ -139,24 +124,23 @@ export function SetTargetDrawer({
             </button>
           </div>
 
+          <p className="mb-2 text-[11px] text-gray-400">Weekly is auto-calculated from the monthly target you set.</p>
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#e7e5e4] text-left uppercase tracking-wide text-gray-400">
                 <SortableHeader label="Product" field="product_name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-                <SortableHeader label="Weekly" field="weekly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-                <SortableHeader label="Monthly" field="monthly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-                <SortableHeader label="Progress" field="monthly_progress" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Monthly target" field="monthly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Weekly (auto)" field="weekly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Achieved this week" field="weekly_progress" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
               </tr>
             </thead>
             <tbody>
               {sortedTargets.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100">
                   <td className="py-2 font-medium text-ink">{t.product_name}</td>
-                  <td className="py-2 text-gray-600">{t.weekly_target}</td>
                   <td className="py-2 text-gray-600">{t.monthly_target}</td>
-                  <td className="py-2 text-gray-600">
-                    {t.monthly_progress}/{t.monthly_target}
-                  </td>
+                  <td className="py-2 text-gray-600">{t.weekly_target}</td>
+                  <td className="py-2 font-semibold text-ink">{t.weekly_progress}</td>
                 </tr>
               ))}
               {targets.length === 0 && (
