@@ -58,6 +58,7 @@ def _to_out(req: ApprovalRequest, collab: Collaboration, creator: Creator, produ
         created_at=req.created_at,
         resolved_at=req.resolved_at,
         resolution_note=req.resolution_note,
+        requester_seen_at=req.requester_seen_at,
     )
 
 
@@ -181,6 +182,29 @@ async def approve_request(
     product = await _get_primary_product(db, collab.id)
     requester = await db.get(User, req.requested_by)
     return _to_out(req, collab, creator, product, requester)
+
+
+@router.post("/{request_id}/acknowledge", response_model=ApprovalRequestOut)
+async def acknowledge_request(
+    request_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ApprovalRequestOut:
+    """Clears the "your request was approved/rejected" notification bell
+    item -- called by the requester when they open or dismiss it. Only the
+    original requester can acknowledge their own request."""
+    req = await _get_request_or_404(request_id, db)
+    if req.requested_by != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to acknowledge this request.")
+    if req.requester_seen_at is None:
+        req.requester_seen_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(req)
+
+    collab = await db.get(Collaboration, req.collaboration_id)
+    creator = await db.get(Creator, collab.creator_id)
+    product = await _get_primary_product(db, collab.id)
+    return _to_out(req, collab, creator, product, user)
 
 
 @router.post("/{request_id}/reject", response_model=ApprovalRequestOut)

@@ -33,3 +33,4 @@ class ApprovalRequestOut(BaseModel):
     created_at: datetime
     resolved_at: datetime | None
     resolution_note: str | None = None
+    requester_seen_at: datetime | None = None

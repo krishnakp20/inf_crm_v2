@@ -116,7 +116,7 @@ export interface ApprovalRequest {
 }
 
 export interface Notification {
-  kind: "approval" | "partnership" | "deadline_warning";
+  kind: "approval" | "approval_resolved" | "partnership" | "deadline_warning";
   id: number;
   creator_name: string;
   creator_handle: string;

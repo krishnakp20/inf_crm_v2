@@ -33,3 +33,8 @@ class ApprovalRequest(Base):
     # Set only on reject -- the resolver's note explaining why. Never
     # required on approve.
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set when the requester acknowledges the approve/reject outcome in the
+    # notification bell (POST .../acknowledge) -- lets the "your request was
+    # resolved" bell item disappear once seen, same way the "pending" item
+    # disappears once resolved. Null the whole time this is still pending.
+    requester_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,4 +1,4 @@
-import { Bell, Search } from "lucide-react";
+import { Bell, Check, Search, X } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -24,6 +24,11 @@ export function AppHeader() {
   }
 
   useEffect(loadNotifications, []);
+
+  function acknowledgeApproval(id: number) {
+    setNotifications((prev) => prev.filter((n) => !(n.kind === "approval_resolved" && n.id === id)));
+    api.post(`/approval-requests/${id}/acknowledge`).catch(() => {});
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -76,29 +81,64 @@ export function AppHeader() {
           <div className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-card border border-[#e7e5e4] bg-white p-2 shadow-lg">
             <div className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-gray-400">Notifications</div>
             <div className="max-h-80 overflow-y-auto">
-              {notifications.map((n) => (
-                <Link
-                  key={`${n.kind}-${n.id}`}
-                  to={n.link}
-                  onClick={() => setOpen(false)}
-                  className="flex items-start gap-2.5 rounded-lg p-2 hover:bg-surface"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-600">
-                    {initials(n.creator_name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="truncate text-xs font-semibold text-ink">{n.creator_name}</div>
-                      <span
-                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase ${PRIORITY_STYLES[n.priority]}`}
+              {notifications.map((n) => {
+                const isResolved = n.kind === "approval_resolved";
+                // Backend sets priority="normal" for an approved outcome,
+                // "high" for rejected -- reused here as the approved/rejected
+                // signal instead of adding a separate field.
+                const wasApproved = isResolved && n.priority === "normal";
+                return (
+                  <Link
+                    key={`${n.kind}-${n.id}`}
+                    to={n.link}
+                    onClick={() => {
+                      setOpen(false);
+                      if (isResolved) acknowledgeApproval(n.id);
+                    }}
+                    className="flex items-start gap-2.5 rounded-lg p-2 hover:bg-surface"
+                  >
+                    {isResolved ? (
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                          wasApproved ? "bg-emerald-50 text-emerald-600" : "bg-[#fff0ed] text-[#cf4e43]"
+                        }`}
                       >
-                        {n.priority}
-                      </span>
+                        {wasApproved ? <Check size={16} /> : <X size={16} />}
+                      </div>
+                    ) : (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-600">
+                        {initials(n.creator_name)}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-xs font-semibold text-ink">{n.creator_name}</div>
+                        {isResolved ? (
+                          <button
+                            type="button"
+                            title="Dismiss"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              acknowledgeApproval(n.id);
+                            }}
+                            className="shrink-0 rounded-md p-0.5 text-gray-300 hover:bg-gray-100 hover:text-gray-500"
+                          >
+                            <X size={12} />
+                          </button>
+                        ) : (
+                          <span
+                            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase ${PRIORITY_STYLES[n.priority]}`}
+                          >
+                            {n.priority}
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate text-[11px] text-gray-500">{n.subtitle}</div>
                     </div>
-                    <div className="truncate text-[11px] text-gray-500">{n.subtitle}</div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
               {notifications.length === 0 && (
                 <p className="px-2 py-3 text-center text-xs text-gray-400">No pending notifications.</p>
               )}

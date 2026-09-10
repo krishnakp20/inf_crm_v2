@@ -481,6 +481,50 @@ async def _deadline_warning_notifications(db: AsyncSession, owner_ids: list[int]
     return items
 
 
+async def _resolved_approval_notifications(db: AsyncSession, user: User) -> list[NotificationOut]:
+    """The other half of the approval loop: requests THIS user sent for
+    approval that have since been approved/rejected and they haven't
+    acknowledged yet (see ApprovalRequest.requester_seen_at and
+    routes/approval_requests.py's .../acknowledge). Unlike every other
+    notification kind here, this one is requester-scoped rather than
+    owner_ids-scoped -- you see it purely because you're the one who asked,
+    regardless of role or team."""
+    stmt = (
+        select(ApprovalRequest, Collaboration, Creator, User)
+        .join(Collaboration, Collaboration.id == ApprovalRequest.collaboration_id)
+        .join(Creator, Creator.id == Collaboration.creator_id)
+        .join(User, User.id == ApprovalRequest.resolved_by)
+        .where(
+            ApprovalRequest.requested_by == user.id,
+            ApprovalRequest.status != ApprovalStatus.pending,
+            ApprovalRequest.requester_seen_at.is_(None),
+        )
+        .order_by(ApprovalRequest.resolved_at.desc())
+        .limit(50)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    items: list[NotificationOut] = []
+    for req, collab, creator, resolver in rows:
+        approved = req.status == ApprovalStatus.approved
+        subtitle = f"{'Approved' if approved else 'Rejected'} by {resolver.name}"
+        if not approved and req.resolution_note:
+            subtitle += f" · {req.resolution_note}"
+        items.append(
+            NotificationOut(
+                kind="approval_resolved",
+                id=req.id,
+                creator_name=creator.name,
+                creator_handle=creator.instagram_handle,
+                subtitle=subtitle,
+                priority="normal" if approved else "high",
+                created_at=req.resolved_at,
+                link="/my-creators",
+            )
+        )
+    return items
+
+
 async def get_dashboard_notifications(
     db: AsyncSession, user: User, owner_ids: list[int] | None
 ) -> list[NotificationOut]:
@@ -540,6 +584,7 @@ async def get_dashboard_notifications(
         )
 
     items.extend(await _deadline_warning_notifications(db, owner_ids))
+    items.extend(await _resolved_approval_notifications(db, user))
 
     items.sort(key=lambda n: n.created_at, reverse=True)
     return items
