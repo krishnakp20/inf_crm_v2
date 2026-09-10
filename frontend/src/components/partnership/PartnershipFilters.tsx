@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { PLATFORM_OPTIONS } from "../../lib/campaign-stages";
-import type { Platform, Product, User } from "../../lib/types";
+import type { ContentBucket, CreatorCategoryTier, Language, Platform, Product, User } from "../../lib/types";
 
 export function PartnershipFilters({
   search,
@@ -19,6 +19,9 @@ export function PartnershipFilters({
   onCategoryChange,
   products,
   users,
+  contentBuckets,
+  languages,
+  categories,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
@@ -36,6 +39,9 @@ export function PartnershipFilters({
   onCategoryChange: (value: string) => void;
   products: Product[];
   users: User[];
+  contentBuckets: ContentBucket[];
+  languages: Language[];
+  categories: CreatorCategoryTier[];
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -88,24 +94,42 @@ export function PartnershipFilters({
         ))}
       </select>
 
-      <input
+      <select
         value={contentBucket}
         onChange={(e) => onContentBucketChange(e.target.value)}
-        placeholder="Content bucket"
-        className="h-9 w-36 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs text-ink placeholder:text-gray-400"
-      />
-      <input
+        className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
+      >
+        <option value="">All content buckets</option>
+        {contentBuckets.map((b) => (
+          <option key={b.id} value={b.name}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+      <select
         value={language}
         onChange={(e) => onLanguageChange(e.target.value)}
-        placeholder="Language"
-        className="h-9 w-28 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs text-ink placeholder:text-gray-400"
-      />
-      <input
+        className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
+      >
+        <option value="">All languages</option>
+        {languages.map((l) => (
+          <option key={l.id} value={l.name}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+      <select
         value={category}
         onChange={(e) => onCategoryChange(e.target.value)}
-        placeholder="Creator category"
-        className="h-9 w-36 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs text-ink placeholder:text-gray-400"
-      />
+        className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
+      >
+        <option value="">All categories</option>
+        {categories.map((c) => (
+          <option key={c.id} value={c.name}>
+            {c.name}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

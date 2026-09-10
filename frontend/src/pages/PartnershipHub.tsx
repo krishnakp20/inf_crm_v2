@@ -11,6 +11,9 @@ import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import type {
+  ContentBucket,
+  CreatorCategoryTier,
+  Language,
   Platform,
   Product,
   PartnershipOpenRow,
@@ -37,6 +40,9 @@ export default function PartnershipHub() {
   const [stats, setStats] = useState<PartnershipStats | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [contentBuckets, setContentBuckets] = useState<ContentBucket[]>([]);
+  const [languages, setLanguages] = useState<Language[]>([]);
+  const [categories, setCategories] = useState<CreatorCategoryTier[]>([]);
 
   const [search, setSearch] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -63,6 +69,9 @@ export default function PartnershipHub() {
   useEffect(() => {
     api.get<Product[]>("/products").then((res) => setProducts(res.data));
     api.get<User[]>("/users").then((res) => setUsers(res.data));
+    api.get<ContentBucket[]>("/content-buckets").then((res) => setContentBuckets(res.data));
+    api.get<Language[]>("/languages").then((res) => setLanguages(res.data));
+    api.get<CreatorCategoryTier[]>("/creator-category-tiers").then((res) => setCategories(res.data));
   }, []);
 
   function loadOverview() {
@@ -232,6 +241,9 @@ export default function PartnershipHub() {
         onCategoryChange={(v) => changeFilter(setCategory, v)}
         products={products}
         users={users}
+        contentBuckets={contentBuckets}
+        languages={languages}
+        categories={categories}
       />
 
       {tab === "overview" && (
