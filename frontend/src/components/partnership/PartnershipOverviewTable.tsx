@@ -1,7 +1,7 @@
-import { useSort } from "../../hooks/useSort";
 import { compactNumber, formatCurrency, initials } from "../../lib/format";
 import { PLATFORM_LABELS } from "../../lib/campaign-stages";
 import { COLLAB_STATUS_LABELS, TICKET_STATUS_BADGE, TICKET_STATUS_LABELS } from "../../lib/partnership-stages";
+import type { SortDirection } from "../../lib/sort";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { PartnershipOverviewRow } from "../../lib/types";
 
@@ -14,41 +14,15 @@ const TH = "whitespace-nowrap py-3 text-[9px] font-extrabold uppercase tracking-
 const TD = "whitespace-nowrap py-3.5 pr-6 text-[11px] text-[#474a58]";
 const CHIP = "whitespace-nowrap rounded-md px-1.5 py-1 text-[9px]";
 
-function getValue(row: PartnershipOverviewRow, field: string): unknown {
-  switch (field) {
-    case "video_name":
-      return row.video_name;
-    case "poc_code":
-      return row.poc_code;
-    case "product":
-      return row.product_names.join(", ");
-    case "owner_name":
-      return row.owner_name;
-    case "live_date":
-      return row.live_date;
-    case "comments_count":
-      return row.comments_count;
-    case "views_count":
-      return row.views_count;
-    case "commercial":
-      return row.ad_rights_amount ?? row.ad_rights_agent_counter ?? row.ad_rights_creator_quote;
-    case "ad_code":
-      return row.ad_code;
-    case "ad_right_duration_days":
-      return row.ad_right_duration_days;
-    case "ticket_status":
-      return TICKET_STATUS_LABELS[row.ticket_status];
-    case "collab_status":
-      return COLLAB_STATUS_LABELS[row.collab_status];
-    case "latest_remark":
-      return row.latest_remark;
-    default:
-      return null;
-  }
-}
-
 export function PartnershipOverviewTable({
   rows,
+  total,
+  limit,
+  offset,
+  sortBy,
+  sortDir,
+  onSortChange,
+  onPageChange,
   showCommercial,
   canTakeAction,
   selectedIds,
@@ -58,6 +32,13 @@ export function PartnershipOverviewTable({
   onTakeAction,
 }: {
   rows: PartnershipOverviewRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  sortBy: string;
+  sortDir: SortDirection;
+  onSortChange: (field: string) => void;
+  onPageChange: (offset: number) => void;
   showCommercial: boolean;
   canTakeAction: boolean;
   selectedIds: Set<number>;
@@ -67,7 +48,8 @@ export function PartnershipOverviewTable({
   onTakeAction: (ticketId: number) => void;
 }) {
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.ticket_id));
-  const { sorted, field, direction, toggle } = useSort(rows, getValue);
+  const page = Math.floor(offset / limit) + 1;
+  const totalPages = Math.max(Math.ceil(total / limit), 1);
 
   return (
     <div className="dashboard-card overflow-hidden p-0">
@@ -93,27 +75,27 @@ export function PartnershipOverviewTable({
                   />
                 </th>
               )}
-              <SortableHeader label="Video name" field="video_name" activeField={field} direction={direction} onSort={toggle} className={`${TH} pl-4`} />
-              <SortableHeader label="POC code" field="poc_code" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Product" field="product" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Owner" field="owner_name" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Live date" field="live_date" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Comments" field="comments_count" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Views" field="views_count" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Video name" field="video_name" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={`${TH} pl-4`} />
+              <SortableHeader label="POC code" field="poc_code" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Product" field="product" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Owner" field="owner_name" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Live date" field="live_date" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Comments" field="comments_count" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Views" field="views_count" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               {showCommercial && (
-                <SortableHeader label="Commercial" field="commercial" activeField={field} direction={direction} onSort={toggle} className={TH} />
+                <SortableHeader label="Commercial" field="commercial" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               )}
-              <SortableHeader label="Ad code" field="ad_code" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Ad right & time" field="ad_right_duration_days" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Ad code" field="ad_code" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Ad right & time" field="ad_right_duration_days" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className={TH}>CTA link</th>
-              <SortableHeader label="Ticket status" field="ticket_status" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Collab status" field="collab_status" activeField={field} direction={direction} onSort={toggle} className={TH} />
-              <SortableHeader label="Latest remark" field="latest_remark" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Ticket status" field="ticket_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Collab status" field="collab_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Latest remark" field="latest_remark" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className="w-28 py-3 pr-4"></th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((row) => {
+            {rows.map((row) => {
               const badge = TICKET_STATUS_BADGE[row.ticket_status];
               return (
                 <tr key={row.ticket_id} className="border-t border-[#efedeb] hover:bg-surface/60">
@@ -265,7 +247,30 @@ export function PartnershipOverviewTable({
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-3 text-xs text-gray-500">{rows.length} records</div>
+      <div className="flex items-center justify-between px-4 py-3 text-xs text-gray-500">
+        <span>
+          Showing {rows.length} of {total} records
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={offset === 0}
+            onClick={() => onPageChange(Math.max(offset - limit, 0))}
+            className="rounded-md border border-gray-200 px-3 py-1 disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span>
+            {page} / {totalPages}
+          </span>
+          <button
+            disabled={offset + limit >= total}
+            onClick={() => onPageChange(offset + limit)}
+            className="rounded-md border border-gray-200 px-3 py-1 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

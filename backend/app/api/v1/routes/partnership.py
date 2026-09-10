@@ -25,6 +25,7 @@ from app.schemas.partnership import (
     PartnershipEditorTicketOut,
     PartnershipMetadataRequest,
     PartnershipOpenRow,
+    PartnershipOverviewResponse,
     PartnershipOverviewRow,
     PartnershipRemarkOut,
     PartnershipRequestChangeRequest,
@@ -223,6 +224,37 @@ async def _filtered_tickets(
     return list((await db.execute(stmt)).scalars().all())
 
 
+OVERVIEW_SORTABLE_FIELDS = {
+    "video_name",
+    "poc_code",
+    "product",
+    "owner_name",
+    "live_date",
+    "comments_count",
+    "views_count",
+    "commercial",
+    "ad_code",
+    "ad_right_duration_days",
+    "ticket_status",
+    "collab_status",
+    "latest_remark",
+}
+
+
+def _overview_sort_value(row: PartnershipOverviewRow, field: str):
+    if field == "product":
+        return ", ".join(row.product_names) if row.product_names else None
+    if field == "commercial":
+        return row.ad_rights_amount if row.ad_rights_amount is not None else (
+            row.ad_rights_agent_counter if row.ad_rights_agent_counter is not None else row.ad_rights_creator_quote
+        )
+    if field == "ticket_status":
+        return row.ticket_status.value
+    if field == "collab_status":
+        return row.collab_status.value
+    return getattr(row, field)
+
+
 @router.get("/stats", response_model=PartnershipStats)
 async def get_partnership_stats(
     db: AsyncSession = Depends(get_db),
@@ -231,7 +263,7 @@ async def get_partnership_stats(
     return await partnership_stats(db, user)
 
 
-@router.get("", response_model=list[PartnershipOverviewRow])
+@router.get("", response_model=PartnershipOverviewResponse)
 async def list_overview(
     owner_id: int | None = None,
     product_id: int | None = None,
@@ -240,12 +272,27 @@ async def list_overview(
     language: str | None = None,
     category: str | None = None,
     search: str | None = None,
+    sort_by: str = Query("live_date"),
+    sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
+    limit: int = Query(25, le=500),
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> list[PartnershipOverviewRow]:
+) -> PartnershipOverviewResponse:
+    if sort_by not in OVERVIEW_SORTABLE_FIELDS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
     tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
     batch = await _batch_load(db, tickets)
-    return [_to_overview_row(t, batch, user) for t in tickets]
+    rows = [_to_overview_row(t, batch, user) for t in tickets]
+
+    with_value = [r for r in rows if _overview_sort_value(r, sort_by) is not None]
+    without_value = [r for r in rows if _overview_sort_value(r, sort_by) is None]
+    with_value.sort(key=lambda r: _overview_sort_value(r, sort_by), reverse=(sort_dir == "desc"))
+    rows = with_value + without_value
+
+    total = len(rows)
+    page = rows[offset : offset + limit]
+    return PartnershipOverviewResponse(items=page, total=total)
 
 
 @router.get("/open", response_model=list[PartnershipOpenRow])

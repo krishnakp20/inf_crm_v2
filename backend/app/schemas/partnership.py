@@ -132,6 +132,11 @@ class PartnershipOpenRow(PartnershipOverviewRow):
     requested: list[str]
 
 
+class PartnershipOverviewResponse(BaseModel):
+    items: list[PartnershipOverviewRow]
+    total: int
+
+
 class PartnershipTicketDetailOut(BaseModel):
     id: int
     collaboration_id: int

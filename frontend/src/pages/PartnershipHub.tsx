@@ -14,6 +14,7 @@ import type {
   Platform,
   Product,
   PartnershipOpenRow,
+  PartnershipOverviewResponse,
   PartnershipOverviewRow,
   PartnershipStats,
   User,
@@ -21,10 +22,16 @@ import type {
 
 type Tab = "overview" | "open" | "closed";
 
+const OVERVIEW_PAGE_SIZE = 25;
+
 export default function PartnershipHub() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("overview");
   const [overviewRows, setOverviewRows] = useState<PartnershipOverviewRow[]>([]);
+  const [overviewTotal, setOverviewTotal] = useState(0);
+  const [overviewSortBy, setOverviewSortBy] = useState("live_date");
+  const [overviewSortDir, setOverviewSortDir] = useState<"asc" | "desc">("desc");
+  const [overviewOffset, setOverviewOffset] = useState(0);
   const [openRows, setOpenRows] = useState<PartnershipOpenRow[]>([]);
   const [closedRows, setClosedRows] = useState<PartnershipOverviewRow[]>([]);
   const [stats, setStats] = useState<PartnershipStats | null>(null);
@@ -59,7 +66,29 @@ export default function PartnershipHub() {
   }, []);
 
   function loadOverview() {
-    api.get<PartnershipOverviewRow[]>("/partnership", { params }).then((res) => setOverviewRows(res.data));
+    api
+      .get<PartnershipOverviewResponse>("/partnership", {
+        params: { ...params, sort_by: overviewSortBy, sort_dir: overviewSortDir, limit: OVERVIEW_PAGE_SIZE, offset: overviewOffset },
+      })
+      .then((res) => {
+        setOverviewRows(res.data.items);
+        setOverviewTotal(res.data.total);
+      });
+  }
+
+  function handleOverviewSortChange(field: string) {
+    setOverviewOffset(0);
+    if (overviewSortBy === field) {
+      setOverviewSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setOverviewSortBy(field);
+      setOverviewSortDir("asc");
+    }
+  }
+
+  function changeFilter<T>(setter: (v: T) => void, value: T) {
+    setOverviewOffset(0);
+    setter(value);
   }
   function loadOpen() {
     api.get<PartnershipOpenRow[]>("/partnership/open", { params }).then((res) => setOpenRows(res.data));
@@ -81,7 +110,18 @@ export default function PartnershipHub() {
     URL.revokeObjectURL(url);
   }
 
-  useEffect(loadOverview, [search, ownerId, productId, platform, contentBucket, language, category]);
+  useEffect(loadOverview, [
+    search,
+    ownerId,
+    productId,
+    platform,
+    contentBucket,
+    language,
+    category,
+    overviewSortBy,
+    overviewSortDir,
+    overviewOffset,
+  ]);
   useEffect(loadOpen, [search, ownerId, productId, platform, contentBucket, language, category]);
   useEffect(loadClosed, [search, ownerId, productId, platform, contentBucket, language, category]);
   useEffect(loadStats, []);
@@ -177,19 +217,19 @@ export default function PartnershipHub() {
 
       <PartnershipFilters
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={(v) => changeFilter(setSearch, v)}
         ownerId={ownerId}
-        onOwnerChange={setOwnerId}
+        onOwnerChange={(v) => changeFilter(setOwnerId, v)}
         productId={productId}
-        onProductChange={setProductId}
+        onProductChange={(v) => changeFilter(setProductId, v)}
         platform={platform}
-        onPlatformChange={setPlatform}
+        onPlatformChange={(v) => changeFilter(setPlatform, v)}
         contentBucket={contentBucket}
-        onContentBucketChange={setContentBucket}
+        onContentBucketChange={(v) => changeFilter(setContentBucket, v)}
         language={language}
-        onLanguageChange={setLanguage}
+        onLanguageChange={(v) => changeFilter(setLanguage, v)}
         category={category}
-        onCategoryChange={setCategory}
+        onCategoryChange={(v) => changeFilter(setCategory, v)}
         products={products}
         users={users}
       />
@@ -209,6 +249,13 @@ export default function PartnershipHub() {
           )}
           <PartnershipOverviewTable
             rows={overviewRows}
+            total={overviewTotal}
+            limit={OVERVIEW_PAGE_SIZE}
+            offset={overviewOffset}
+            sortBy={overviewSortBy}
+            sortDir={overviewSortDir}
+            onSortChange={handleOverviewSortChange}
+            onPageChange={setOverviewOffset}
             showCommercial={showCommercial}
             canTakeAction={!!canTakeAction}
             selectedIds={selectedIds}

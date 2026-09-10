@@ -573,6 +573,11 @@ export interface PartnershipOpenRow extends PartnershipOverviewRow {
   requested: string[];
 }
 
+export interface PartnershipOverviewResponse {
+  items: PartnershipOverviewRow[];
+  total: number;
+}
+
 export interface PartnershipRemark {
   id: number;
   author_id: number;
