@@ -158,6 +158,8 @@ export interface Collaboration {
   video_link: string | null;
   platform: Platform | null;
   additional_video_links: CollaborationVideoLink[];
+  language: string | null;
+  content_bucket: string | null;
   video_live_date: string | null;
   effective_live_date: string | null;
   is_overdue: boolean;

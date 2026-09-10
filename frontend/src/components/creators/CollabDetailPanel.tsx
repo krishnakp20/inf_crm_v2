@@ -1,11 +1,26 @@
-import { AlertTriangle, Check, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { initials, instagramUrl } from "../../lib/format";
-import type { Collaboration, CollabStage, ContentType, DealType, PaymentStatus, Product } from "../../lib/types";
+import type {
+  Collaboration,
+  CollabStage,
+  ContentBucket,
+  ContentType,
+  DealType,
+  Language,
+  PaymentStatus,
+  Platform,
+  Product,
+} from "../../lib/types";
 import { RequestApprovalModal } from "./RequestApprovalModal";
+
+interface VideoLinkRow {
+  platform: Platform | "";
+  url: string;
+}
 
 const STAGE_LABEL: Record<CollabStage, string> = Object.fromEntries(
   COLLAB_STAGE_ORDER.map((s) => [s.key, s.label])
@@ -61,8 +76,36 @@ export function CollabDetailPanel({
   const [trackingLink, setTrackingLink] = useState(collab.tracking_link ?? "");
   const [orderId, setOrderId] = useState(collab.order_id ?? "");
   const [pocCode, setPocCode] = useState(collab.poc_code ?? "");
-  const [videoLink, setVideoLink] = useState(collab.video_link ?? "");
+  const [videoLinks, setVideoLinks] = useState<VideoLinkRow[]>([
+    { platform: collab.platform ?? "", url: collab.video_link ?? "" },
+    ...collab.additional_video_links.map((l) => ({ platform: l.platform as Platform | "", url: l.url })),
+  ]);
   const [videoLiveDate, setVideoLiveDate] = useState(collab.video_live_date ?? "");
+  const [language, setLanguage] = useState(collab.language ?? "");
+  const [contentBucket, setContentBucket] = useState(collab.content_bucket ?? "");
+  const [languages, setLanguages] = useState<Language[]>([]);
+  const [contentBuckets, setContentBuckets] = useState<ContentBucket[]>([]);
+  const showLiveMeta = collab.stage === "live" || collab.language !== null || collab.content_bucket !== null;
+
+  useEffect(() => {
+    if (showLiveMeta) {
+      api.get<Language[]>("/languages").then((res) => setLanguages(res.data));
+      api.get<ContentBucket[]>("/content-buckets").then((res) => setContentBuckets(res.data));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateVideoLink(index: number, patch: Partial<VideoLinkRow>) {
+    setVideoLinks((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function addVideoLink() {
+    setVideoLinks((prev) => [...prev, { platform: "", url: "" }]);
+  }
+
+  function removeVideoLink(index: number) {
+    setVideoLinks((prev) => prev.filter((_, i) => i !== index));
+  }
   const [additionalProductIds, setAdditionalProductIds] = useState<number[]>(
     collab.products.filter((p) => !p.is_primary).map((p) => p.product_id)
   );
@@ -107,8 +150,16 @@ export function CollabDetailPanel({
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (videoLinks.some((row) => row.url.trim() && !row.platform)) {
+      setError("Choose a platform for every video link.");
+      return;
+    }
     setSaving(true);
     try {
+      const additionalLinks = videoLinks
+        .slice(1)
+        .filter((row) => row.url.trim() && row.platform)
+        .map((row) => ({ platform: row.platform, url: row.url.trim() }));
       await api.patch(`/collaborations/${collab.id}`, {
         priority,
         creator_reply: creatorReply || null,
@@ -121,7 +172,9 @@ export function CollabDetailPanel({
         tracking_link: trackingLink || null,
         order_id: orderId || null,
         poc_code: pocCode || null,
-        video_link: videoLink || null,
+        video_link: videoLinks[0].url.trim() || null,
+        platform: videoLinks[0].platform || null,
+        additional_video_links: additionalLinks,
         video_live_date: videoLiveDate || null,
         payment_status: paymentStatus,
         note: note || null,
@@ -130,6 +183,7 @@ export function CollabDetailPanel({
         product_variants: Object.fromEntries(
           Object.entries(productVariants).filter(([pid]) => linkedProductIds.includes(Number(pid)))
         ),
+        ...(showLiveMeta ? { language: language || null, content_bucket: contentBucket || null } : {}),
       });
       await api.patch(`/creators/${collab.creator_id}`, {
         phone: creatorPhone || null,
@@ -492,33 +546,49 @@ export function CollabDetailPanel({
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-[11px] text-gray-500">
-                  Video / Reel link{collab.platform ? ` · ${collab.platform === "instagram" ? "Instagram" : "YouTube"}` : ""}
-                </label>
-                <input
-                  type="url"
-                  value={videoLink}
-                  onChange={(e) => setVideoLink(e.target.value)}
-                  placeholder="https://instagram.com/reel/..."
-                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                />
-                {collab.additional_video_links.length > 0 && (
-                  <div className="mt-1.5 flex flex-col gap-1">
-                    {collab.additional_video_links.map((link) => (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="truncate text-[11px] text-brand-600 hover:underline"
-                        title={link.url}
+              <div className="col-span-2">
+                <label className="mb-1 block text-[11px] text-gray-500">Video / Reel link(s)</label>
+                <p className="mb-1.5 text-[11px] text-gray-400">
+                  Add one link per platform the video went live on -- e.g. an Instagram Reel and a YouTube upload.
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {videoLinks.map((row, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <select
+                        value={row.platform}
+                        onChange={(e) => updateVideoLink(i, { platform: e.target.value as Platform })}
+                        className="w-[110px] shrink-0 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                       >
-                        {link.platform === "instagram" ? "Instagram" : "YouTube"} · {link.url}
-                      </a>
-                    ))}
-                  </div>
-                )}
+                        <option value="">Platform</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="youtube">YouTube</option>
+                      </select>
+                      <input
+                        type="url"
+                        value={row.url}
+                        onChange={(e) => updateVideoLink(i, { url: e.target.value })}
+                        placeholder="https://instagram.com/reel/..."
+                        className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                      />
+                      {i > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => removeVideoLink(i)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-surface hover:text-red-600"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={addVideoLink}
+                  className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  <Plus size={12} /> Add another link
+                </button>
               </div>
               <div>
                 <label className="mb-1 block text-[11px] text-gray-500">Video live date · Optional</label>
@@ -532,6 +602,40 @@ export function CollabDetailPanel({
                   Leave blank to use the date this card was moved to Live.
                 </p>
               </div>
+              {showLiveMeta && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-500">Language</label>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Select...</option>
+                      {languages.map((l) => (
+                        <option key={l.id} value={l.name}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-500">Content bucket</label>
+                    <select
+                      value={contentBucket}
+                      onChange={(e) => setContentBucket(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Select...</option>
+                      {contentBuckets.map((b) => (
+                        <option key={b.id} value={b.name}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 

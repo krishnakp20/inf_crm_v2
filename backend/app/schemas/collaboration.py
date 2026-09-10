@@ -62,6 +62,14 @@ class CollaborationUpdate(BaseModel):
     order_id: str | None = None
     poc_code: str | None = None
     video_link: str | None = None
+    platform: Platform | None = None
+    # Full replace -- the whole additional-links set becomes exactly this
+    # list (matching how additional_product_ids already works below).
+    additional_video_links: list[CollaborationVideoLinkIn] | None = None
+    # Live-only; set on the associated PartnershipTicket if one exists
+    # (silently ignored otherwise -- meaningless before Live).
+    language: str | None = None
+    content_bucket: str | None = None
     video_live_date: date | None = None
     payment_status: PaymentStatus | None = None
     additional_product_ids: list[int] | None = None
@@ -139,6 +147,12 @@ class CollaborationOut(BaseModel):
     video_link: str | None
     platform: Platform | None
     additional_video_links: list[CollaborationVideoLinkOut]
+    # From the associated PartnershipTicket, if one exists (Live onward) --
+    # null before that. Edited from here via CollaborationUpdate, which
+    # writes through to the ticket; the ticket itself remains the source of
+    # truth Partnership Hub reads from.
+    language: str | None
+    content_bucket: str | None
     video_live_date: date | None  # explicit value, if the user set one
     effective_live_date: date | None  # video_live_date, or the stage-move date if unset
     is_overdue: bool
