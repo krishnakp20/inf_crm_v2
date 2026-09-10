@@ -91,13 +91,14 @@ async def get_kpis(
     reels_added_in_range_stmt = _in_window(select(func.count(Collaboration.id)), Collaboration.created_at)
     # Partnership Pending / Ads Live both come from Partnership Hub ticket
     # status, not the collaboration's Kanban stage -- "Pending" mirrors the
-    # Hub's Open tab (anything not yet Closed & Live), "Ads Live" mirrors
-    # its Closed & Live tab. See partnership.py's /open and /closed routes,
-    # which use this exact same ticket_status split.
+    # Hub's Open tab, "Ads Live" mirrors its Closed & Live tab. A freshly
+    # auto-created ticket sits at the default "open" status with no admin
+    # action taken yet -- it belongs on Overview only, not here, matching
+    # the Open tab's own definition (see partnership.py's list_open).
     partnership_pending_stmt = (
         select(func.count(PartnershipTicket.id))
         .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
-        .where(PartnershipTicket.ticket_status != TicketStatus.closed_and_live)
+        .where(PartnershipTicket.ticket_status.in_([TicketStatus.pending_at_user, TicketStatus.pending_at_admin]))
     )
     ads_live_stmt = (
         select(func.count(PartnershipTicket.id))
