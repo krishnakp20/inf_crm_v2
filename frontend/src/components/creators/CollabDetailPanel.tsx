@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { initials, instagramUrl } from "../../lib/format";
 import type {
+  ApprovalRequest,
   Collaboration,
   CollabStage,
   ContentBucket,
@@ -123,6 +124,7 @@ export function CollabDetailPanel({
 
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const canResolveApproval = user?.role === "admin" || user?.role === "supervisor";
 
   const [showApproval, setShowApproval] = useState(false);
   const [movingStage, setMovingStage] = useState(false);
@@ -133,6 +135,50 @@ export function CollabDetailPanel({
   const [markingDead, setMarkingDead] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
+  const [resolvingApproval, setResolvingApproval] = useState(false);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
+
+  useEffect(() => {
+    if (!canResolveApproval) return;
+    api
+      .get<ApprovalRequest[]>("/approval-requests", {
+        params: { collaboration_id: collab.id, status: "pending" },
+      })
+      .then((res) => setPendingApproval(res.data[0] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collab.id]);
+
+  async function approveApproval() {
+    if (!pendingApproval) return;
+    setResolvingApproval(true);
+    try {
+      await api.post(`/approval-requests/${pendingApproval.id}/approve`);
+      setPendingApproval(null);
+      onChanged();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not approve this request.");
+    } finally {
+      setResolvingApproval(false);
+    }
+  }
+
+  async function rejectApproval() {
+    if (!pendingApproval || !rejectNote.trim()) return;
+    setResolvingApproval(true);
+    try {
+      await api.post(`/approval-requests/${pendingApproval.id}/reject`, { note: rejectNote.trim() });
+      setPendingApproval(null);
+      setShowRejectConfirm(false);
+      onChanged();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not reject this request.");
+    } finally {
+      setResolvingApproval(false);
+    }
+  }
 
   const linkedProductIds = useMemo(
     () => [...(primaryProductId ? [primaryProductId] : []), ...additionalProductIds],
@@ -294,6 +340,42 @@ export function CollabDetailPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
+          {pendingApproval && (
+            <section className="mb-5 rounded-card border border-[#fbe0a8] bg-[#fff9ee] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-ink">Approval requested</h3>
+                <span className="rounded-md bg-[#fff5e5] px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-[#ad7018]">
+                  {pendingApproval.priority}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-gray-600">
+                {pendingApproval.requested_by_name} · Sent to {pendingApproval.target === "admin" ? "Admin" : "Supervisor"}
+              </p>
+              <p className="mt-1.5 text-xs text-gray-600">{pendingApproval.note}</p>
+              <div className="mt-2.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={resolvingApproval}
+                  onClick={approveApproval}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  <Check size={13} />
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  disabled={resolvingApproval}
+                  onClick={() => {
+                    setRejectNote("");
+                    setShowRejectConfirm(true);
+                  }}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-white hover:text-[#cf4e43] disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              </div>
+            </section>
+          )}
           <section className="mb-5">
             <h3 className="text-sm font-semibold text-ink">Creator and collaboration</h3>
             <p className="mt-0.5 text-xs text-muted">The username is the permanent link to the master creator record.</p>
@@ -788,6 +870,46 @@ export function CollabDetailPanel({
             onClose();
           }}
         />
+      )}
+
+      {showRejectConfirm && pendingApproval && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
+          onClick={() => !resolvingApproval && setShowRejectConfirm(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-[380px] rounded-card bg-white p-5 shadow-lg">
+            <h3 className="text-sm font-semibold text-ink">Reject this request?</h3>
+            <p className="mt-1.5 text-xs text-muted">Let {pendingApproval.requested_by_name} know why this wasn't approved.</p>
+            <div className="mt-3">
+              <label className="mb-1 block text-xs font-medium text-gray-700">Reason for rejecting · Required</label>
+              <input
+                autoFocus
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="e.g. Commercial is above the approved cap for this creator"
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-ink placeholder:text-gray-400"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRejectConfirm(false)}
+                disabled={resolvingApproval}
+                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!rejectNote.trim() || resolvingApproval}
+                onClick={rejectApproval}
+                className="rounded-md bg-[#cf4e43] px-4 py-2 text-sm font-medium text-white hover:bg-[#b8362b] disabled:opacity-50"
+              >
+                Reject request
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

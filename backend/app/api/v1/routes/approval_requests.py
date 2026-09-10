@@ -65,6 +65,7 @@ def _to_out(req: ApprovalRequest, collab: Collaboration, creator: Creator, produ
 @router.get("", response_model=list[ApprovalRequestOut])
 async def list_approval_requests(
     owner_id: int | None = None,
+    collaboration_id: int | None = None,
     status_filter: ApprovalStatus | None = Query(None, alias="status"),
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
@@ -88,6 +89,8 @@ async def list_approval_requests(
             # the collaboration is within this supervisor's team.
             stmt = stmt.where(ApprovalRequest.target == ApprovalTarget.supervisor)
 
+    if collaboration_id is not None:
+        stmt = stmt.where(ApprovalRequest.collaboration_id == collaboration_id)
     if status_filter is not None:
         stmt = stmt.where(ApprovalRequest.status == status_filter)
 
