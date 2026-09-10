@@ -161,7 +161,8 @@ _STAGE_FIELD_ADDITIONS: dict[CollabStage, list[str]] = {
     CollabStage.replied: ["creator_reply"],
     CollabStage.negotiating: ["commercial_quoted", "deal_type"],
     CollabStage.commercial_locked: ["commercial_amount", "content_type"],
-    CollabStage.live: ["live_attribution"],
+    CollabStage.product_sent: ["tracking_link", "order_id"],
+    CollabStage.live: ["live_attribution", "poc_code", "video_link", "language", "content_bucket"],
 }
 
 STAGE_REQUIRED_FIELDS: dict[CollabStage, list[str]] = {}
@@ -261,6 +262,8 @@ async def apply_stage_transition(
     actor_id: int,
     note: str | None = None,
     bump_activity: bool = True,
+    language: str | None = None,
+    content_bucket: str | None = None,
 ) -> None:
     """Core stage-mutation + side effects shared by the interactive
     transition_collab_stage route and the automated dead-zone sweep
@@ -268,6 +271,11 @@ async def apply_stage_transition(
     validation gauntlet -- that stays a route-only concern the automated job
     must never be blocked by. Does NOT commit -- caller controls the
     transaction.
+
+    language/content_bucket are only meaningful the moment this call is the
+    one that first creates the PartnershipTicket (to_stage==live); the
+    automated dead-zone sweep never passes them, matching how it never
+    passes required-field values for any other stage either.
     """
     was_live = collab.stage == CollabStage.live
     was_dead = collab.stage == CollabStage.dead_leads
@@ -286,7 +294,7 @@ async def apply_stage_transition(
             await db.execute(select(PartnershipTicket.id).where(PartnershipTicket.collaboration_id == collab.id))
         ).first()
         if existing_ticket is None:
-            db.add(PartnershipTicket(collaboration_id=collab.id))
+            db.add(PartnershipTicket(collaboration_id=collab.id, language=language, content_bucket=content_bucket))
 
     if to_stage == CollabStage.dead_leads and not was_dead:
         other_active = (

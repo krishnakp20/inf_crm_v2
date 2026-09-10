@@ -493,7 +493,9 @@ export function CollabDetailPanel({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] text-gray-500">Video / Reel link</label>
+                <label className="mb-1 block text-[11px] text-gray-500">
+                  Video / Reel link{collab.platform ? ` · ${collab.platform === "instagram" ? "Instagram" : "YouTube"}` : ""}
+                </label>
                 <input
                   type="url"
                   value={videoLink}
@@ -501,6 +503,22 @@ export function CollabDetailPanel({
                   placeholder="https://instagram.com/reel/..."
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
+                {collab.additional_video_links.length > 0 && (
+                  <div className="mt-1.5 flex flex-col gap-1">
+                    {collab.additional_video_links.map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-[11px] text-brand-600 hover:underline"
+                        title={link.url}
+                      >
+                        {link.platform === "instagram" ? "Instagram" : "YouTube"} · {link.url}
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-[11px] text-gray-500">Video live date · Optional</label>

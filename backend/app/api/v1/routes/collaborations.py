@@ -16,6 +16,7 @@ from app.db.models.approval_request import ApprovalRequest
 from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
+from app.db.models.collaboration_video_link import CollaborationVideoLink
 from app.db.models.creator import Creator
 from app.db.models.enums import CollabStage, UserRole
 from app.db.models.partnership_ticket import PartnershipTicket
@@ -30,6 +31,7 @@ from app.schemas.collaboration import (
     CollaborationCreate,
     CollaborationOut,
     CollaborationUpdate,
+    CollaborationVideoLinkOut,
 )
 from app.services.collab_pipeline import (
     COLLAB_STAGE_INDEX,
@@ -160,6 +162,29 @@ async def _load_products_for_collabs(db: AsyncSession, collab_ids: list[int]) ->
     return out
 
 
+async def _load_video_links_for_collabs(
+    db: AsyncSession, collab_ids: list[int]
+) -> dict[int, list[CollaborationVideoLinkOut]]:
+    """Additional (platform, link) pairs beyond the first -- see
+    CollaborationVideoLink's docstring. The first pair lives directly on
+    Collaboration.video_link/.platform and isn't included here."""
+    if not collab_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(CollaborationVideoLink)
+            .where(CollaborationVideoLink.collaboration_id.in_(collab_ids))
+            .order_by(CollaborationVideoLink.sort_order, CollaborationVideoLink.id)
+        )
+    ).scalars().all()
+    out: dict[int, list[CollaborationVideoLinkOut]] = {}
+    for link in rows:
+        out.setdefault(link.collaboration_id, []).append(
+            CollaborationVideoLinkOut(id=link.id, platform=link.platform, url=link.url)
+        )
+    return out
+
+
 async def _latest_approval_by_collab(
     db: AsyncSession, collab_ids: list[int]
 ) -> dict[int, tuple[str, str]]:
@@ -194,6 +219,7 @@ def _to_out(
     products: list[CollabProductOut],
     agg: tuple[int, int],
     deadline_days: dict[CollabStage, int | None],
+    additional_video_links: list[CollaborationVideoLinkOut],
     approval: tuple[str, str] | None = None,
     effective_live_date: date | None = None,
 ) -> CollaborationOut:
@@ -224,6 +250,8 @@ def _to_out(
         order_id=collab.order_id,
         poc_code=collab.poc_code,
         video_link=collab.video_link,
+        platform=collab.platform,
+        additional_video_links=additional_video_links,
         video_live_date=collab.video_live_date,
         effective_live_date=effective_live_date or collab.video_live_date,
         is_overdue=is_stage_deadline_exceeded(collab, deadline_days),
@@ -286,6 +314,7 @@ async def list_collaborations(
     approvals_by_collab = await _latest_approval_by_collab(db, [row[0].id for row in rows])
     live_dates_by_collab = await effective_live_dates(db, [row[0].id for row in rows])
     deadline_days = await load_stage_deadline_days(db)
+    video_links_by_collab = await _load_video_links_for_collabs(db, [row[0].id for row in rows])
     return [
         _to_out(
             c,
@@ -294,6 +323,7 @@ async def list_collaborations(
             products_by_collab.get(c.id, []),
             aggregates[creator.id],
             deadline_days,
+            video_links_by_collab.get(c.id, []),
             approvals_by_collab.get(c.id),
             live_dates_by_collab.get(c.id),
         )
@@ -369,6 +399,7 @@ async def get_collaboration(
     approvals_by_collab = await _latest_approval_by_collab(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
     deadline_days = await load_stage_deadline_days(db)
+    video_links_by_collab = await _load_video_links_for_collabs(db, [collab.id])
     return _to_out(
         collab,
         creator,
@@ -376,6 +407,7 @@ async def get_collaboration(
         products_by_collab.get(collab.id, []),
         aggregates[collab.creator_id],
         deadline_days,
+        video_links_by_collab.get(collab.id, []),
         approvals_by_collab.get(collab.id),
         live_date,
     )
@@ -415,6 +447,22 @@ async def _create_collaboration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Select every product featured in this video before creating a Live collaboration.",
         )
+    if "tracking_link" in required and not (payload.tracking_link and payload.tracking_link.strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tracking link is required for this stage.")
+    if "order_id" in required and not (payload.order_id and payload.order_id.strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order ID is required for this stage.")
+    if "poc_code" in required and not (payload.poc_code and payload.poc_code.strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="POC code is required for this stage.")
+    if "video_link" in required and not (
+        payload.video_link and payload.video_link.strip() and payload.platform is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="A video link and its platform are required for this stage."
+        )
+    if "language" in required and not (payload.language and payload.language.strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Language is required for this stage.")
+    if "content_bucket" in required and not (payload.content_bucket and payload.content_bucket.strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Content bucket is required for this stage.")
 
     creator = await db.get(Creator, payload.creator_id)
     if creator is None:
@@ -462,6 +510,9 @@ async def _create_collaboration(
             content_type=payload.content_type,
             tracking_link=payload.tracking_link,
             order_id=payload.order_id,
+            poc_code=payload.poc_code,
+            video_link=payload.video_link,
+            platform=payload.platform,
         )
         db.add(collab)
         try:
@@ -495,6 +546,20 @@ async def _create_collaboration(
         )
 
     db.add(CollabStageEvent(collaboration_id=collab.id, from_stage=None, to_stage=payload.stage, actor_id=user.id))
+
+    if payload.stage == CollabStage.live:
+        # apply_stage_transition auto-creates the PartnershipTicket the
+        # moment an EXISTING card moves to Live -- a card created directly
+        # into Live never goes through that function, so it needs the same
+        # ticket-creation done here (previously missing entirely).
+        db.add(PartnershipTicket(collaboration_id=collab.id, language=payload.language, content_bucket=payload.content_bucket))
+        for i, link in enumerate(payload.additional_video_links):
+            db.add(
+                CollaborationVideoLink(
+                    collaboration_id=collab.id, platform=link.platform, url=link.url, sort_order=i
+                )
+            )
+
     await db.commit()
     await db.refresh(collab)
 
@@ -502,6 +567,7 @@ async def _create_collaboration(
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
     deadline_days = await load_stage_deadline_days(db)
+    video_links_by_collab = await _load_video_links_for_collabs(db, [collab.id])
     return _to_out(
         collab,
         creator,
@@ -509,6 +575,7 @@ async def _create_collaboration(
         products_by_collab.get(collab.id, []),
         aggregates[creator.id],
         deadline_days,
+        video_links_by_collab.get(collab.id, []),
         None,
         live_date,
     )
@@ -661,6 +728,7 @@ async def update_collaboration(
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
     deadline_days = await load_stage_deadline_days(db)
+    video_links_by_collab = await _load_video_links_for_collabs(db, [collab.id])
     return _to_out(
         collab,
         creator,
@@ -668,6 +736,7 @@ async def update_collaboration(
         products_by_collab.get(collab.id, []),
         aggregates[collab.creator_id],
         deadline_days,
+        video_links_by_collab.get(collab.id, []),
         None,
         live_date,
     )
@@ -725,6 +794,31 @@ async def transition_collab_stage(
             ).first() is not None
             if not payload.live_attribution_product_ids and not has_existing_attribution:
                 missing.append("live_attribution")
+        if "tracking_link" in required and not (
+            (payload.tracking_link and payload.tracking_link.strip())
+            or (collab.tracking_link and collab.tracking_link.strip())
+        ):
+            missing.append("tracking_link")
+        if "order_id" in required and not (
+            (payload.order_id and payload.order_id.strip()) or (collab.order_id and collab.order_id.strip())
+        ):
+            missing.append("order_id")
+        if "poc_code" in required and not (
+            (payload.poc_code and payload.poc_code.strip()) or (collab.poc_code and collab.poc_code.strip())
+        ):
+            missing.append("poc_code")
+        if "video_link" in required and not (
+            (payload.video_link and payload.video_link.strip() and payload.platform is not None)
+            or (collab.video_link and collab.video_link.strip() and collab.platform is not None)
+        ):
+            missing.append("video_link")
+        # language/content_bucket land on the PartnershipTicket, which only
+        # exists once this move actually succeeds -- there's no
+        # already-on-record fallback to check before that first success.
+        if "language" in required and not (payload.language and payload.language.strip()):
+            missing.append("language")
+        if "content_bucket" in required and not (payload.content_bucket and payload.content_bucket.strip()):
+            missing.append("content_bucket")
 
         if missing:
             raise HTTPException(
@@ -753,6 +847,23 @@ async def transition_collab_stage(
             collab.deal_type = payload.deal_type
         if payload.content_type is not None:
             collab.content_type = payload.content_type
+        if payload.tracking_link is not None:
+            collab.tracking_link = payload.tracking_link
+        if payload.order_id is not None:
+            collab.order_id = payload.order_id
+        if payload.poc_code is not None:
+            collab.poc_code = payload.poc_code
+        if payload.video_link is not None:
+            collab.video_link = payload.video_link
+        if payload.platform is not None:
+            collab.platform = payload.platform
+        if payload.additional_video_links:
+            for i, link in enumerate(payload.additional_video_links):
+                db.add(
+                    CollaborationVideoLink(
+                        collaboration_id=collab.id, platform=link.platform, url=link.url, sort_order=i
+                    )
+                )
         if payload.live_attribution_product_ids is not None:
             links = (
                 (
@@ -776,7 +887,17 @@ async def transition_collab_stage(
     if payload.video_live_date is not None:
         collab.video_live_date = payload.video_live_date
 
-    await apply_stage_transition(db, collab, creator, payload.to_stage, user.id, payload.note, bump_activity=True)
+    await apply_stage_transition(
+        db,
+        collab,
+        creator,
+        payload.to_stage,
+        user.id,
+        payload.note,
+        bump_activity=True,
+        language=payload.language,
+        content_bucket=payload.content_bucket,
+    )
 
     await db.commit()
     await db.refresh(collab)
@@ -787,6 +908,7 @@ async def transition_collab_stage(
     products_by_collab = await _load_products_for_collabs(db, [collab.id])
     live_date = (await effective_live_dates(db, [collab.id])).get(collab.id)
     deadline_days = await load_stage_deadline_days(db)
+    video_links_by_collab = await _load_video_links_for_collabs(db, [collab.id])
     return _to_out(
         collab,
         creator,
@@ -794,6 +916,7 @@ async def transition_collab_stage(
         products_by_collab.get(collab.id, []),
         aggregates[collab.creator_id],
         deadline_days,
+        video_links_by_collab.get(collab.id, []),
         None,
         live_date,
     )

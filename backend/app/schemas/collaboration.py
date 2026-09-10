@@ -2,7 +2,18 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
-from app.db.models.enums import CollabStage, ContentType, CreatorStatus, DealType, PaymentStatus
+from app.db.models.enums import CollabStage, ContentType, CreatorStatus, DealType, PaymentStatus, Platform
+
+
+class CollaborationVideoLinkIn(BaseModel):
+    platform: Platform
+    url: str
+
+
+class CollaborationVideoLinkOut(BaseModel):
+    id: int
+    platform: Platform
+    url: str
 
 
 class CollaborationCreate(BaseModel):
@@ -26,6 +37,15 @@ class CollaborationCreate(BaseModel):
     content_type: ContentType | None = None
     tracking_link: str | None = None
     order_id: str | None = None
+    poc_code: str | None = None
+    video_link: str | None = None
+    platform: Platform | None = None
+    # Live-stage only -- set on the auto-created PartnershipTicket the
+    # moment a card is created directly into Live (see
+    # collab_pipeline.apply_stage_transition / _create_collaboration).
+    language: str | None = None
+    content_bucket: str | None = None
+    additional_video_links: list[CollaborationVideoLinkIn] = []
 
 
 class CollaborationUpdate(BaseModel):
@@ -66,6 +86,16 @@ class CollabStageTransition(BaseModel):
     # date this move actually happens is used instead (see
     # collab_pipeline.effective_live_dates).
     video_live_date: date | None = None
+    # Product Sent -- required at that stage (see STAGE_REQUIRED_FIELDS).
+    tracking_link: str | None = None
+    order_id: str | None = None
+    # Live -- required at that stage.
+    poc_code: str | None = None
+    video_link: str | None = None
+    platform: Platform | None = None
+    language: str | None = None
+    content_bucket: str | None = None
+    additional_video_links: list[CollaborationVideoLinkIn] | None = None
 
 
 class StageRequirementError(BaseModel):
@@ -107,6 +137,8 @@ class CollaborationOut(BaseModel):
     order_id: str | None
     poc_code: str | None
     video_link: str | None
+    platform: Platform | None
+    additional_video_links: list[CollaborationVideoLinkOut]
     video_live_date: date | None  # explicit value, if the user set one
     effective_live_date: date | None  # video_live_date, or the stage-move date if unset
     is_overdue: bool

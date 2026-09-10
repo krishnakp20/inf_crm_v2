@@ -126,6 +126,12 @@ export interface Notification {
   link: string;
 }
 
+export interface CollaborationVideoLink {
+  id: number;
+  platform: Platform;
+  url: string;
+}
+
 export interface Collaboration {
   id: number;
   collab_code: string;
@@ -150,6 +156,8 @@ export interface Collaboration {
   order_id: string | null;
   poc_code: string | null;
   video_link: string | null;
+  platform: Platform | null;
+  additional_video_links: CollaborationVideoLink[];
   video_live_date: string | null;
   effective_live_date: string | null;
   is_overdue: boolean;

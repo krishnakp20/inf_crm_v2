@@ -6,6 +6,7 @@ from app.db.models.campaign_product import CampaignProduct
 from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
+from app.db.models.collaboration_video_link import CollaborationVideoLink
 from app.db.models.content_bucket import ContentBucket
 from app.db.models.creator import Creator
 from app.db.models.creator_category_tier import CreatorCategoryTier
@@ -33,6 +34,7 @@ __all__ = [
     "CollabStageEvent",
     "Collaboration",
     "CollaborationProduct",
+    "CollaborationVideoLink",
     "ContentBucket",
     "Creator",
     "CreatorCategoryTier",
