@@ -8,9 +8,11 @@ import { CollabKanbanBoard } from "../components/creators/CollabKanbanBoard";
 import { RequestApprovalModal } from "../components/creators/RequestApprovalModal";
 import { SetTargetDrawer } from "../components/creators/SetTargetDrawer";
 import { StageMovePrompt } from "../components/creators/StageMovePrompt";
+import { DateRangePicker, type RangePreset } from "../components/dashboard/DateRangePicker";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
+import { rangeToDates, toLocalDateString } from "../lib/dateRange";
 import type { CollabBoardStats, Collaboration, CollabStage, Product, User } from "../lib/types";
 
 const PRIORITY_FILTERS = [
@@ -46,8 +48,9 @@ export default function MyCreators() {
   // id rather than requiring it to already be loaded.
   const [deepLinkCollab, setDeepLinkCollab] = useState<Collaboration | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [rangePreset, setRangePreset] = useState<RangePreset>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [approvalCollab, setApprovalCollab] = useState<Collaboration | null>(null);
   const [compact, setCompact] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ collabId: number; toStage: CollabStage; missingFields: string[] } | null>(
@@ -98,13 +101,21 @@ export default function MyCreators() {
 
   function loadBoard(ownerId: number | "all") {
     const ownerParam = ownerId === "all" ? undefined : ownerId;
+    // /collaborations and /collaborations/board-stats take a plain date
+    // (not a full datetime like Dashboard/Analytics' endpoints) -- convert
+    // via local calendar-date getters, not a raw ISO-string slice, so a
+    // "Today"/"Last 7 days" preset resolves to the right calendar date
+    // regardless of the browser's UTC offset.
+    const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
+    const dateFrom = from ? toLocalDateString(from) : undefined;
+    const dateTo = to ? toLocalDateString(to) : undefined;
     api
       .get<Collaboration[]>("/collaborations", {
         params: {
           owner_id: ownerParam,
           product_id: productFilter || undefined,
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
+          date_from: dateFrom,
+          date_to: dateTo,
           limit: 500,
         },
       })
@@ -114,8 +125,8 @@ export default function MyCreators() {
         params: {
           owner_id: ownerParam,
           product_id: productFilter || undefined,
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
+          date_from: dateFrom,
+          date_to: dateTo,
         },
       })
       .then((res) => setStats(res.data));
@@ -125,7 +136,7 @@ export default function MyCreators() {
     if (!selectedOwnerId) return;
     loadBoard(selectedOwnerId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOwnerId, productFilter, dateFrom, dateTo]);
+  }, [selectedOwnerId, productFilter, rangePreset, customFrom, customTo]);
 
   const filteredCollaborations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -310,25 +321,20 @@ export default function MyCreators() {
           </select>
         </label>
 
-        <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
-          <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">From</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="w-[110px] bg-transparent text-[8px] text-ink focus:outline-none"
+        <div className="shrink-0">
+          <DateRangePicker
+            preset={rangePreset}
+            customFrom={customFrom}
+            customTo={customTo}
+            onSelectPreset={setRangePreset}
+            onApplyCustom={(from, to) => {
+              setCustomFrom(from);
+              setCustomTo(to);
+              setRangePreset("custom");
+            }}
+            align="left"
           />
-        </label>
-
-        <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
-          <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">To</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="w-[110px] bg-transparent text-[8px] text-ink focus:outline-none"
-          />
-        </label>
+        </div>
 
         <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-[#e7e5e4] bg-surface p-0.5">
           <button

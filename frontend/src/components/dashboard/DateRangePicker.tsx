@@ -1,9 +1,10 @@
 import { CalendarDays, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export type RangePreset = "today" | "7d" | "30d" | "custom";
+export type RangePreset = "all" | "today" | "7d" | "30d" | "custom";
 
 const PRESET_LABELS: Record<RangePreset, string> = {
+  all: "All time",
   today: "Today",
   "7d": "Last 7 days",
   "30d": "Last 30 days",
@@ -16,12 +17,19 @@ export function DateRangePicker({
   customTo,
   onSelectPreset,
   onApplyCustom,
+  align = "right",
 }: {
   preset: RangePreset;
   customFrom: string;
   customTo: string;
   onSelectPreset: (preset: RangePreset) => void;
   onApplyCustom: (from: string, to: string) => void;
+  /** Which edge of the trigger button the dropdown panel hangs from --
+   * "right" (default) suits a trigger near the right edge of its
+   * container (e.g. a page's top-right Topbar action); "left" suits one
+   * further left (e.g. inline in a left-aligned filter row), so the
+   * panel doesn't overflow off the opposite edge. */
+  align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(customFrom);
@@ -47,8 +55,12 @@ export function DateRangePicker({
         <ChevronDown size={13} className="text-gray-400" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1.5 w-56 rounded-card border border-[#e7e5e4] bg-white p-1.5 shadow-lg">
-          {(["today", "7d", "30d"] as RangePreset[]).map((p) => (
+        <div
+          className={`absolute top-full z-20 mt-1.5 w-56 rounded-card border border-[#e7e5e4] bg-white p-1.5 shadow-lg ${
+            align === "left" ? "left-0" : "right-0"
+          }`}
+        >
+          {(["all", "today", "7d", "30d"] as RangePreset[]).map((p) => (
             <button
               key={p}
               onClick={() => {
