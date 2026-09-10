@@ -16,6 +16,7 @@ import type {
   Product,
 } from "../../lib/types";
 import { RequestApprovalModal } from "./RequestApprovalModal";
+import { StageMovePrompt } from "./StageMovePrompt";
 
 interface VideoLinkRow {
   platform: Platform | "";
@@ -37,16 +38,6 @@ const PAYMENT_OPTIONS: { label: string; value: PaymentStatus }[] = [
   { label: "Partial Payment", value: "partial_payment" },
   { label: "Pending", value: "pending" },
 ];
-
-const REQUIRED_FIELD_LABELS: Record<string, string> = {
-  creator_reply: "Creator reply",
-  commercial_quoted: "Commercial quoted",
-  commercial_amount: "Commercial locked amount",
-  deal_type: "Deal type (Paid/Barter)",
-  content_type: "Content type (Integrated/Dedicated)",
-  live_attribution: "Live video attribution",
-  creator_phone: "Phone / WhatsApp",
-};
 
 function toggleId(list: number[], setList: (v: number[]) => void, id: number) {
   setList(list.includes(id) ? list.filter((v) => v !== id) : [...list, id]);
@@ -136,6 +127,7 @@ export function CollabDetailPanel({
   const [showApproval, setShowApproval] = useState(false);
   const [movingStage, setMovingStage] = useState(false);
   const [targetStage, setTargetStage] = useState<CollabStage | "">("");
+  const [pendingMove, setPendingMove] = useState<{ toStage: CollabStage; missingFields: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [markingDead, setMarkingDead] = useState(false);
@@ -213,8 +205,7 @@ export function CollabDetailPanel({
     } catch (err: any) {
       const missingFields: string[] | undefined = err.response?.data?.detail?.missing_fields;
       if (err.response?.status === 400 && Array.isArray(missingFields)) {
-        const labels = missingFields.map((f) => REQUIRED_FIELD_LABELS[f] ?? f).join(", ");
-        setError(`Fill in ${labels} above, click Save fields, then try Move stage again.`);
+        setPendingMove({ toStage: stage, missingFields });
       } else {
         setError(err.response?.data?.detail ?? "Could not move this card.");
       }
@@ -783,6 +774,20 @@ export function CollabDetailPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {pendingMove && (
+        <StageMovePrompt
+          collabId={collab.id}
+          targetStage={pendingMove.toStage}
+          missingFields={pendingMove.missingFields}
+          linkedProducts={collab.products.map((p) => ({ id: p.product_id, name: p.product_name }))}
+          onClose={() => setPendingMove(null)}
+          onMoved={() => {
+            onChanged();
+            onClose();
+          }}
+        />
       )}
     </div>
   );
