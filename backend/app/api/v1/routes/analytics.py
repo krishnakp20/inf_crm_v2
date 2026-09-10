@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -31,6 +31,15 @@ from app.services.analytics import (
 from app.services.dashboard import get_collab_funnel
 
 router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_analytics_access)])
+
+# Substitutes for date_from when the frontend's "All time" preset is picked --
+# it deliberately sends no date_from/date_to (see rangeToDates()) rather than
+# a real lower bound, and every other preset ("today"/"7d"/"30d"/custom)
+# always sends an explicit one. So an absent date_from can only mean "All
+# time" was chosen, never a caller accidentally omitting it -- safe to treat
+# as "no lower bound" instead of quietly falling back to the last 30 days,
+# which used to make "All time" behave identically to the 30-day default.
+_ALL_TIME_START = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 
 async def _resolve_scope(
@@ -67,7 +76,7 @@ async def get_analytics(
 ) -> AnalyticsResponse:
     now = datetime.now(timezone.utc)
     range_end = date_to or now
-    range_start = date_from or (range_end - timedelta(days=30))
+    range_start = date_from or _ALL_TIME_START
 
     owner_ids, scope_label = await _resolve_scope(db, user, scope, user_id)
 
@@ -87,7 +96,9 @@ async def get_analytics(
 
     return AnalyticsResponse(
         scope_label=scope_label,
-        date_range_label=f"{range_start:%d %b %Y} – {range_end:%d %b %Y}",
+        date_range_label=(
+            f"All time – {range_end:%d %b %Y}" if date_from is None else f"{range_start:%d %b %Y} – {range_end:%d %b %Y}"
+        ),
         live_video_count=len(live_ids),
         business_impact=business,
         performance_overview=overview,
