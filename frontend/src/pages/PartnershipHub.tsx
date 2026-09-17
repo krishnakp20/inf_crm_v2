@@ -119,6 +119,16 @@ export default function PartnershipHub() {
     URL.revokeObjectURL(url);
   }
 
+  async function exportMasterData() {
+    const res = await api.get("/partnership/export-master-data", { params, responseType: "blob" });
+    const url = URL.createObjectURL(res.data as Blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "partnership-master-data-export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(loadOverview, [
     search,
     ownerId,
@@ -171,14 +181,24 @@ export default function PartnershipHub() {
         subtitle="Track ad rights, ad codes and CTA links for every video that's gone live."
         actions={
           user?.role === "admin" ? (
-            <button
-              onClick={exportMetricsTemplate}
-              title="Downloads a metrics sheet for the videos currently shown, with POC Code and Video Link pre-filled -- fill in the numbers and upload it back through Settings > Upload metrics."
-              className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] bg-white px-3 py-2.5 text-xs font-bold text-ink hover:bg-surface"
-            >
-              <Download size={14} />
-              Export for metrics upload
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportMasterData}
+                title="Downloads every field on the videos currently shown -- creator, product, commercials, ad rights, status and remarks -- for reporting or sharing outside the CRM."
+                className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] bg-white px-3 py-2.5 text-xs font-bold text-ink hover:bg-surface"
+              >
+                <Download size={14} />
+                Export data
+              </button>
+              <button
+                onClick={exportMetricsTemplate}
+                title="Downloads a metrics sheet for the videos currently shown, with POC Code and Video Link pre-filled -- fill in the numbers and upload it back through Settings > Upload metrics."
+                className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] bg-white px-3 py-2.5 text-xs font-bold text-ink hover:bg-surface"
+              >
+                <Download size={14} />
+                Export for metrics upload
+              </button>
+            </div>
           ) : undefined
         }
       />

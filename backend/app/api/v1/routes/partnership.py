@@ -387,6 +387,130 @@ async def export_metrics_template(
     )
 
 
+_MASTER_DATA_COLUMNS = [
+    "POC Name",
+    "Creator's Name",
+    "Profile Link",
+    "POC Code",
+    "Live Date",
+    "Product",
+    "Reel Commercials",
+    "Reel Link",
+    "Language",
+    "Content Bucket",
+    "Creator Category",
+    "Comments",
+    "Likes",
+    "Ad rights Included",
+    "Collab Commercials",
+    "Ad Code",
+    "CTA Link",
+    "Collab Status",
+    "Remarks",
+    "Meta ROAs",
+    "Google ROAs",
+    "Updated on",
+]
+
+_COLLAB_STATUS_LABELS = {
+    PartnershipCollabStatus.open: "Open",
+    PartnershipCollabStatus.partnership_sent: "Partnership Sent",
+    PartnershipCollabStatus.need_tag: "Need Tag",
+    PartnershipCollabStatus.ad_code_not_working: "Ad Code Not Working",
+    PartnershipCollabStatus.closed: "Closed",
+    PartnershipCollabStatus.closed_and_live: "Closed & Live",
+}
+
+
+@router.get("/export-master-data")
+async def export_master_data(
+    owner_id: int | None = None,
+    product_id: int | None = None,
+    platform: Platform | None = None,
+    content_bucket: str | None = None,
+    language: str | None = None,
+    category: str | None = None,
+    search: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """The full Partnership Hub record for every video in the current
+    Overview filter, matching the client's "DATA SHARE (MASTER DATA)"
+    reference sheet -- a reporting/sharing export, distinct from
+    export_metrics_template's narrower round-trip upload template above
+    (that one must keep exactly the columns Settings > Upload metrics
+    requires; this one is free to carry everything else).
+
+    A few columns are deliberate stand-ins, confirmed with the client:
+    - POC Name: no POC roster exists in the app (poc_code is a free-text
+      ops string, not linked to a person) -- uses the collaboration
+      owner's name instead.
+    - Reel Commercials / Collab Commercials: two separate negotiations
+      exist (Collaboration.commercial_amount for the content itself,
+      PartnershipTicket.ad_rights_amount for ad-usage rights on it) --
+      mapped by the client's own column order (Reel Commercials sits next
+      to Product/Reel Link; Collab Commercials sits next to the ad-rights
+      fields), which is the reverse of what the names alone suggest.
+    - Meta ROAs / Google ROAs: left blank -- the app only tracks one
+      generic ROAS today, with no per-ad-platform split; these columns
+      exist so the sheet shape already matches the reference, ready for
+      that split whenever it's built.
+    - Updated on: PartnershipTicket has no updated_at column, and
+      Collaboration.last_activity_at isn't touched by anything that
+      happens inside Partnership Hub -- uses the latest remark's
+      created_at instead, since every Hub action writes one.
+    """
+    if user.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
+
+    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    batch = await _batch_load(db, tickets)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(_MASTER_DATA_COLUMNS)
+    for ticket in tickets:
+        collab, creator, owner = batch["collabs"][ticket.collaboration_id]
+        products = batch["products"].get(collab.id, [])
+        live_date = batch["live_dates"].get(collab.id)
+        remarks = batch["remarks"].get(ticket.id, [])
+        latest_remark, updated_on = (remarks[0][0].body, remarks[0][0].created_at) if remarks else ("", ticket.created_at)
+        handle = creator.instagram_handle.lstrip("@").strip()
+
+        writer.writerow(
+            [
+                owner.name,
+                creator.name,
+                f"https://instagram.com/{handle}" if handle else "",
+                collab.poc_code or "",
+                live_date.isoformat() if live_date else "",
+                ", ".join(products),
+                collab.commercial_amount if collab.commercial_amount is not None else "",
+                collab.video_link or "",
+                ticket.language or "",
+                ticket.content_bucket or "",
+                creator.category or "",
+                collab.comments_count if collab.comments_count is not None else "",
+                collab.likes_count if collab.likes_count is not None else "",
+                "Yes" if ticket.requested_ad_rights else "No",
+                ticket.ad_rights_amount if ticket.ad_rights_amount is not None else "",
+                ticket.ad_code or "",
+                ticket.cta_link or "",
+                _COLLAB_STATUS_LABELS[ticket.collab_status],
+                latest_remark,
+                "",
+                "",
+                updated_on.isoformat(),
+            ]
+        )
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=partnership-master-data-export.csv"},
+    )
+
+
 @router.get("/{ticket_id}")
 async def get_ticket_detail(
     ticket_id: int,
