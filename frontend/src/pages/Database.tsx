@@ -364,7 +364,7 @@ export default function Database() {
         />
       )}
 
-      <OwnershipCheck owners={owners} />
+      <OwnershipCheck owners={owners} onRevived={refresh} />
 
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-5">

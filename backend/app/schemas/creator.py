@@ -129,6 +129,11 @@ class OwnershipMatch(BaseModel):
     # The creator's real current stage, from their most recently active
     # collaboration -- None if they have no collaborations at all yet.
     current_stage_label: str | None = None
+    # That same most-recently-active collaboration's id -- lets the caller
+    # offer a one-click "revive" (POST .../clone) when current_stage_label
+    # is "Dead Leads", instead of a dead-end "already exists" block. None
+    # under the same condition as current_stage_label.
+    current_collaboration_id: int | None = None
 
 
 class BoardStats(BaseModel):

@@ -100,18 +100,20 @@ async def check_ownership(
     # whichever of the creator's collaborations was most recently active,
     # same source of truth as the Database table's current_collab_stage_label.
     stage_label_by_creator: dict[int, str] = {}
+    latest_collab_id_by_creator: dict[int, int] = {}
     if creator_ids:
         collab_result = await db.execute(
-            select(Collaboration.creator_id, Collaboration.stage, Collaboration.last_activity_at).where(
+            select(Collaboration.id, Collaboration.creator_id, Collaboration.stage, Collaboration.last_activity_at).where(
                 Collaboration.creator_id.in_(creator_ids)
             )
         )
-        latest_by_creator: dict[int, tuple[CollabStage, datetime]] = {}
-        for creator_id, stage, last_activity_at in collab_result.all():
+        latest_by_creator: dict[int, tuple[int, CollabStage, datetime]] = {}
+        for collab_id, creator_id, stage, last_activity_at in collab_result.all():
             current = latest_by_creator.get(creator_id)
-            if current is None or last_activity_at > current[1]:
-                latest_by_creator[creator_id] = (stage, last_activity_at)
-        stage_label_by_creator = {cid: COLLAB_STAGE_LABELS[stage] for cid, (stage, _) in latest_by_creator.items()}
+            if current is None or last_activity_at > current[2]:
+                latest_by_creator[creator_id] = (collab_id, stage, last_activity_at)
+        stage_label_by_creator = {cid: COLLAB_STAGE_LABELS[stage] for cid, (_, stage, _) in latest_by_creator.items()}
+        latest_collab_id_by_creator = {cid: collab_id for cid, (collab_id, _, _) in latest_by_creator.items()}
 
     return [
         OwnershipMatch(
@@ -120,6 +122,7 @@ async def check_ownership(
             instagram_handle=c.instagram_handle,
             owner_id=c.owner_id,
             current_stage_label=stage_label_by_creator.get(c.id),
+            current_collaboration_id=latest_collab_id_by_creator.get(c.id),
         )
         for c in creators
     ]

@@ -629,6 +629,18 @@ async def clone_collaboration(
     additional = [p for p in products if p.product_id != primary.product_id]
     target_stage = source.stage if source.stage != CollabStage.dead_leads else CollabStage.new_lead
 
+    if source.stage == CollabStage.dead_leads:
+        # Same revive-on-exit-from-Dead-Leads bookkeeping as
+        # apply_stage_transition -- a clone giving this creator a fresh
+        # active card should un-archive them too, or they'd stay hidden
+        # from "Add collaboration"'s existing-creator search and other
+        # active-creator views despite having a live card again.
+        creator = await db.get(Creator, source.creator_id)
+        if creator is not None and creator.is_archived:
+            creator.is_archived = False
+            creator.archived_at = None
+            creator.archive_reason = None
+
     payload = CollaborationCreate(
         creator_id=source.creator_id,
         owner_id=source.owner_id,

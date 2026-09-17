@@ -32,7 +32,9 @@ export function AddCreatorModal({
   const [followersCount, setFollowersCount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [ownershipWarning, setOwnershipWarning] = useState<string | null>(null);
+  const [revivableCollabId, setRevivableCollabId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [reviving, setReviving] = useState(false);
 
   useEffect(() => {
     api.get<ContentCategory[]>("/content-categories").then((res) => setCategories(res.data));
@@ -56,8 +58,27 @@ export function AddCreatorModal({
     if (exactMatch) {
       const stageSuffix = exactMatch.current_stage_label ? ` (${exactMatch.current_stage_label})` : "";
       setOwnershipWarning(`@${exactMatch.instagram_handle} is already owned by ${ownerName(exactMatch.owner_id)}${stageSuffix}.`);
+      setRevivableCollabId(
+        exactMatch.current_stage_label === "Dead Leads" ? exactMatch.current_collaboration_id ?? null : null
+      );
     } else {
       setOwnershipWarning(null);
+      setRevivableCollabId(null);
+    }
+  }
+
+  async function handleRevive() {
+    if (!revivableCollabId) return;
+    setError(null);
+    setReviving(true);
+    try {
+      await api.post(`/collaborations/${revivableCollabId}/clone`);
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not revive this creator.");
+    } finally {
+      setReviving(false);
     }
   }
 
@@ -135,15 +156,26 @@ export function AddCreatorModal({
             onChange={(e) => {
               setHandle(e.target.value);
               setOwnershipWarning(null);
+              setRevivableCollabId(null);
             }}
             onBlur={checkHandleOwnership}
             placeholder="@username"
             className="mb-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
           {ownershipWarning && (
-            <p className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
-              {ownershipWarning}
-            </p>
+            <div className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
+              <p>{ownershipWarning}</p>
+              {revivableCollabId && (
+                <button
+                  type="button"
+                  onClick={handleRevive}
+                  disabled={reviving}
+                  className="mt-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {reviving ? "Reviving..." : "Revive as a new lead"}
+                </button>
+              )}
+            </div>
           )}
           {!ownershipWarning && <div className="mb-3" />}
 
