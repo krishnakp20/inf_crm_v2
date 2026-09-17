@@ -163,7 +163,7 @@ export default function Campaigns() {
             userId={userId}
             onUserChange={setUserId}
             products={products}
-            users={users}
+            users={advisors}
           />
           <CampaignTable campaigns={campaigns} onOpen={setDetailCampaignId} />
         </>
@@ -209,7 +209,7 @@ export default function Campaigns() {
               className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
             >
               <option value="">All users</option>
-              {users.map((u) => (
+              {advisors.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
                 </option>

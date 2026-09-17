@@ -66,7 +66,7 @@ export default function Analytics() {
   }
 
   const advisorOptions = users.filter(
-    (u) => u.role === "advisor" && (user?.role === "admin" || u.supervisor_id === user?.id)
+    (u) => u.role === "advisor" && u.is_active && (user?.role === "admin" || u.supervisor_id === user?.id)
   );
 
   function exportReport() {

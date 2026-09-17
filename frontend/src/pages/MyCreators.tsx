@@ -266,7 +266,7 @@ export default function MyCreators() {
               className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
             >
               <option value="all">All team</option>
-              {advisors.map((a) => (
+              {activeAdvisors.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>

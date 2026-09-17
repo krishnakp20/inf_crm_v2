@@ -68,10 +68,12 @@ export default function Database() {
     const active = users.filter((u) => u.role === "advisor" && u.is_active);
     return user?.role === "supervisor" ? active.filter((u) => u.supervisor_id === user.id) : active;
   }, [users, user]);
-  const filterableUsers = useMemo(
-    () => (user?.role === "supervisor" ? users.filter((u) => u.id === user.id || u.supervisor_id === user.id) : users),
-    [users, user]
-  );
+  const filterableUsers = useMemo(() => {
+    const activeOrSelf = users.filter((u) => u.is_active || u.id === user?.id);
+    return user?.role === "supervisor"
+      ? activeOrSelf.filter((u) => u.id === user.id || u.supervisor_id === user.id)
+      : activeOrSelf;
+  }, [users, user]);
 
   function loadCreators() {
     const params: Record<string, string | number | boolean> = {

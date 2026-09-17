@@ -61,7 +61,7 @@ export function PartnershipFilters({
         className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
       >
         <option value="">All users</option>
-        {users.map((u) => (
+        {users.filter((u) => u.is_active).map((u) => (
           <option key={u.id} value={u.id}>
             {u.name}
           </option>

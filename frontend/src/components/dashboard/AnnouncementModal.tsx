@@ -21,7 +21,7 @@ export function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; o
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<User[]>("/users").then((res) => setAdvisors(res.data.filter((u) => u.role === "advisor")));
+    api.get<User[]>("/users").then((res) => setAdvisors(res.data.filter((u) => u.role === "advisor" && u.is_active)));
     api.get<AnnouncementOut[]>("/announcements").then((res) => {
       const current = res.data[0];
       if (!current) return;

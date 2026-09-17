@@ -265,7 +265,7 @@ async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | No
     week_start = today_start - timedelta(days=today_start.weekday())
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    advisors_stmt = select(User).where(User.role == UserRole.advisor).order_by(User.name)
+    advisors_stmt = select(User).where(User.role == UserRole.advisor, User.is_active.is_(True)).order_by(User.name)
     if owner_ids is not None:
         advisors_stmt = advisors_stmt.where(User.id.in_(owner_ids))
     advisors = (await db.execute(advisors_stmt)).scalars().all()
