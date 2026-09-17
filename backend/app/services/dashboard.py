@@ -138,15 +138,22 @@ async def get_collab_funnel(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> list[FunnelStage]:
-    """Each bucket is the exact count of cards CURRENTLY sitting in that
-    stage (a real Kanban-column snapshot) -- not "reached this stage or
-    beyond". A card moving forward is subtracted from its old stage's count
-    and added to the new one, same as the board itself.
+    """Each bucket is a cumulative "reached this stage or later" count, by
+    CURRENT position -- e.g. Negotiating's count includes every card
+    currently sitting at Negotiating, Locked, Product sent, ... all the way
+    to Live, not just the ones exactly at Negotiating right now. This is
+    what makes it read as an actual funnel (monotonically non-increasing,
+    with a meaningful "% from previous" under each bubble) instead of a
+    same-shape Kanban-column snapshot. A card that fell back to an earlier
+    stage, or was marked Dead Leads, is counted (or excluded) by where it
+    sits NOW, not by the furthest stage it ever reached historically --
+    consistent with Dead Leads already being excluded from this funnel
+    entirely (see COLLAB_FUNNEL_BUCKETS).
 
     date_from/date_to (when given) scope every bucket, including Ads live,
     to cards created in that window -- same created_at semantics the rest
     of the app already uses for "date filter" (My Creators' board/stats)."""
-    counts: list[int] = []
+    exact_counts: list[int] = []
     for _, _, stages in COLLAB_FUNNEL_BUCKETS:
         stmt = select(func.count(Collaboration.id)).where(Collaboration.stage.in_(stages))
         if owner_ids is not None:
@@ -156,7 +163,11 @@ async def get_collab_funnel(
         if date_to is not None:
             stmt = stmt.where(Collaboration.created_at < date_to)
         count = (await db.execute(stmt)).scalar_one()
-        counts.append(count)
+        exact_counts.append(count)
+
+    # Cumulative from here onward -- stage i's count is every card at stage
+    # i or any later pipeline stage, not just the ones exactly at i.
+    counts: list[int] = [sum(exact_counts[i:]) for i in range(len(exact_counts))]
 
     # Final funnel stage: Ads live -- Partnership Hub tickets verified
     # Closed & Live. Not a CollabStage value (every Closed & Live collab is
