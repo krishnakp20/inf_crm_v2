@@ -202,7 +202,7 @@ export default function MyCreators() {
         subtitle="One creator username can hold multiple collaboration cards without duplicating the creator record."
         actions={
           <div className="flex gap-2">
-            {user?.role === "advisor" && (
+            {(user?.role === "advisor" || user?.role === "admin") && (
               <button
                 onClick={() => setShowSetTarget(true)}
                 className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] px-4 py-2.5 text-xs font-bold text-ink hover:bg-surface"
@@ -408,7 +408,13 @@ export default function MyCreators() {
         />
       )}
 
-      {showSetTarget && <SetTargetDrawer products={products} onClose={() => setShowSetTarget(false)} />}
+      {showSetTarget && (
+        <SetTargetDrawer
+          products={products}
+          advisors={user?.role === "admin" ? activeAdvisors : undefined}
+          onClose={() => setShowSetTarget(false)}
+        />
+      )}
     </div>
   );
 }

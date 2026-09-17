@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useSort } from "../../hooks/useSort";
 import { api } from "../../lib/api";
 import { SortableHeader } from "../shared/SortableHeader";
-import type { Product, ProductTarget } from "../../lib/types";
+import type { Product, ProductTarget, User } from "../../lib/types";
 
 function getValue(t: ProductTarget, field: string): unknown {
   switch (field) {
@@ -24,11 +24,16 @@ function getValue(t: ProductTarget, field: string): unknown {
 
 export function SetTargetDrawer({
   products,
+  advisors,
   onClose,
 }: {
   products: Product[];
+  /** Admin only -- when given, shows a "Set target for" picker instead of
+   * implicitly managing the caller's own targets. */
+  advisors?: User[];
   onClose: () => void;
 }) {
+  const [selectedUserId, setSelectedUserId] = useState<number | "">(advisors?.[0]?.id ?? "");
   const [targets, setTargets] = useState<ProductTarget[]>([]);
   const { sorted: sortedTargets, field, direction, toggle } = useSort(targets, getValue);
   const [productId, setProductId] = useState<number | "">(products[0]?.id ?? "");
@@ -36,14 +41,27 @@ export function SetTargetDrawer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const managingOther = !!advisors;
+  const targetUserId = managingOther ? selectedUserId : undefined;
+
   function loadTargets() {
-    api.get<ProductTarget[]>("/product-targets").then((res) => setTargets(res.data));
+    if (managingOther && !targetUserId) {
+      setTargets([]);
+      return;
+    }
+    api
+      .get<ProductTarget[]>("/product-targets", { params: targetUserId ? { user_id: targetUserId } : undefined })
+      .then((res) => setTargets(res.data));
   }
 
-  useEffect(loadTargets, []);
+  useEffect(loadTargets, [targetUserId]);
 
   async function handleSave() {
     setError(null);
+    if (managingOther && !targetUserId) {
+      setError("Choose a user first.");
+      return;
+    }
     if (!productId || !monthlyTarget) {
       setError("Choose a product and a monthly target.");
       return;
@@ -53,6 +71,7 @@ export function SetTargetDrawer({
       await api.post("/product-targets", {
         product_id: productId,
         monthly_target: Number(monthlyTarget),
+        user_id: targetUserId || undefined,
       });
       setMonthlyTarget("");
       loadTargets();
@@ -75,7 +94,9 @@ export function SetTargetDrawer({
               <Target size={16} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-ink">Set my product targets</h2>
+              <h2 className="text-base font-semibold text-ink">
+                {managingOther ? "Set product targets for a user" : "Set my product targets"}
+              </h2>
               <p className="text-xs text-gray-500">Set a monthly target -- the weekly pace is worked out for you.</p>
             </div>
           </div>
@@ -85,6 +106,24 @@ export function SetTargetDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
+          {advisors && (
+            <div className="mb-5 rounded-card border border-[#e7e5e4] p-3">
+              <label className="mb-1 block text-xs font-medium text-gray-700">Set target for</label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(Number(e.target.value))}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select a user...</option>
+                {advisors.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="mb-5 rounded-card border border-[#e7e5e4] p-3">
             <p className="text-xs font-semibold text-ink">Synced product names</p>
             <p className="mt-0.5 text-[11px] text-gray-500">
@@ -117,7 +156,7 @@ export function SetTargetDrawer({
 
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || (managingOther && !selectedUserId)}
               className="mt-3 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save target"}
@@ -146,7 +185,7 @@ export function SetTargetDrawer({
               {targets.length === 0 && (
                 <tr>
                   <td colSpan={4} className="py-4 text-center text-gray-400">
-                    No targets set yet.
+                    {managingOther && !selectedUserId ? "Select a user above to see and set their targets." : "No targets set yet."}
                   </td>
                 </tr>
               )}
