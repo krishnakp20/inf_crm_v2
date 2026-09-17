@@ -1,15 +1,24 @@
 import { CalendarDays, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export type RangePreset = "all" | "today" | "7d" | "30d" | "custom";
+export type RangePreset = "today" | "yesterday" | "7d" | "30d" | "last_month" | "this_month" | "all" | "custom";
 
 const PRESET_LABELS: Record<RangePreset, string> = {
-  all: "All time",
   today: "Today",
+  yesterday: "Yesterday",
   "7d": "Last 7 days",
   "30d": "Last 30 days",
+  last_month: "Last month",
+  this_month: "This Month",
+  all: "Maximum",
   custom: "Custom range",
 };
+
+// "all" ("Maximum") stays a valid preset value (My Creators still defaults
+// to it, and rangeToDates still resolves it to an unbounded range) but is
+// deliberately not offered as a button here -- not part of the requested
+// preset list.
+const PRESET_BUTTONS: RangePreset[] = ["today", "yesterday", "7d", "30d", "last_month", "this_month"];
 
 export function DateRangePicker({
   preset,
@@ -60,7 +69,7 @@ export function DateRangePicker({
             align === "left" ? "left-0" : "right-0"
           }`}
         >
-          {(["all", "today", "7d", "30d"] as RangePreset[]).map((p) => (
+          {PRESET_BUTTONS.map((p) => (
             <button
               key={p}
               onClick={() => {

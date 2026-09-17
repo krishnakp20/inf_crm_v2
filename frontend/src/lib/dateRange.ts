@@ -6,9 +6,13 @@ export function rangeToDates(
   customTo: string
 ): { from?: string; to?: string } {
   const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (preset === "today") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { from: start.toISOString(), to: now.toISOString() };
+    return { from: todayStart.toISOString(), to: now.toISOString() };
+  }
+  if (preset === "yesterday") {
+    const start = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+    return { from: start.toISOString(), to: todayStart.toISOString() };
   }
   if (preset === "7d") {
     const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -17,6 +21,18 @@ export function rangeToDates(
   if (preset === "30d") {
     const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { from: start.toISOString(), to: now.toISOString() };
+  }
+  if (preset === "last_month") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  if (preset === "this_month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: start.toISOString(), to: now.toISOString() };
+  }
+  if (preset === "all") {
+    return {};
   }
   if (customFrom && customTo) {
     return { from: new Date(customFrom).toISOString(), to: new Date(`${customTo}T23:59:59`).toISOString() };
