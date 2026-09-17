@@ -54,9 +54,8 @@ export function AddCreatorModal({
       (m: { instagram_handle: string }) => m.instagram_handle.toLowerCase() === cleanHandle.toLowerCase()
     );
     if (exactMatch) {
-      setOwnershipWarning(
-        `@${exactMatch.instagram_handle} is already owned by ${ownerName(exactMatch.owner_id)} (${exactMatch.current_stage.replace(/_/g, " ")}).`
-      );
+      const stageSuffix = exactMatch.current_stage_label ? ` (${exactMatch.current_stage_label})` : "";
+      setOwnershipWarning(`@${exactMatch.instagram_handle} is already owned by ${ownerName(exactMatch.owner_id)}${stageSuffix}.`);
     } else {
       setOwnershipWarning(null);
     }

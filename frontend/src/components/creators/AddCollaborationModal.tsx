@@ -240,11 +240,6 @@ export function AddCollaborationModal({
         setSubmitting(false);
         return;
       }
-      if (showProductSent && !orderId.trim()) {
-        setError("Order ID is required for this stage.");
-        setSubmitting(false);
-        return;
-      }
       if (showLiveAttribution && !pocCode.trim()) {
         setError("POC code is required for this stage.");
         setSubmitting(false);
@@ -678,7 +673,7 @@ export function AddCollaborationModal({
               onChange={(e) => setTrackingLink(e.target.value)}
               className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
-            <label className="mb-1 block text-sm font-medium text-gray-700">Order ID · Required</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Order ID · Optional</label>
             <input
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}

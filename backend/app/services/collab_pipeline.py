@@ -161,7 +161,7 @@ _STAGE_FIELD_ADDITIONS: dict[CollabStage, list[str]] = {
     CollabStage.replied: ["creator_reply"],
     CollabStage.negotiating: ["commercial_quoted", "deal_type"],
     CollabStage.commercial_locked: ["commercial_amount", "content_type"],
-    CollabStage.product_sent: ["tracking_link", "order_id"],
+    CollabStage.product_sent: ["tracking_link"],
     CollabStage.live: ["live_attribution", "poc_code", "video_link", "language", "content_bucket"],
 }
 
