@@ -154,12 +154,12 @@ export default function Analytics() {
             liveVideoCount={data.live_video_count}
           />
           <BusinessImpactRow data={data.business_impact} showRevenue={data.show_revenue} />
+          {data.cost_efficiency && <CostEfficiencyPanel data={data.cost_efficiency} />}
+          <FunnelTrendChart funnel={data.funnel} />
           <PerformanceOverviewRow data={data.performance_overview} showCpv={data.show_cpv} />
           <ProductPerformanceTable rows={data.product_performance} showCostPerComment={data.show_cost_efficiency} />
-          {data.cost_efficiency && <CostEfficiencyPanel data={data.cost_efficiency} />}
           {data.commercial_locked && <CommercialLockedPanel data={data.commercial_locked} />}
           <WhatIsWorkingPanel data={data.what_is_working} />
-          <FunnelTrendChart funnel={data.funnel} />
           <PipelineVelocityPanel rows={data.pipeline_velocity} />
           <TargetVsAchievedPanel rows={data.target_vs_achieved} />
         </>
