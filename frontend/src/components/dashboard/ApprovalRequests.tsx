@@ -70,11 +70,13 @@ export function ApprovalRequests({
           <div key={req.id} className="rounded-card border border-[#e7e5e4] p-3">
             <div className="flex items-start gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-600">
-                {initials(req.creator_name)}
+                {initials(canApprove ? req.requested_by_name : req.creator_name)}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="truncate text-sm font-semibold text-ink">{req.creator_name}</div>
+                  <div className="truncate text-sm font-semibold text-ink">
+                    {canApprove ? req.requested_by_name : req.creator_name}
+                  </div>
                   <span
                     className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase ${PRIORITY_STYLES[req.priority]}`}
                   >
@@ -82,7 +84,7 @@ export function ApprovalRequests({
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {req.requested_by_name} · {req.collab_stage_label} · Sent to{" "}
+                  {canApprove ? req.creator_name : req.requested_by_name} · {req.collab_stage_label} · Sent to{" "}
                   {req.target === "admin" ? "Admin" : "Supervisor"}
                 </div>
                 <p className="mt-1.5 text-xs text-gray-600">{req.note}</p>
