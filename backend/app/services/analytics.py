@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,13 @@ from app.schemas.analytics import (
 
 # "Hit definition: a video with 500+ comments" -- fixed, not admin-configurable.
 HIT_COMMENT_THRESHOLD = 500
+
+# A safely-early stand-in for "no lower bound" wherever a caller wants a
+# cumulative ("as of this date") reading rather than a [start, end) window --
+# e.g. Analytics' "All time" preset, or Dashboard's Active reels KPI, which
+# both need "every video live by date X" rather than "video went live within
+# this exact window." Real data in this app starts well after this date.
+ALL_TIME_START = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 _HIT_CASE = case((Collaboration.comments_count >= HIT_COMMENT_THRESHOLD, 1), else_=0)
 

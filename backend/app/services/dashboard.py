@@ -27,6 +27,7 @@ from app.schemas.dashboard import (
     TargetRow,
 )
 from app.schemas.product import ProductPerformance
+from app.services.analytics import ALL_TIME_START, _scoped_live_collab_ids
 from app.services.collab_pipeline import (
     COLLAB_FUNNEL_BUCKETS,
     COLLAB_STAGE_LABELS,
@@ -68,15 +69,16 @@ async def get_kpis(
     range_end: datetime | None = None,
 ) -> KpiSummary:
     window_start = range_start or now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    window_end = range_end
+    window_end = range_end or now
 
     def _in_window(stmt, column):
-        stmt = stmt.where(column >= window_start)
-        if window_end is not None:
-            stmt = stmt.where(column < window_end)
-        return stmt
+        return stmt.where(column >= window_start, column < window_end)
 
-    total_creators_stmt = select(func.count(Creator.id))
+    # Total creators is cumulative AS OF the end of the selected range (every
+    # creator added up to that point), not always today's grand total
+    # regardless of which range is picked -- the +N badge underneath is this
+    # period's contribution to that running total, via new_in_range below.
+    total_creators_stmt = select(func.count(Creator.id)).where(Creator.created_at < window_end)
     new_in_range_stmt = _in_window(select(func.count(Creator.id)), Creator.created_at)
     if owner_ids is not None:
         total_creators_stmt = total_creators_stmt.where(Creator.owner_id.in_(owner_ids))
@@ -85,10 +87,18 @@ async def get_kpis(
     total_creators = (await db.execute(total_creators_stmt)).scalar_one()
     new_in_range = (await db.execute(new_in_range_stmt)).scalar_one()
 
-    # Active reels = videos actually in the Live stage (not "every non-dead
-    # card" -- a New Lead or a card still in Negotiation isn't a reel yet).
-    active_reels_stmt = select(func.count(Collaboration.id)).where(Collaboration.stage == CollabStage.live)
-    reels_added_in_range_stmt = _in_window(select(func.count(Collaboration.id)), Collaboration.created_at)
+    # Active reels = videos that had gone Live by the end of the selected
+    # range, cumulative by effective live date (video_live_date, or first
+    # CollabStageEvent.to_stage==live -- same rule and helper Analytics uses,
+    # see _scoped_live_collab_ids), not "every collab currently sitting at
+    # stage=Live" -- that count never changed with the date range at all.
+    # reels_added_in_range is the same helper narrowed to just this window
+    # (by live date, not by when the collaboration record was created --
+    # a brand-new lead isn't a "reel added" until it actually goes live).
+    active_reels = len(await _scoped_live_collab_ids(db, owner_ids, ALL_TIME_START, window_end))
+    reels_added_in_range = len(await _scoped_live_collab_ids(db, owner_ids, window_start, window_end))
+    reels_growth_pct = (reels_added_in_range / active_reels * 100) if active_reels else 0.0
+
     # Partnership Pending / Ads Live both come from Partnership Hub ticket
     # status, not the collaboration's Kanban stage -- "Pending" mirrors the
     # Hub's Open tab, "Ads Live" mirrors its Closed & Live tab. A freshly
@@ -106,14 +116,9 @@ async def get_kpis(
         .where(PartnershipTicket.ticket_status == TicketStatus.closed_and_live)
     )
     if owner_ids is not None:
-        active_reels_stmt = active_reels_stmt.where(Collaboration.owner_id.in_(owner_ids))
-        reels_added_in_range_stmt = reels_added_in_range_stmt.where(Collaboration.owner_id.in_(owner_ids))
         partnership_pending_stmt = partnership_pending_stmt.where(Collaboration.owner_id.in_(owner_ids))
         ads_live_stmt = ads_live_stmt.where(Collaboration.owner_id.in_(owner_ids))
 
-    active_reels = (await db.execute(active_reels_stmt)).scalar_one()
-    reels_added_in_range = (await db.execute(reels_added_in_range_stmt)).scalar_one()
-    reels_growth_pct = (reels_added_in_range / active_reels * 100) if active_reels else 0.0
     partnership_pending = (await db.execute(partnership_pending_stmt)).scalar_one()
     ads_live = (await db.execute(ads_live_stmt)).scalar_one()
 

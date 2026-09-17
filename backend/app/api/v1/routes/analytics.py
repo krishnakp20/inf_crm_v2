@@ -15,6 +15,7 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.analytics import AnalyticsResponse
 from app.services.analytics import (
+    ALL_TIME_START,
     _scoped_live_collab_ids,
     _scoped_locked_collab_ids,
     business_impact,
@@ -31,15 +32,6 @@ from app.services.analytics import (
 from app.services.dashboard import get_collab_funnel
 
 router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_analytics_access)])
-
-# Substitutes for date_from when the frontend's "All time" preset is picked --
-# it deliberately sends no date_from/date_to (see rangeToDates()) rather than
-# a real lower bound, and every other preset ("today"/"7d"/"30d"/custom)
-# always sends an explicit one. So an absent date_from can only mean "All
-# time" was chosen, never a caller accidentally omitting it -- safe to treat
-# as "no lower bound" instead of quietly falling back to the last 30 days,
-# which used to make "All time" behave identically to the 30-day default.
-_ALL_TIME_START = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 
 async def _resolve_scope(
@@ -76,7 +68,7 @@ async def get_analytics(
 ) -> AnalyticsResponse:
     now = datetime.now(timezone.utc)
     range_end = date_to or now
-    range_start = date_from or _ALL_TIME_START
+    range_start = date_from or ALL_TIME_START
 
     owner_ids, scope_label = await _resolve_scope(db, user, scope, user_id)
 

@@ -11,7 +11,7 @@ import { Targets } from "../components/dashboard/Targets";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
-import { rangeToDates } from "../lib/dateRange";
+import { rangePhrase, rangeToDates } from "../lib/dateRange";
 import { longWeekdayDate, timeBasedGreeting } from "../lib/format";
 import type { DashboardResponse } from "../lib/types";
 
@@ -146,7 +146,7 @@ export default function Dashboard() {
           tone="indigo"
           label="Total creators"
           value={kpis.total_creators.toLocaleString()}
-          meta={`+${kpis.new_this_month} this month`}
+          meta={`+${kpis.new_this_month} ${rangePhrase(rangePreset)}`}
           subtext="Across the master database"
         />
         <KpiCard
@@ -155,7 +155,7 @@ export default function Dashboard() {
           label="Active reels"
           value={kpis.active_reels.toLocaleString()}
           meta={`+${kpis.active_reels_growth_pct}%`}
-          subtext={`${kpis.active_reels_added_this_month} reels added this month`}
+          subtext={`${kpis.active_reels_added_this_month} reels added ${rangePhrase(rangePreset)}`}
         />
         <KpiCard
           icon={Calendar}

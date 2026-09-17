@@ -40,6 +40,24 @@ export function rangeToDates(
   return {};
 }
 
+const RANGE_PHRASES: Record<RangePreset, string> = {
+  today: "today",
+  yesterday: "yesterday",
+  "7d": "in the last 7 days",
+  "30d": "in the last 30 days",
+  last_month: "last month",
+  this_month: "this month",
+  all: "all time",
+  custom: "in this range",
+};
+
+/** Natural-language phrasing for the currently selected preset, e.g. for a
+ * "+N {phrase}" KPI badge -- so the label actually matches whichever range
+ * is picked instead of always reading "this month" regardless of it. */
+export function rangePhrase(preset: RangePreset): string {
+  return RANGE_PHRASES[preset];
+}
+
 /** Plain YYYY-MM-DD in the browser's local timezone, for endpoints that take
  * a `date` rather than a full datetime (re-parses so the calendar date is
  * read back correctly regardless of the ISO string's UTC offset). */
