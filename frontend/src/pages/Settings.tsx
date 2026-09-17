@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { ContentBucketsPanel } from "../components/settings/ContentBucketsPanel";
+import { ContentCategoryPanel } from "../components/settings/ContentCategoryPanel";
 import { CreatorCategoryPanel } from "../components/settings/CreatorCategoryPanel";
 import { LanguagesPanel } from "../components/settings/LanguagesPanel";
 import { MetricUploadPanel } from "../components/settings/MetricUploadPanel";
@@ -14,6 +15,7 @@ type Panel =
   | "products"
   | "languages"
   | "content-buckets"
+  | "content-category"
   | "creator-category"
   | "metric-upload";
 
@@ -22,6 +24,7 @@ const PANELS: { key: Panel; label: string; hint: string }[] = [
   { key: "products", label: "Products", hint: "Shared product master" },
   { key: "languages", label: "Language", hint: "Approved language list" },
   { key: "content-buckets", label: "Content buckets", hint: "Approved content types" },
+  { key: "content-category", label: "Content category", hint: "Niche list for the Category field" },
   { key: "creator-category", label: "Creator category", hint: "Tiers by follower count" },
   { key: "metric-upload", label: "Upload metrics", hint: "Sync Live video results" },
 ];
@@ -63,6 +66,8 @@ export default function Settings() {
             <LanguagesPanel />
           ) : panel === "content-buckets" ? (
             <ContentBucketsPanel />
+          ) : panel === "content-category" ? (
+            <ContentCategoryPanel />
           ) : panel === "creator-category" ? (
             <CreatorCategoryPanel />
           ) : (

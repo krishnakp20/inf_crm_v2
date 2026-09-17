@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { PLATFORM_OPTIONS } from "../../lib/campaign-stages";
-import type { ContentBucket, CreatorCategoryTier, Language, Platform, Product, User } from "../../lib/types";
+import type { ContentBucket, ContentCategory, Language, Platform, Product, User } from "../../lib/types";
 
 export function PartnershipFilters({
   search,
@@ -41,7 +41,7 @@ export function PartnershipFilters({
   users: User[];
   contentBuckets: ContentBucket[];
   languages: Language[];
-  categories: CreatorCategoryTier[];
+  categories: ContentCategory[];
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2.5">

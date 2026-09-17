@@ -8,6 +8,7 @@ from app.api.v1.routes import (
     campaigns,
     collaborations,
     content_buckets,
+    content_categories,
     creator_category_tiers,
     creators,
     dashboard,
@@ -30,6 +31,7 @@ api_router.include_router(announcements.router)
 api_router.include_router(products.router)
 api_router.include_router(languages.router)
 api_router.include_router(content_buckets.router)
+api_router.include_router(content_categories.router)
 api_router.include_router(creator_category_tiers.router)
 api_router.include_router(product_targets.router)
 api_router.include_router(collaborations.router)

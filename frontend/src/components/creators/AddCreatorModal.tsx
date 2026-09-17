@@ -1,7 +1,7 @@
 import { Plus, ShieldCheck, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import type { CreatorStage, User } from "../../lib/types";
+import type { ContentCategory, CreatorStage, User } from "../../lib/types";
 
 export function AddCreatorModal({
   users,
@@ -28,10 +28,15 @@ export function AddCreatorModal({
     defaultOwnerId ?? (canAssignOwner ? users[0]?.id ?? currentUserId : currentUserId)
   );
   const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<ContentCategory[]>([]);
   const [followersCount, setFollowersCount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [ownershipWarning, setOwnershipWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api.get<ContentCategory[]>("/content-categories").then((res) => setCategories(res.data));
+  }, []);
 
   const ownerName = (ownerIdToFind: number) =>
     users.find((u) => u.id === ownerIdToFind)?.name ?? "another advisor";
@@ -68,7 +73,7 @@ export function AddCreatorModal({
         phone: phone || null,
         alternate_phone: alternatePhone || null,
         followers_count: followersCount ? Number(followersCount) : 0,
-        category: category || "Beauty",
+        category: category || "",
         owner_id: canAssignOwner ? ownerId : currentUserId,
       });
       if (initialStage && initialStage !== "new_lead") {
@@ -190,12 +195,18 @@ export function AddCreatorModal({
           )}
 
           <label className="mb-1 block text-sm font-medium text-gray-700">Category · Optional</label>
-          <input
+          <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="Beauty"
             className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
+          >
+            <option value="">Select...</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
 
           <label className="mb-1 block text-sm font-medium text-gray-700">Followers · Optional</label>
           <input

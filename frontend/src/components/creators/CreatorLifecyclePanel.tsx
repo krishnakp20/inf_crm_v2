@@ -22,6 +22,7 @@ import { SortableHeader } from "../shared/SortableHeader";
 import type {
   ActivityLogEntry,
   CommercialHistoryRow,
+  ContentCategory,
   CreatorDetail,
   CreatorLifecycle,
   User,
@@ -90,7 +91,6 @@ const TIMELINE_ICONS: Record<string, typeof ArrowRight> = {
   added: FileText,
 };
 
-const CATEGORIES = ["Beauty", "Lifestyle", "Makeup", "Skincare", "Fitness", "Fashion"];
 const STATUS_OPTIONS = [
   { label: "High", value: "priority" },
   { label: "Medium", value: "active" },
@@ -128,6 +128,7 @@ export function CreatorLifecyclePanel({
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [advisors, setAdvisors] = useState<User[]>([]);
+  const [categories, setCategories] = useState<ContentCategory[]>([]);
   const [transferTargetId, setTransferTargetId] = useState<number | "">("");
   const [transferring, setTransferring] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -169,6 +170,10 @@ export function CreatorLifecyclePanel({
   function loadDetail() {
     api.get<CreatorDetail>(`/creators/${creatorId}/detail`).then((res) => setDetail(res.data));
   }
+
+  useEffect(() => {
+    api.get<ContentCategory[]>("/content-categories").then((res) => setCategories(res.data));
+  }, []);
 
   useEffect(() => {
     loadLifecycle();
@@ -442,11 +447,15 @@ export function CreatorLifecyclePanel({
                 onChange={(e) => setEditCategory(e.target.value)}
                 className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                <option value="">Select...</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
                   </option>
                 ))}
+                {editCategory && !categories.some((c) => c.name === editCategory) && (
+                  <option value={editCategory}>{editCategory} (not in list)</option>
+                )}
               </select>
               <label className="mb-1 block text-sm font-medium text-gray-700">Priority</label>
               <select

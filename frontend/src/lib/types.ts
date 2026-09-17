@@ -70,6 +70,12 @@ export interface ContentBucket {
   created_at: string;
 }
 
+export interface ContentCategory {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
 export interface CreatorCategoryTier {
   id: number;
   name: string;

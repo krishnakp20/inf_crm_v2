@@ -12,7 +12,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import type {
   ContentBucket,
-  CreatorCategoryTier,
+  ContentCategory,
   Language,
   Platform,
   Product,
@@ -42,7 +42,7 @@ export default function PartnershipHub() {
   const [users, setUsers] = useState<User[]>([]);
   const [contentBuckets, setContentBuckets] = useState<ContentBucket[]>([]);
   const [languages, setLanguages] = useState<Language[]>([]);
-  const [categories, setCategories] = useState<CreatorCategoryTier[]>([]);
+  const [categories, setCategories] = useState<ContentCategory[]>([]);
 
   const [search, setSearch] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -71,7 +71,7 @@ export default function PartnershipHub() {
     api.get<User[]>("/users").then((res) => setUsers(res.data));
     api.get<ContentBucket[]>("/content-buckets").then((res) => setContentBuckets(res.data));
     api.get<Language[]>("/languages").then((res) => setLanguages(res.data));
-    api.get<CreatorCategoryTier[]>("/creator-category-tiers").then((res) => setCategories(res.data));
+    api.get<ContentCategory[]>("/content-categories").then((res) => setCategories(res.data));
   }, []);
 
   function loadOverview() {
