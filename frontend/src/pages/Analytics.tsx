@@ -10,6 +10,8 @@ import { PerformanceOverviewRow } from "../components/analytics/PerformanceOverv
 import { PipelineVelocityPanel } from "../components/analytics/PipelineVelocityPanel";
 import { ProductPerformanceTable } from "../components/analytics/ProductPerformanceTable";
 import { TargetVsAchievedPanel } from "../components/analytics/TargetVsAchievedPanel";
+import { UserDetailedTable } from "../components/analytics/UserDetailedTable";
+import { UserSummaryTable } from "../components/analytics/UserSummaryTable";
 import { WhatIsWorkingPanel } from "../components/analytics/WhatIsWorkingPanel";
 import { DateRangePicker, type RangePreset } from "../components/dashboard/DateRangePicker";
 import { Topbar } from "../components/layout/Topbar";
@@ -162,6 +164,12 @@ export default function Analytics() {
           <WhatIsWorkingPanel data={data.what_is_working} />
           <PipelineVelocityPanel rows={data.pipeline_velocity} />
           <TargetVsAchievedPanel rows={data.target_vs_achieved} />
+          <UserSummaryTable rows={data.user_breakdown} />
+          <UserDetailedTable
+            rows={data.user_breakdown}
+            totalAvgCreatorCost={data.cost_efficiency?.avg_creator_cost ?? null}
+            totalHitRatePct={data.performance_overview.hit_rate_pct}
+          />
         </>
       )}
     </div>

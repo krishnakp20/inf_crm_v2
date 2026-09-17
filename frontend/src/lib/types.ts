@@ -715,6 +715,29 @@ export interface AnalyticsTargetRow {
   pct: number;
 }
 
+export interface AnalyticsUserBreakdownRow {
+  user_id: number;
+  user_name: string;
+  new_lead: number;
+  replied: number;
+  negotiating: number;
+  locked: number;
+  product_sent: number;
+  product_delivered: number;
+  first_draft: number;
+  approved: number;
+  live: number;
+  dead_lead: number;
+  total: number;
+  revenue: number | null;
+  avg_creator_cost: number | null;
+  ads_live: number;
+  hit_rate_pct: number;
+  cost_per_comment: number | null;
+  meta_roas: number | null;
+  google_roas: number | null;
+}
+
 export interface AnalyticsResponse {
   scope_label: string;
   date_range_label: string;
@@ -727,6 +750,7 @@ export interface AnalyticsResponse {
   what_is_working: AnalyticsWhatIsWorking;
   pipeline_velocity: AnalyticsPipelineVelocityRow[];
   target_vs_achieved: AnalyticsTargetRow[];
+  user_breakdown: AnalyticsUserBreakdownRow[];
   funnel: FunnelStage[];
   show_cpv: boolean;
   show_cost_efficiency: boolean;

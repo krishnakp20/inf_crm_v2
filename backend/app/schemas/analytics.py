@@ -71,6 +71,37 @@ class AnalyticsTargetRow(BaseModel):
     pct: float
 
 
+class AnalyticsUserBreakdownRow(BaseModel):
+    user_id: int
+    user_name: str
+    # Current stage snapshot -- each collaboration counted exactly once, in
+    # whichever stage it's sitting in right now (not date-range scoped,
+    # not cumulative) -- new_lead + ... + dead_lead always sums to total.
+    new_lead: int
+    replied: int
+    negotiating: int
+    locked: int  # CollabStage.commercial_locked
+    product_sent: int
+    product_delivered: int
+    first_draft: int
+    approved: int
+    live: int
+    dead_lead: int
+    total: int
+    # Business metrics -- scoped to the selected Analytics date range
+    # except revenue/ads_live, which (like Business impact above) are
+    # always all-time.
+    revenue: float | None
+    avg_creator_cost: float | None
+    ads_live: int
+    hit_rate_pct: float
+    cost_per_comment: float | None
+    # Not tracked anywhere yet -- no per-ad-platform revenue/spend split
+    # exists, only one generic ROAS. Always null until that's built.
+    meta_roas: float | None
+    google_roas: float | None
+
+
 class AnalyticsResponse(BaseModel):
     scope_label: str
     date_range_label: str
@@ -83,6 +114,7 @@ class AnalyticsResponse(BaseModel):
     what_is_working: AnalyticsWhatIsWorking
     pipeline_velocity: list[AnalyticsPipelineVelocityRow]
     target_vs_achieved: list[AnalyticsTargetRow]
+    user_breakdown: list[AnalyticsUserBreakdownRow]
     funnel: list[FunnelStage]
     show_cpv: bool
     show_cost_efficiency: bool

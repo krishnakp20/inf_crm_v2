@@ -21,6 +21,7 @@ from app.schemas.analytics import (
     AnalyticsPipelineVelocityRow,
     AnalyticsProductPerformanceRow,
     AnalyticsTargetRow,
+    AnalyticsUserBreakdownRow,
     AnalyticsWhatIsWorking,
     AnalyticsWhatIsWorkingRow,
 )
@@ -519,6 +520,133 @@ async def target_vs_achieved(
                 credit=round(credit, 2),
                 target=round(target, 2),
                 pct=round(credit / target * 100, 1) if target else 0.0,
+            )
+        )
+    return rows
+
+
+_STAGE_FIELD_NAMES: dict[CollabStage, str] = {
+    CollabStage.new_lead: "new_lead",
+    CollabStage.replied: "replied",
+    CollabStage.negotiating: "negotiating",
+    CollabStage.commercial_locked: "locked",
+    CollabStage.product_sent: "product_sent",
+    CollabStage.product_delivered: "product_delivered",
+    CollabStage.first_draft: "first_draft",
+    CollabStage.approved: "approved",
+    CollabStage.live: "live",
+    CollabStage.dead_leads: "dead_lead",
+}
+
+
+async def user_breakdown(
+    db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
+) -> list[AnalyticsUserBreakdownRow]:
+    """Per-advisor pipeline snapshot + business metrics, for the "Summary"
+    and "Detailed view" tables. Stage columns are a current-stage snapshot
+    (each collaboration counted exactly once, in whatever stage it's at
+    right now) so they always sum to `total` -- not the cumulative
+    "reached this stage or later" reading get_collab_funnel uses, which
+    wouldn't sum meaningfully to a total. Revenue/ads_live are all-time
+    like Business impact above; avg_creator_cost/hit_rate/cost_per_comment
+    respect the selected date range like Cost efficiency/Performance
+    overview, via the same effective-live-date scoping
+    (_scoped_live_collab_ids). Meta/Google ROAS are always null -- no
+    per-platform revenue/spend split is tracked anywhere yet."""
+    if owner_ids is not None:
+        users_stmt = select(User.id, User.name).where(User.id.in_(owner_ids)).order_by(User.name)
+    else:
+        # Marketer's unrestricted scope: every active advisor, the natural
+        # collab-owning population -- not "no one," and not tied to who
+        # happens to have a target set (unlike target_vs_achieved, this
+        # table isn't about targets).
+        users_stmt = (
+            select(User.id, User.name)
+            .where(User.role == UserRole.advisor, User.is_active.is_(True))
+            .order_by(User.name)
+        )
+    users = (await db.execute(users_stmt)).all()
+    if not users:
+        return []
+    user_ids = [u[0] for u in users]
+
+    stage_stmt = (
+        select(Collaboration.owner_id, Collaboration.stage, func.count(Collaboration.id))
+        .where(Collaboration.owner_id.in_(user_ids))
+        .group_by(Collaboration.owner_id, Collaboration.stage)
+    )
+    stage_counts: dict[int, dict[CollabStage, int]] = defaultdict(dict)
+    for owner_id, stage, count in (await db.execute(stage_stmt)).all():
+        stage_counts[owner_id][stage] = count
+
+    # Ads live + revenue -- all-time, same convention as business_impact.
+    ads_live_stmt = (
+        select(Collaboration.owner_id, func.count(PartnershipTicket.id))
+        .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
+        .where(
+            PartnershipTicket.ticket_status == TicketStatus.closed_and_live,
+            Collaboration.owner_id.in_(user_ids),
+        )
+        .group_by(Collaboration.owner_id)
+    )
+    ads_live_by_owner = {owner_id: count for owner_id, count in (await db.execute(ads_live_stmt)).all()}
+
+    revenue_stmt = (
+        select(Collaboration.owner_id, func.coalesce(func.sum(Collaboration.revenue), 0))
+        .where(Collaboration.stage == CollabStage.live, Collaboration.owner_id.in_(user_ids))
+        .group_by(Collaboration.owner_id)
+    )
+    revenue_by_owner = {owner_id: float(total) for owner_id, total in (await db.execute(revenue_stmt)).all()}
+
+    # Cost/hit-rate/cost-per-comment -- date-range scoped, via the same
+    # effective-live-date rule as the rest of Analytics. One query for the
+    # whole scope's matching collab ids, one more grouped by owner for the
+    # actual sums -- avoids an N-query loop over every advisor.
+    range_live_ids = await _scoped_live_collab_ids(db, user_ids, range_start, range_end)
+    cost_by_owner: dict[int, tuple[float, int, int, int]] = {}
+    if range_live_ids:
+        cost_stmt = (
+            select(
+                Collaboration.owner_id,
+                func.coalesce(func.sum(Collaboration.commercial_amount), 0),
+                func.count(Collaboration.id),
+                func.coalesce(func.sum(Collaboration.comments_count), 0),
+                func.coalesce(func.sum(_HIT_CASE), 0),
+            )
+            .where(Collaboration.id.in_(range_live_ids))
+            .group_by(Collaboration.owner_id)
+        )
+        for owner_id, cost, live_count, comments, hits in (await db.execute(cost_stmt)).all():
+            cost_by_owner[owner_id] = (float(cost), live_count, int(comments), int(hits))
+
+    rows: list[AnalyticsUserBreakdownRow] = []
+    for user_id, user_name in users:
+        counts = stage_counts.get(user_id, {})
+        by_field = {field: counts.get(stage, 0) for stage, field in _STAGE_FIELD_NAMES.items()}
+        cost, live_count, comments, hits = cost_by_owner.get(user_id, (0.0, 0, 0, 0))
+        revenue = revenue_by_owner.get(user_id, 0.0)
+        rows.append(
+            AnalyticsUserBreakdownRow(
+                user_id=user_id,
+                user_name=user_name,
+                new_lead=by_field["new_lead"],
+                replied=by_field["replied"],
+                negotiating=by_field["negotiating"],
+                locked=by_field["locked"],
+                product_sent=by_field["product_sent"],
+                product_delivered=by_field["product_delivered"],
+                first_draft=by_field["first_draft"],
+                approved=by_field["approved"],
+                live=by_field["live"],
+                dead_lead=by_field["dead_lead"],
+                total=sum(counts.values()),
+                revenue=revenue if revenue else None,
+                avg_creator_cost=round(cost / live_count, 2) if live_count else None,
+                ads_live=ads_live_by_owner.get(user_id, 0),
+                hit_rate_pct=round(hits / live_count * 100, 1) if live_count else 0.0,
+                cost_per_comment=round(cost / comments, 2) if comments else None,
+                meta_roas=None,
+                google_roas=None,
             )
         )
     return rows

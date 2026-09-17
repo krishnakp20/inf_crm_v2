@@ -27,6 +27,7 @@ from app.services.analytics import (
     show_cost_data,
     show_revenue_data,
     target_vs_achieved,
+    user_breakdown,
     what_is_working,
 )
 from app.services.dashboard import get_collab_funnel
@@ -86,6 +87,14 @@ async def get_analytics(
         overview.cpv = None
         overview.cost_per_comment = None
 
+    breakdown = await user_breakdown(db, owner_ids, range_start, range_end)
+    for row in breakdown:
+        if not show_cost:
+            row.avg_creator_cost = None
+            row.cost_per_comment = None
+        if not show_revenue:
+            row.revenue = None
+
     return AnalyticsResponse(
         scope_label=scope_label,
         date_range_label=(
@@ -106,6 +115,7 @@ async def get_analytics(
         what_is_working=await what_is_working(db, live_ids),
         pipeline_velocity=await pipeline_velocity(db, owner_ids, range_start, range_end),
         target_vs_achieved=await target_vs_achieved(db, owner_ids, range_start, range_end),
+        user_breakdown=breakdown,
         funnel=await get_collab_funnel(db, owner_ids, range_start, range_end),
         show_cpv=show_cost,
         show_cost_efficiency=show_cost,
