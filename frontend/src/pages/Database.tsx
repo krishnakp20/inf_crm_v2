@@ -6,6 +6,7 @@ import { ArchivedLeadsTable } from "../components/creators/ArchivedLeadsTable";
 import { CreatorLifecyclePanel } from "../components/creators/CreatorLifecyclePanel";
 import { CreatorTable } from "../components/creators/CreatorTable";
 import { OwnershipCheck } from "../components/creators/OwnershipCheck";
+import { UnassignedPoolTable } from "../components/creators/UnassignedPoolTable";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
@@ -35,11 +36,11 @@ export default function Database() {
   const [searchParams] = useSearchParams();
   const [creators, setCreators] = useState<CreatorTableRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [tabCounts, setTabCounts] = useState({ all: 0, archived: 0 });
+  const [tabCounts, setTabCounts] = useState({ all: 0, archived: 0, unassigned: 0 });
   const [users, setUsers] = useState<User[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [ownerId, setOwnerId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"all" | "archived">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "archived" | "unassigned">("all");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
@@ -83,7 +84,8 @@ export default function Database() {
       sort_by: sortBy,
       sort_dir: sortDir,
     };
-    if (ownerId) params.owner_id = ownerId;
+    if (activeTab === "unassigned") params.pool = true;
+    if (ownerId && activeTab !== "unassigned") params.owner_id = ownerId;
     if (search) params.search = search;
 
     api.get("/creators/table", { params }).then((res) => {
@@ -99,8 +101,9 @@ export default function Database() {
     Promise.all([
       api.get("/creators/table", { params: { ...base, is_archived: false } }),
       api.get("/creators/table", { params: { ...base, is_archived: true } }),
-    ]).then(([allRes, archivedRes]) => {
-      setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total });
+      api.get("/creators/table", { params: { limit: 1, offset: 0, pool: true, search: search || undefined } }),
+    ]).then(([allRes, archivedRes, unassignedRes]) => {
+      setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total, unassigned: unassignedRes.data.total });
     });
   }
 
@@ -386,8 +389,17 @@ export default function Database() {
           >
             Archived leads <span className="text-gray-400">{tabCounts.archived}</span>
           </button>
+          <button
+            onClick={() => {
+              setActiveTab("unassigned");
+              setOffset(0);
+            }}
+            className={`text-[10px] font-bold ${activeTab === "unassigned" ? "text-brand-600" : "text-[#77727d]"}`}
+          >
+            Unassigned pool <span className="text-gray-400">{tabCounts.unassigned}</span>
+          </button>
         </div>
-        {(user?.role === "admin" || user?.role === "supervisor") && (
+        {(user?.role === "admin" || user?.role === "supervisor") && activeTab !== "unassigned" && (
           <label className="flex items-center gap-2">
             <span className="text-[8px] text-[#918d97]">Filter by user</span>
             <select
@@ -484,6 +496,18 @@ export default function Database() {
           onPageChange={setOffset}
           onView={setDetailCreatorId}
           onAssigned={refresh}
+        />
+      ) : activeTab === "unassigned" ? (
+        <UnassignedPoolTable
+          creators={creators}
+          total={total}
+          limit={pageSize}
+          offset={offset}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortChange={handleSortChange}
+          onPageChange={setOffset}
+          onClaimed={refresh}
         />
       ) : (
         <CreatorTable

@@ -30,7 +30,7 @@ export default function Team() {
     creator_count: number;
     active_collab_count: number;
   } | null>(null);
-  const [deactivationAction, setDeactivationAction] = useState<"archive" | "reassign">("reassign");
+  const [deactivationAction, setDeactivationAction] = useState<"archive" | "reassign" | "unassign">("reassign");
   const [archiveReason, setArchiveReason] = useState("");
   const [reassignTargetId, setReassignTargetId] = useState<string>("");
   const [deactivating, setDeactivating] = useState(false);
@@ -136,6 +136,8 @@ export default function Team() {
         reason: deactivationAction === "archive" ? archiveReason.trim() : undefined,
         new_owner_id: deactivationAction === "reassign" ? Number(reassignTargetId) : undefined,
       });
+      // unassign needs neither reason nor new_owner_id -- backend resolves
+      // the fixed Unassigned placeholder account itself.
       setDeactivationTarget(null);
       setDeactivationImpact(null);
       loadUsers();
@@ -358,7 +360,7 @@ export default function Team() {
               . Choose what happens to them before deactivating.
             </p>
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setDeactivationAction("reassign")}
@@ -368,6 +370,16 @@ export default function Team() {
               >
                 <div className="font-semibold text-ink">Reassign</div>
                 <div className="text-gray-500">Hand everything to another advisor</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeactivationAction("unassign")}
+                className={`rounded-lg border px-3 py-2 text-left text-xs ${
+                  deactivationAction === "unassign" ? "border-brand-200 bg-brand-50" : "border-[#e7e5e4]"
+                }`}
+              >
+                <div className="font-semibold text-ink">Revoke ownership</div>
+                <div className="text-gray-500">Anyone can claim them from the pool</div>
               </button>
               <button
                 type="button"
@@ -400,6 +412,16 @@ export default function Team() {
                 </select>
                 <p className="mt-1 text-[11px] text-gray-400">
                   Moves both their creator records and their active Kanban cards.
+                </p>
+              </div>
+            )}
+
+            {deactivationAction === "unassign" && (
+              <div className="mt-3">
+                <p className="text-[11px] text-gray-400">
+                  Their creators and active Kanban cards move to an Unassigned pool -- any active user can claim one
+                  for themselves from the Database page. Already-archived leads of theirs are unarchived so they're
+                  visible and claimable too.
                 </p>
               </div>
             )}

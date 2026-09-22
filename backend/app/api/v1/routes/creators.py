@@ -7,10 +7,11 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from openpyxl import load_workbook
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.constants import UNASSIGNED_OWNER_EMAIL
 from app.core.deps import (
     get_current_user,
     owner_scope_filter,
@@ -235,6 +236,7 @@ async def list_creators_table(
     owner_id: int | None = None,
     search: str | None = None,
     is_archived: bool = False,
+    pool: bool = False,
     sort_by: str = Query("created_at"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(10, le=5000),
@@ -244,13 +246,22 @@ async def list_creators_table(
 ) -> CreatorTableResponse:
     if sort_by not in SORTABLE_FIELDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
-    owner_ids = await owner_scope_filter(user, db, owner_id)
-    # Archived leads are visible in this list to every role (scoped to their
-    # normal owner_ids like any other row here) -- opening one is what's
-    # admin-gated, enforced separately in _get_creator_or_404.
     stmt = select(Creator).where(Creator.is_archived == is_archived)
-    if owner_ids is not None:
-        stmt = stmt.where(Creator.owner_id.in_(owner_ids))
+    if pool:
+        # The Unassigned pool (creators left ownerless by "Revoke ownership"
+        # on deactivation) is deliberately visible to every role, bypassing
+        # the normal owner scope -- that's the whole point of the pool.
+        unassigned = (
+            await db.execute(select(User).where(User.email == UNASSIGNED_OWNER_EMAIL))
+        ).scalar_one_or_none()
+        stmt = stmt.where(Creator.owner_id == (unassigned.id if unassigned else -1))
+    else:
+        owner_ids = await owner_scope_filter(user, db, owner_id)
+        # Archived leads are visible in this list to every role (scoped to
+        # their normal owner_ids like any other row here) -- opening one is
+        # what's admin-gated, enforced separately in _get_creator_or_404.
+        if owner_ids is not None:
+            stmt = stmt.where(Creator.owner_id.in_(owner_ids))
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
@@ -669,6 +680,49 @@ async def transfer_ownership(
             event_type=OwnershipEventType.transferred,
             actor_id=user.id,
         )
+    )
+    await db.commit()
+    await db.refresh(creator)
+    return creator
+
+
+@router.post("/{creator_id}/claim", response_model=CreatorOut)
+async def claim_creator(
+    creator_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Creator:
+    # Self-service pickup of a lead left in the Unassigned pool by a
+    # deactivated user's "revoke ownership" option. Bypasses
+    # _get_creator_or_404's owner-scoping on purpose -- that helper would
+    # 404 a creator the caller doesn't already own, which is exactly the
+    # case here.
+    creator = await db.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
+    unassigned = (await db.execute(select(User).where(User.email == UNASSIGNED_OWNER_EMAIL))).scalar_one_or_none()
+    if unassigned is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unassigned placeholder account is missing."
+        )
+    if creator.owner_id != unassigned.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This lead has already been claimed.")
+
+    now = datetime.now(timezone.utc)
+    creator.owner_id = user.id
+    creator.last_activity_at = now
+    db.add(
+        OwnershipEvent(
+            creator_id=creator.id,
+            user_id=user.id,
+            event_type=OwnershipEventType.assigned,
+            actor_id=user.id,
+        )
+    )
+    await db.execute(
+        update(Collaboration)
+        .where(Collaboration.creator_id == creator.id, Collaboration.owner_id == unassigned.id)
+        .values(owner_id=user.id, last_activity_at=now)
     )
     await db.commit()
     await db.refresh(creator)

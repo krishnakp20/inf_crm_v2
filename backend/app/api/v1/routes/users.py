@@ -5,6 +5,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.constants import UNASSIGNED_OWNER_EMAIL
 from app.core.deps import get_current_user, require_admin
 from app.core.security import hash_password, verify_password
 from app.db.models.collaboration import Collaboration
@@ -241,6 +242,33 @@ async def deactivate_user(
             update(Collaboration)
             .where(Collaboration.owner_id == user_id)
             .values(owner_id=new_owner.id, last_activity_at=now)
+        )
+    elif payload.action == "unassign":
+        unassigned = (
+            await db.execute(select(User).where(User.email == UNASSIGNED_OWNER_EMAIL))
+        ).scalar_one_or_none()
+        if unassigned is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unassigned placeholder account is missing."
+            )
+        creators = (await db.execute(select(Creator).where(Creator.owner_id == user_id))).scalars().all()
+        for creator in creators:
+            creator.owner_id = unassigned.id
+            creator.is_archived = False
+            creator.archived_at = None
+            creator.archive_reason = None
+            db.add(
+                OwnershipEvent(
+                    creator_id=creator.id,
+                    user_id=unassigned.id,
+                    event_type=OwnershipEventType.revoked,
+                    actor_id=user.id,
+                )
+            )
+        await db.execute(
+            update(Collaboration)
+            .where(Collaboration.owner_id == user_id)
+            .values(owner_id=unassigned.id, last_activity_at=now)
         )
 
     target.is_active = False

@@ -52,6 +52,6 @@ class DeactivationImpact(BaseModel):
 class DeactivateUserRequest(BaseModel):
     # None when there's nothing to move (deactivation impact was zero) --
     # the frontend skips the prompt entirely in that case.
-    action: Literal["archive", "reassign"] | None = None
+    action: Literal["archive", "reassign", "unassign"] | None = None
     reason: str | None = None
     new_owner_id: int | None = None
