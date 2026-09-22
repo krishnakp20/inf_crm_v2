@@ -48,6 +48,7 @@ export interface Product {
   owner_id: number;
   target_videos: number;
   is_active: boolean;
+  parent: string | null;
   created_at: string;
   variants: ProductVariant[];
 }
@@ -667,10 +668,12 @@ export interface AnalyticsPerformanceOverview {
 export interface AnalyticsProductPerformanceRow {
   product_id: number;
   product_name: string;
+  product_parent: string | null;
   videos: number;
   views: number;
   comments: number;
   cost_per_comment: number | null;
+  total_cost: number | null;
 }
 
 export interface AnalyticsCostEfficiency {

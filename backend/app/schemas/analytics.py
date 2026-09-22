@@ -23,10 +23,12 @@ class AnalyticsPerformanceOverview(BaseModel):
 class AnalyticsProductPerformanceRow(BaseModel):
     product_id: int
     product_name: str
+    product_parent: str | None  # product-master grouping label, display/filter only
     videos: float  # fractional live-video credit
     views: int
     comments: int
     cost_per_comment: float | None  # null for Marketer
+    total_cost: float | None  # null for Marketer -- lets the frontend re-derive a weighted cost/comment when grouping rows by product_parent
 
 
 class AnalyticsCostEfficiency(BaseModel):

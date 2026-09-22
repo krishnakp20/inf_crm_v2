@@ -290,10 +290,12 @@ async def product_performance(
             AnalyticsProductPerformanceRow(
                 product_id=product_id,
                 product_name=product.name,
+                product_parent=product.parent,
                 videos=round(data["videos"], 2),
                 views=views,
                 comments=comments,
                 cost_per_comment=round(cost / comments, 2) if (show_cost and comments) else None,
+                total_cost=cost if show_cost else None,
             )
         )
     rows.sort(key=lambda r: r.views, reverse=True)

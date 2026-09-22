@@ -20,6 +20,13 @@ from app.schemas.product import (
 router = APIRouter(prefix="/products", tags=["products"])
 
 
+def _normalize_parent(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 async def _variants_by_product(db: AsyncSession, product_ids: list[int]) -> dict[int, list[ProductVariantOut]]:
     if not product_ids:
         return {}
@@ -50,6 +57,7 @@ async def list_products(
             owner_id=p.owner_id,
             target_videos=p.target_videos,
             is_active=p.is_active,
+            parent=p.parent,
             created_at=p.created_at,
             variants=variants_by_product.get(p.id, []),
         )
@@ -67,7 +75,12 @@ async def create_product(
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Product already exists")
 
-    product = Product(name=payload.name, owner_id=payload.owner_id, target_videos=payload.target_videos)
+    product = Product(
+        name=payload.name,
+        owner_id=payload.owner_id,
+        target_videos=payload.target_videos,
+        parent=_normalize_parent(payload.parent),
+    )
     db.add(product)
     await db.commit()
     await db.refresh(product)
@@ -77,6 +90,7 @@ async def create_product(
         owner_id=product.owner_id,
         target_videos=product.target_videos,
         is_active=product.is_active,
+        parent=product.parent,
         created_at=product.created_at,
         variants=[],
     )
@@ -94,6 +108,8 @@ async def update_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "parent":
+            value = _normalize_parent(value)
         setattr(product, field, value)
     await db.commit()
     await db.refresh(product)
@@ -104,6 +120,7 @@ async def update_product(
         owner_id=product.owner_id,
         target_videos=product.target_videos,
         is_active=product.is_active,
+        parent=product.parent,
         created_at=product.created_at,
         variants=variants,
     )
@@ -129,6 +146,7 @@ async def bulk_toggle_products(
             owner_id=p.owner_id,
             target_videos=p.target_videos,
             is_active=p.is_active,
+            parent=p.parent,
             created_at=p.created_at,
             variants=variants_by_product.get(p.id, []),
         )

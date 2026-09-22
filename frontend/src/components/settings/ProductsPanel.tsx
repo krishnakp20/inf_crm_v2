@@ -16,9 +16,11 @@ export function ProductsPanel() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [name, setName] = useState("");
+  const [parent, setParent] = useState("");
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [savingParentId, setSavingParentId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shadeDrafts, setShadeDrafts] = useState<Record<number, string>>({});
   const [addingShadeFor, setAddingShadeFor] = useState<number | null>(null);
@@ -26,8 +28,14 @@ export function ProductsPanel() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [parentFilter, setParentFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkToggling, setBulkToggling] = useState(false);
+
+  const existingParents = useMemo(
+    () => [...new Set(products.map((p) => p.parent).filter((p): p is string => !!p))].sort(),
+    [products]
+  );
 
   function loadProducts() {
     api.get<Product[]>("/products", { params: { include_inactive: true } }).then((res) => setProducts(res.data));
@@ -40,10 +48,11 @@ export function ProductsPanel() {
     return products.filter((p) => {
       if (statusFilter === "active" && !p.is_active) return false;
       if (statusFilter === "disabled" && p.is_active) return false;
+      if (parentFilter && p.parent !== parentFilter) return false;
       if (query && !p.name.toLowerCase().includes(query)) return false;
       return true;
     });
-  }, [products, search, statusFilter]);
+  }, [products, search, statusFilter, parentFilter]);
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id));
 
@@ -102,13 +111,34 @@ export function ProductsPanel() {
     setError(null);
     setAdding(true);
     try {
-      await api.post("/products", { name: name.trim(), owner_id: user.id, target_videos: 0 });
+      await api.post("/products", {
+        name: name.trim(),
+        owner_id: user.id,
+        target_videos: 0,
+        parent: parent.trim() || undefined,
+      });
       setName("");
+      setParent("");
       loadProducts();
     } catch (err: any) {
       setError(err.response?.data?.detail ?? "Could not add this product.");
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function handleSetParent(product: Product, value: string) {
+    const nextParent = value.trim() || null;
+    if (nextParent === product.parent) return;
+    setError(null);
+    setSavingParentId(product.id);
+    try {
+      await api.patch(`/products/${product.id}`, { parent: nextParent });
+      loadProducts();
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? "Could not update this product's parent.");
+    } finally {
+      setSavingParentId(null);
     }
   }
 
@@ -173,7 +203,10 @@ export function ProductsPanel() {
 
       <div className="rounded-card border border-[#e7e5e4] bg-surface p-4">
         <h3 className="text-sm font-semibold text-ink">Add a product</h3>
-        <p className="mb-3 mt-0.5 text-xs text-gray-500">Duplicate names are blocked automatically.</p>
+        <p className="mb-3 mt-0.5 text-xs text-gray-500">
+          Duplicate names are blocked automatically. Parent is optional -- it groups similar products together in
+          Dashboard and Analytics only.
+        </p>
         <div className="flex gap-2">
           <input
             value={name}
@@ -181,6 +214,14 @@ export function ProductsPanel() {
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             placeholder="Enter product name"
             className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+          />
+          <input
+            value={parent}
+            onChange={(e) => setParent(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            placeholder="Parent · optional"
+            list="product-parent-options"
+            className="w-48 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
           />
           <button
             onClick={handleAdd}
@@ -192,6 +233,12 @@ export function ProductsPanel() {
         </div>
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
+
+      <datalist id="product-parent-options">
+        {existingParents.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
 
       <div className="mt-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -230,6 +277,21 @@ export function ProductsPanel() {
               </button>
             ))}
           </div>
+          {existingParents.length > 0 && (
+            <select
+              aria-label="Filter by parent"
+              value={parentFilter}
+              onChange={(e) => setParentFilter(e.target.value)}
+              className="h-9 rounded-lg border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
+            >
+              <option value="">All parents</option>
+              {existingParents.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          )}
           <label className="flex h-9 items-center gap-1.5 rounded-lg border border-[#e7e5e4] bg-white px-2.5 text-xs text-gray-600">
             <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="h-3.5 w-3.5 rounded" />
             Select all {statusFilter !== "all" ? statusFilter : "shown"}
@@ -288,6 +350,19 @@ export function ProductsPanel() {
                     </div>
                     <div className="text-xs text-gray-500">
                       {p.is_active ? "Available to all users" : "Hidden from pickers and filters"}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Parent</span>
+                      <input
+                        key={`${p.id}-${p.parent ?? ""}`}
+                        defaultValue={p.parent ?? ""}
+                        onBlur={(e) => handleSetParent(p, e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                        disabled={savingParentId === p.id}
+                        placeholder="None"
+                        list="product-parent-options"
+                        className="w-40 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs disabled:opacity-50"
+                      />
                     </div>
                   </div>
                 </div>

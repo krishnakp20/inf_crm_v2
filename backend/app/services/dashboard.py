@@ -366,6 +366,7 @@ async def get_product_performance(
                 owner_id=product.owner_id,
                 target_videos=product.target_videos,
                 is_active=product.is_active,
+                parent=product.parent,
                 created_at=product.created_at,
                 owner_name=creator_name,
                 videos_live=round(sum(by_owner.values()), 2),

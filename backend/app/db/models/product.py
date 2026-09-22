@@ -13,6 +13,10 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(120), unique=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     target_videos: Mapped[int] = mapped_column(Integer, default=0)
+    # Free-text grouping label (e.g. "Browfect" grouping "Browfect Black" +
+    # "Browfect Brown") -- display/filter-only in Dashboard and Analytics,
+    # not used anywhere else (no stage gates, no validation).
+    parent: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     # Disabled products stay fully intact for every collaboration that
     # already references them (name, shade, history, reports -- untouched);
     # they're just excluded from product pickers/filters going forward.

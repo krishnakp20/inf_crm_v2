@@ -7,6 +7,7 @@ class ProductCreate(BaseModel):
     name: str
     owner_id: int
     target_videos: int = 0
+    parent: str | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -14,6 +15,7 @@ class ProductUpdate(BaseModel):
     owner_id: int | None = None
     target_videos: int | None = None
     is_active: bool | None = None
+    parent: str | None = None
 
 
 class ProductBulkToggle(BaseModel):
@@ -39,6 +41,7 @@ class ProductOut(BaseModel):
     owner_id: int
     target_videos: int
     is_active: bool
+    parent: str | None = None
     created_at: datetime
     variants: list[ProductVariantOut] = []
 
