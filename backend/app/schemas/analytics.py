@@ -73,6 +73,43 @@ class AnalyticsTargetRow(BaseModel):
     pct: float
 
 
+class AnalyticsVelocityByUserRow(BaseModel):
+    user_id: int
+    user_name: str
+    # Same 4 metrics/order as AnalyticsPipelineVelocityRow's
+    # _VELOCITY_DEFINITIONS, scoped to just this one user.
+    cells: list[AnalyticsPipelineVelocityRow]
+
+
+class AnalyticsMatrixCell(BaseModel):
+    achieved: float
+    target: float
+
+
+class AnalyticsProductUserMatrixRow(BaseModel):
+    product_id: int
+    product_name: str
+    # Aligned by position with AnalyticsProductUserMatrix.users -- cells[i]
+    # is this product's figures for users[i].
+    cells: list[AnalyticsMatrixCell]
+    total: AnalyticsMatrixCell
+
+
+class AnalyticsUserRef(BaseModel):
+    user_id: int
+    user_name: str
+
+
+class AnalyticsProductUserMatrix(BaseModel):
+    # Only products/users with at least one monthly target set anywhere in
+    # scope appear here -- an untargeted product or user would be an all-
+    # zero row/column, which isn't useful in a target-tracking view.
+    users: list[AnalyticsUserRef]
+    rows: list[AnalyticsProductUserMatrixRow]
+    column_totals: list[AnalyticsMatrixCell]  # aligned with users
+    grand_total: AnalyticsMatrixCell
+
+
 class AnalyticsUserBreakdownRow(BaseModel):
     user_id: int
     user_name: str
@@ -115,7 +152,9 @@ class AnalyticsResponse(BaseModel):
     commercial_locked: AnalyticsCommercialLocked | None  # None entirely for Marketer
     what_is_working: AnalyticsWhatIsWorking
     pipeline_velocity: list[AnalyticsPipelineVelocityRow]
+    pipeline_velocity_by_user: list[AnalyticsVelocityByUserRow]
     target_vs_achieved: list[AnalyticsTargetRow]
+    product_user_matrix: AnalyticsProductUserMatrix
     user_breakdown: list[AnalyticsUserBreakdownRow]
     funnel: list[FunnelStage]
     show_cpv: bool

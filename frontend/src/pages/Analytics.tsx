@@ -7,8 +7,10 @@ import { CommercialLockedPanel } from "../components/analytics/CommercialLockedP
 import { CostEfficiencyPanel } from "../components/analytics/CostEfficiencyPanel";
 import { FunnelTrendChart } from "../components/analytics/FunnelTrendChart";
 import { PerformanceOverviewRow } from "../components/analytics/PerformanceOverviewRow";
+import { PipelineVelocityByUserTable } from "../components/analytics/PipelineVelocityByUserTable";
 import { PipelineVelocityPanel } from "../components/analytics/PipelineVelocityPanel";
 import { ProductPerformanceTable } from "../components/analytics/ProductPerformanceTable";
+import { ProductUserTargetMatrix } from "../components/analytics/ProductUserTargetMatrix";
 import { TargetVsAchievedPanel } from "../components/analytics/TargetVsAchievedPanel";
 import { UserDetailedTable } from "../components/analytics/UserDetailedTable";
 import { UserSummaryTable } from "../components/analytics/UserSummaryTable";
@@ -170,6 +172,8 @@ export default function Analytics() {
             totalAvgCreatorCost={data.cost_efficiency?.avg_creator_cost ?? null}
             totalHitRatePct={data.performance_overview.hit_rate_pct}
           />
+          <ProductUserTargetMatrix matrix={data.product_user_matrix} />
+          <PipelineVelocityByUserTable rows={data.pipeline_velocity_by_user} />
         </>
       )}
     </div>

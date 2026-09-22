@@ -17,11 +17,16 @@ from app.schemas.analytics import (
     AnalyticsBusinessImpact,
     AnalyticsCommercialLocked,
     AnalyticsCostEfficiency,
+    AnalyticsMatrixCell,
     AnalyticsPerformanceOverview,
     AnalyticsPipelineVelocityRow,
     AnalyticsProductPerformanceRow,
+    AnalyticsProductUserMatrix,
+    AnalyticsProductUserMatrixRow,
     AnalyticsTargetRow,
     AnalyticsUserBreakdownRow,
+    AnalyticsUserRef,
+    AnalyticsVelocityByUserRow,
     AnalyticsWhatIsWorking,
     AnalyticsWhatIsWorkingRow,
 )
@@ -466,6 +471,33 @@ async def pipeline_velocity(
     ]
 
 
+async def pipeline_velocity_by_user(
+    db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
+) -> list[AnalyticsVelocityByUserRow]:
+    """Same 4 metrics as pipeline_velocity, broken out per user instead of
+    aggregated across the whole scope. Same "unrestricted scope -> every
+    active advisor" fallback as user_breakdown -- this isn't about targets,
+    it's about who owns collaborations."""
+    if owner_ids is not None:
+        users_stmt = select(User.id, User.name).where(User.id.in_(owner_ids)).order_by(User.name)
+    else:
+        users_stmt = (
+            select(User.id, User.name)
+            .where(User.role == UserRole.advisor, User.is_active.is_(True))
+            .order_by(User.name)
+        )
+    users = (await db.execute(users_stmt)).all()
+
+    rows: list[AnalyticsVelocityByUserRow] = []
+    for user_id, user_name in users:
+        cells = [
+            await _velocity_row(db, [user_id], label, start_stage, end_stage, range_start, range_end)
+            for label, start_stage, end_stage in _VELOCITY_DEFINITIONS
+        ]
+        rows.append(AnalyticsVelocityByUserRow(user_id=user_id, user_name=user_name, cells=cells))
+    return rows
+
+
 async def _live_video_credit_for_owner(
     db: AsyncSession, user_id: int, range_start: datetime, range_end: datetime
 ) -> float:
@@ -525,6 +557,89 @@ async def target_vs_achieved(
             )
         )
     return rows
+
+
+async def product_user_target_matrix(
+    db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
+) -> AnalyticsProductUserMatrix:
+    """Product x user grid of target vs achieved. Only products and users
+    with at least one monthly target set (within owner_ids scope, or
+    anywhere when unrestricted) appear -- an untargeted row/column would be
+    all zeros, which isn't useful in a target-tracking view."""
+    range_days = (range_end - range_start).days or 1
+    proration = range_days / 30.0
+
+    targets_stmt = select(ProductTarget.user_id, ProductTarget.product_id, ProductTarget.monthly_target)
+    if owner_ids is not None:
+        targets_stmt = targets_stmt.where(ProductTarget.user_id.in_(owner_ids))
+    target_rows = (await db.execute(targets_stmt)).all()
+
+    empty_cell = AnalyticsMatrixCell(achieved=0.0, target=0.0)
+    if not target_rows:
+        return AnalyticsProductUserMatrix(users=[], rows=[], column_totals=[], grand_total=empty_cell)
+
+    target_by_user_product: dict[tuple[int, int], int] = {}
+    user_ids_with_target: set[int] = set()
+    product_ids_with_target: set[int] = set()
+    for user_id, product_id, monthly in target_rows:
+        target_by_user_product[(user_id, product_id)] = monthly
+        user_ids_with_target.add(user_id)
+        product_ids_with_target.add(product_id)
+
+    users = (
+        await db.execute(select(User.id, User.name).where(User.id.in_(user_ids_with_target)).order_by(User.name))
+    ).all()
+    products = (
+        await db.execute(
+            select(Product.id, Product.name).where(Product.id.in_(product_ids_with_target)).order_by(Product.name)
+        )
+    ).all()
+
+    # Achieved credit per (user, product), scoped to the selected date
+    # range -- same per-user loop pattern as target_vs_achieved above.
+    achieved_by_user_product: dict[tuple[int, int], float] = {}
+    for user_id, _ in users:
+        live_ids = await _scoped_live_collab_ids(db, [user_id], range_start, range_end)
+        rollup = await _product_rollup(db, live_ids)
+        for product_id, data in rollup.items():
+            achieved_by_user_product[(user_id, product_id)] = data["videos"]
+
+    user_refs = [AnalyticsUserRef(user_id=uid, user_name=name) for uid, name in users]
+    column_totals = [[0.0, 0.0] for _ in users]  # [achieved, target] per user, positional
+    grand_achieved = 0.0
+    grand_target = 0.0
+
+    rows: list[AnalyticsProductUserMatrixRow] = []
+    for product_id, product_name in products:
+        cells: list[AnalyticsMatrixCell] = []
+        row_achieved = 0.0
+        row_target = 0.0
+        for idx, (user_id, _) in enumerate(users):
+            monthly = target_by_user_product.get((user_id, product_id), 0)
+            target = round(monthly * proration, 2)
+            achieved = round(achieved_by_user_product.get((user_id, product_id), 0.0), 2)
+            cells.append(AnalyticsMatrixCell(achieved=achieved, target=target))
+            row_achieved += achieved
+            row_target += target
+            column_totals[idx][0] += achieved
+            column_totals[idx][1] += target
+        rows.append(
+            AnalyticsProductUserMatrixRow(
+                product_id=product_id,
+                product_name=product_name,
+                cells=cells,
+                total=AnalyticsMatrixCell(achieved=round(row_achieved, 2), target=round(row_target, 2)),
+            )
+        )
+        grand_achieved += row_achieved
+        grand_target += row_target
+
+    return AnalyticsProductUserMatrix(
+        users=user_refs,
+        rows=rows,
+        column_totals=[AnalyticsMatrixCell(achieved=round(a, 2), target=round(t, 2)) for a, t in column_totals],
+        grand_total=AnalyticsMatrixCell(achieved=round(grand_achieved, 2), target=round(grand_target, 2)),
+    )
 
 
 _STAGE_FIELD_NAMES: dict[CollabStage, str] = {

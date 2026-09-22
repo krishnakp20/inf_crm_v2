@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AnnouncementBanner } from "../components/dashboard/AnnouncementBanner";
 import { AnnouncementModal } from "../components/dashboard/AnnouncementModal";
 import { ApprovalRequests } from "../components/dashboard/ApprovalRequests";
+import { CumulativeLeadFunnel } from "../components/dashboard/CumulativeLeadFunnel";
 import { DateRangePicker, type RangePreset } from "../components/dashboard/DateRangePicker";
 import { KpiCard } from "../components/dashboard/KpiCard";
 import { PipelineFunnel } from "../components/dashboard/PipelineFunnel";
@@ -183,10 +184,12 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-[1.5fr_1fr] gap-3">
+      <div className="mb-3 grid grid-cols-[1.5fr_1fr] gap-3">
         <Targets rows={targets} />
         <ProductPerformance products={product_performance} />
       </div>
+
+      <CumulativeLeadFunnel funnel={funnel} />
     </div>
   );
 }

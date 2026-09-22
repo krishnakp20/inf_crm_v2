@@ -722,6 +722,36 @@ export interface AnalyticsTargetRow {
   pct: number;
 }
 
+export interface AnalyticsVelocityByUserRow {
+  user_id: number;
+  user_name: string;
+  cells: AnalyticsPipelineVelocityRow[];
+}
+
+export interface AnalyticsMatrixCell {
+  achieved: number;
+  target: number;
+}
+
+export interface AnalyticsUserRef {
+  user_id: number;
+  user_name: string;
+}
+
+export interface AnalyticsProductUserMatrixRow {
+  product_id: number;
+  product_name: string;
+  cells: AnalyticsMatrixCell[];
+  total: AnalyticsMatrixCell;
+}
+
+export interface AnalyticsProductUserMatrix {
+  users: AnalyticsUserRef[];
+  rows: AnalyticsProductUserMatrixRow[];
+  column_totals: AnalyticsMatrixCell[];
+  grand_total: AnalyticsMatrixCell;
+}
+
 export interface AnalyticsUserBreakdownRow {
   user_id: number;
   user_name: string;
@@ -756,7 +786,9 @@ export interface AnalyticsResponse {
   commercial_locked: AnalyticsCommercialLocked | null;
   what_is_working: AnalyticsWhatIsWorking;
   pipeline_velocity: AnalyticsPipelineVelocityRow[];
+  pipeline_velocity_by_user: AnalyticsVelocityByUserRow[];
   target_vs_achieved: AnalyticsTargetRow[];
+  product_user_matrix: AnalyticsProductUserMatrix;
   user_breakdown: AnalyticsUserBreakdownRow[];
   funnel: FunnelStage[];
   show_cpv: boolean;
