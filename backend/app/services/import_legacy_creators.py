@@ -61,7 +61,7 @@ from app.db.models.collab_stage_event import CollabStageEvent
 from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
-from app.db.models.enums import CollabStage, CreatorStage, CreatorStatus, PaymentStatus, UserRole
+from app.db.models.enums import CollabStage, CreatorSource, CreatorStage, CreatorStatus, PaymentStatus, UserRole
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.user import User
@@ -304,6 +304,7 @@ async def run_import(csv_path: str, dry_run: bool = True) -> ImportSummary:
                         owner_id=owner_id,
                         current_stage=CreatorStage.live if videos else CreatorStage.new_lead,
                         status=CreatorStatus.active if videos else CreatorStatus.none,
+                        source=CreatorSource.system,
                     )
                     db.add(creator)
                     await db.flush()

@@ -22,6 +22,17 @@ class CreatorStage(str, enum.Enum):
     paid = "paid"
 
 
+class CreatorSource(str, enum.Enum):
+    # Who actually put this creator into the DB -- "user" means through the
+    # app (Add creator form or the app's own Bulk upload button), "system"
+    # means a backend script wrote it directly (e.g. import_legacy_creators,
+    # update_from_corrected_csv), bypassing the app entirely. Null/unset on
+    # every creator that predates this field -- deliberately left for
+    # manual backfill, not auto-guessed.
+    system = "system"
+    user = "user"
+
+
 class CreatorStatus(str, enum.Enum):
     priority = "priority"
     active = "active"

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.db.models.enums import CreatorStage, CreatorStatus
+from app.db.models.enums import CreatorSource, CreatorStage, CreatorStatus
 
 
 class CreatorCreate(BaseModel):
@@ -50,6 +50,11 @@ class BulkAssign(BaseModel):
     new_owner_id: int
 
 
+class BulkSetSource(BaseModel):
+    creator_ids: list[int]
+    source: CreatorSource
+
+
 class CreatorOut(BaseModel):
     id: int
     name: str
@@ -64,6 +69,7 @@ class CreatorOut(BaseModel):
     owner_id: int
     current_stage: CreatorStage
     status: CreatorStatus
+    source: CreatorSource | None
     notes: str | None
     is_archived: bool
     created_at: datetime
@@ -82,6 +88,7 @@ class CreatorTableRow(BaseModel):
     followers_count: int
     owner_id: int
     status: CreatorStatus
+    source: CreatorSource | None
     is_archived: bool
     archived_at: datetime | None
     archive_reason: str | None

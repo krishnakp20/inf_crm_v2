@@ -23,7 +23,7 @@ from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.creator import Creator
 from app.db.models.creator_file import CreatorFile
-from app.db.models.enums import CollabStage, CreatorStage, FollowUpStatus, OwnershipEventType, UserRole
+from app.db.models.enums import CollabStage, CreatorSource, CreatorStage, FollowUpStatus, OwnershipEventType, UserRole
 from app.db.models.follow_up import FollowUp
 from app.db.models.message import Message
 from app.db.models.ownership_event import OwnershipEvent
@@ -34,6 +34,7 @@ from app.db.session import get_db
 from app.schemas.creator import (
     BoardStats,
     BulkAssign,
+    BulkSetSource,
     BulkUploadResult,
     BulkUploadRowResult,
     CreatorCreate,
@@ -237,6 +238,7 @@ async def list_creators_table(
     search: str | None = None,
     is_archived: bool = False,
     pool: bool = False,
+    source: str | None = Query(None, pattern="^(system|user|unset)$"),
     sort_by: str = Query("created_at"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(10, le=5000),
@@ -262,6 +264,10 @@ async def list_creators_table(
         # what's admin-gated, enforced separately in _get_creator_or_404.
         if owner_ids is not None:
             stmt = stmt.where(Creator.owner_id.in_(owner_ids))
+    if source == "unset":
+        stmt = stmt.where(Creator.source.is_(None))
+    elif source is not None:
+        stmt = stmt.where(Creator.source == CreatorSource(source))
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
@@ -330,6 +336,7 @@ async def list_creators_table(
                 followers_count=creator.followers_count,
                 owner_id=creator.owner_id,
                 status=creator.status,
+                source=creator.source,
                 is_archived=creator.is_archived,
                 archived_at=creator.archived_at,
                 archive_reason=creator.archive_reason,
@@ -446,6 +453,7 @@ async def bulk_upload_creators(
             category=(row.get("category") or "Beauty").strip(),
             followers_count=followers_count,
             owner_id=owner_id,
+            source=CreatorSource.user,
         )
         db.add(creator)
         await db.flush()
@@ -574,6 +582,7 @@ async def create_creator(
         owner_id=owner_id,
         status=payload.status,
         notes=payload.notes,
+        source=CreatorSource.user,
     )
     db.add(creator)
     await db.flush()
@@ -756,6 +765,24 @@ async def bulk_assign(
                 actor_id=admin_user.id,
             )
         )
+    await db.commit()
+    for creator in creators:
+        await db.refresh(creator)
+    return creators
+
+
+@router.post("/bulk-set-source", response_model=list[CreatorOut])
+async def bulk_set_source(
+    payload: BulkSetSource,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> list[Creator]:
+    # Manual backfill tool for creators that predate the Source field (see
+    # Creator.source) -- no auto-guessing, an admin reviews and tags them.
+    result = await db.execute(select(Creator).where(Creator.id.in_(payload.creator_ids)))
+    creators = list(result.scalars().all())
+    for creator in creators:
+        creator.source = payload.source
     await db.commit()
     for creator in creators:
         await db.refresh(creator)

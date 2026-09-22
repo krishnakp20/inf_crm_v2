@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.db.models.enums import CreatorStage, CreatorStatus
+from app.db.models.enums import CreatorSource, CreatorStage, CreatorStatus
 
 
 class Creator(Base):
@@ -27,6 +27,8 @@ class Creator(Base):
     status: Mapped[CreatorStatus] = mapped_column(
         Enum(CreatorStatus, name="creator_status"), default=CreatorStatus.none
     )
+    # Null on every creator that predates this field -- see CreatorSource.
+    source: Mapped[CreatorSource | None] = mapped_column(Enum(CreatorSource, name="creator_source"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

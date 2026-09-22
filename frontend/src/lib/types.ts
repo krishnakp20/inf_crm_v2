@@ -25,6 +25,8 @@ export type CreatorStage =
 
 export type CreatorStatus = "priority" | "active" | "review_due" | "overdue" | "ndr" | "partnership" | "none";
 
+export type CreatorSource = "system" | "user";
+
 export type CollabStage =
   | "new_lead"
   | "replied"
@@ -208,6 +210,7 @@ export interface Creator {
   owner_id: number;
   current_stage: CreatorStage;
   status: CreatorStatus;
+  source: CreatorSource | null;
   notes: string | null;
   is_archived: boolean;
   created_at: string;
@@ -223,6 +226,7 @@ export interface CreatorTableRow {
   followers_count: number;
   owner_id: number;
   status: CreatorStatus;
+  source: CreatorSource | null;
   is_archived: boolean;
   archived_at: string | null;
   archive_reason: string | null;

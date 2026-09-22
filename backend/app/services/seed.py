@@ -15,6 +15,7 @@ from app.db.models.creator import Creator
 from app.db.models.enums import (
     ApprovalPriority,
     CollabStage,
+    CreatorSource,
     CreatorStage,
     CreatorStatus,
     FollowUpStatus,
@@ -163,6 +164,7 @@ async def seed() -> None:
                 owner_id=advisors[advisor_idx].id,
                 current_stage=stage,
                 status=CreatorStatus.active,
+                source=CreatorSource.system,
                 created_at=now - timedelta(days=rng.randint(5, 90)),
                 last_activity_at=now - timedelta(hours=rng.randint(1, 72)),
             )
@@ -194,6 +196,7 @@ async def seed() -> None:
                 owner_id=rng.choice(advisors).id,
                 current_stage=stage,
                 status=CreatorStatus.active,
+                source=CreatorSource.system,
                 created_at=now - timedelta(days=rng.randint(1, 120)),
                 last_activity_at=now - timedelta(hours=rng.randint(1, 240)),
             )

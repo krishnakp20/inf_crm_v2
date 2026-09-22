@@ -1,10 +1,17 @@
 import { ArrowRightCircle, Eye } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { api } from "../../lib/api";
 import { compactNumber, initials, instagramUrl, maskPhone } from "../../lib/format";
 import type { SortDirection } from "../../lib/sort";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { CreatorStatus, CreatorTableRow, Product } from "../../lib/types";
 import { BulkMoveToMyCreatorsModal } from "./BulkMoveToMyCreatorsModal";
+
+const SOURCE_STYLES: Record<"system" | "user", { label: string; className: string }> = {
+  system: { label: "System", className: "rounded-md bg-[#f0eff1] px-1.5 py-0.5 text-[7px] font-extrabold text-[#716d78]" },
+  user: { label: "User", className: "rounded-md bg-[#eaf8ef] px-1.5 py-0.5 text-[7px] font-extrabold text-[#238b57]" },
+};
 
 const STATUS_STYLES: Record<CreatorStatus, { label: string; className: string }> = {
   overdue: { label: "Overdue", className: "rounded-md bg-[#fff0ed] px-1.5 py-0.5 text-[7px] font-extrabold text-[#ca4d43]" },
@@ -48,6 +55,7 @@ export function CreatorTable({
   onSortChange,
   onPageChange,
   onView,
+  onChanged,
 }: {
   creators: CreatorTableRow[];
   owners: Record<number, string>;
@@ -60,13 +68,32 @@ export function CreatorTable({
   onSortChange: (field: SortField) => void;
   onPageChange: (offset: number) => void;
   onView: (creatorId: number) => void;
+  onChanged: () => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const page = Math.floor(offset / limit) + 1;
   const totalPages = Math.max(Math.ceil(total / limit), 1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBulkMove, setShowBulkMove] = useState(false);
+  const [settingSource, setSettingSource] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
 
   const allSelected = creators.length > 0 && creators.every((c) => selectedIds.has(c.id));
+
+  async function handleBulkSetSource(source: "system" | "user") {
+    setSourceError(null);
+    setSettingSource(true);
+    try {
+      await api.post("/creators/bulk-set-source", { creator_ids: [...selectedIds], source });
+      setSelectedIds(new Set());
+      onChanged();
+    } catch (err: any) {
+      setSourceError(err.response?.data?.detail ?? "Could not update source for these creators.");
+    } finally {
+      setSettingSource(false);
+    }
+  }
 
   function toggleAll() {
     setSelectedIds(allSelected ? new Set() : new Set(creators.map((c) => c.id)));
@@ -87,6 +114,26 @@ export function CreatorTable({
         <div className="flex items-center justify-between border-b border-[#e7e5e4] bg-surface px-4 py-2 text-xs">
           <span className="font-semibold text-ink">{selectedIds.size} creator{selectedIds.size !== 1 ? "s" : ""} selected</span>
           <div className="flex items-center gap-3">
+            {sourceError && <span className="text-[#cf4e43]">{sourceError}</span>}
+            {isAdmin && (
+              <>
+                <span className="text-gray-400">Mark source:</span>
+                <button
+                  onClick={() => handleBulkSetSource("user")}
+                  disabled={settingSource}
+                  className="rounded-lg border border-[#e7e5e4] bg-white px-3 py-1.5 font-bold text-ink hover:bg-surface disabled:opacity-50"
+                >
+                  User
+                </button>
+                <button
+                  onClick={() => handleBulkSetSource("system")}
+                  disabled={settingSource}
+                  className="rounded-lg border border-[#e7e5e4] bg-white px-3 py-1.5 font-bold text-ink hover:bg-surface disabled:opacity-50"
+                >
+                  System
+                </button>
+              </>
+            )}
             <button
               onClick={() => setShowBulkMove(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#c8c6f5] bg-white px-3 py-1.5 font-bold text-brand-600 hover:bg-brand-50"
@@ -132,6 +179,7 @@ export function CreatorTable({
               <SortableHeader label="Comments" field="comments_count" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
               <SortableHeader label="Current stage" field="current_stage" activeField={sortBy} direction={sortDir} onSort={(f) => onSortChange(f as SortField)} className={TH} />
               <th className={TH}>Status</th>
+              <th className={TH}>Source</th>
               <th className="w-10 py-2.5 pr-4"></th>
             </tr>
           </thead>
@@ -228,6 +276,13 @@ export function CreatorTable({
                   <td className="py-2.5 pr-3">
                     <span className={statusStyle.className}>{statusStyle.label}</span>
                   </td>
+                  <td className="py-2.5 pr-3">
+                    {creator.source ? (
+                      <span className={SOURCE_STYLES[creator.source].className}>{SOURCE_STYLES[creator.source].label}</span>
+                    ) : (
+                      <span className="text-[8px] text-[#97939d]">—</span>
+                    )}
+                  </td>
                   <td className="py-2.5 pr-4">
                     <button
                       onClick={() => onView(creator.id)}
@@ -242,7 +297,7 @@ export function CreatorTable({
             })}
             {creators.length === 0 && (
               <tr>
-                <td colSpan={12} className="py-6 text-center text-sm text-gray-400">
+                <td colSpan={13} className="py-6 text-center text-sm text-gray-400">
                   No creators match these filters.
                 </td>
               </tr>

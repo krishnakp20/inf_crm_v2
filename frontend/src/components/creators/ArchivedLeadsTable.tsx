@@ -9,6 +9,11 @@ import type { CreatorTableRow, User } from "../../lib/types";
 
 const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
+const SOURCE_STYLES: Record<"system" | "user", { label: string; className: string }> = {
+  system: { label: "System", className: "rounded-md bg-[#f0eff1] px-1.5 py-0.5 text-[7px] font-extrabold text-[#716d78]" },
+  user: { label: "User", className: "rounded-md bg-[#eaf8ef] px-1.5 py-0.5 text-[7px] font-extrabold text-[#238b57]" },
+};
+
 const AVATAR_PALETTE = [
   { bg: "bg-[#fff0ed]", text: "text-[#ca4d43]" },
   { bg: "bg-[#f0eff1]", text: "text-[#6d6972]" },
@@ -57,6 +62,8 @@ export function ArchivedLeadsTable({
   const [assignTargetId, setAssignTargetId] = useState<number | "">(advisors[0]?.id ?? "");
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [settingSource, setSettingSource] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
 
   const allSelected = creators.length > 0 && creators.every((c) => selectedIds.has(c.id));
 
@@ -91,6 +98,20 @@ export function ArchivedLeadsTable({
     }
   }
 
+  async function handleBulkSetSource(source: "system" | "user") {
+    setSourceError(null);
+    setSettingSource(true);
+    try {
+      await api.post("/creators/bulk-set-source", { creator_ids: [...selectedIds], source });
+      setSelectedIds(new Set());
+      onAssigned();
+    } catch (err: any) {
+      setSourceError(err.response?.data?.detail ?? "Could not update source for these creators.");
+    } finally {
+      setSettingSource(false);
+    }
+  }
+
   return (
     <div className="dashboard-card overflow-hidden p-0">
       {!isAdmin && (
@@ -106,6 +127,7 @@ export function ArchivedLeadsTable({
           </span>
           <div className="flex items-center gap-2">
             {assignError && <span className="text-[#cf4e43]">{assignError}</span>}
+            {sourceError && <span className="text-[#cf4e43]">{sourceError}</span>}
             <label className="flex items-center gap-1.5 text-gray-500">
               Assign to
               <select
@@ -127,6 +149,21 @@ export function ArchivedLeadsTable({
             >
               <Users size={13} />
               {assigning ? "Assigning..." : "Assign selected"}
+            </button>
+            <span className="text-gray-400">Mark source:</span>
+            <button
+              onClick={() => handleBulkSetSource("user")}
+              disabled={settingSource}
+              className="rounded-lg border border-[#e7e5e4] bg-white px-3 py-1.5 font-bold text-ink hover:bg-surface disabled:opacity-50"
+            >
+              User
+            </button>
+            <button
+              onClick={() => handleBulkSetSource("system")}
+              disabled={settingSource}
+              className="rounded-lg border border-[#e7e5e4] bg-white px-3 py-1.5 font-bold text-ink hover:bg-surface disabled:opacity-50"
+            >
+              System
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
@@ -159,6 +196,7 @@ export function ArchivedLeadsTable({
               <SortableHeader label="Videos" field="videos_delivered" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Last cost" field="last_cost" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className={TH}>Reason</th>
+              <th className={TH}>Source</th>
               <th className="w-10 py-2.5 pr-4"></th>
             </tr>
           </thead>
@@ -231,6 +269,13 @@ export function ArchivedLeadsTable({
                     {creator.last_cost != null ? `₹${creator.last_cost.toLocaleString()}` : "—"}
                   </td>
                   <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{creator.archive_reason ?? "—"}</td>
+                  <td className="py-2.5 pr-3">
+                    {creator.source ? (
+                      <span className={SOURCE_STYLES[creator.source].className}>{SOURCE_STYLES[creator.source].label}</span>
+                    ) : (
+                      <span className="text-[8px] text-[#97939d]">—</span>
+                    )}
+                  </td>
                   <td className="py-2.5 pr-4">
                     {isAdmin ? (
                       <button
@@ -254,7 +299,7 @@ export function ArchivedLeadsTable({
             })}
             {creators.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-6 text-center text-sm text-gray-400">
+                <td colSpan={10} className="py-6 text-center text-sm text-gray-400">
                   No creators found.
                 </td>
               </tr>

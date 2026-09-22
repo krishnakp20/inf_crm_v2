@@ -40,6 +40,7 @@ export default function Database() {
   const [users, setUsers] = useState<User[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [ownerId, setOwnerId] = useState<string>("");
+  const [sourceFilter, setSourceFilter] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"all" | "archived" | "unassigned">("all");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -86,6 +87,7 @@ export default function Database() {
     };
     if (activeTab === "unassigned") params.pool = true;
     if (ownerId && activeTab !== "unassigned") params.owner_id = ownerId;
+    if (sourceFilter) params.source = sourceFilter;
     if (search) params.search = search;
 
     api.get("/creators/table", { params }).then((res) => {
@@ -97,6 +99,7 @@ export default function Database() {
   function loadTabCounts() {
     const base: Record<string, string | number | boolean> = { limit: 1, offset: 0 };
     if (ownerId) base.owner_id = ownerId;
+    if (sourceFilter) base.source = sourceFilter;
     if (search) base.search = search;
     Promise.all([
       api.get("/creators/table", { params: { ...base, is_archived: false } }),
@@ -107,8 +110,8 @@ export default function Database() {
     });
   }
 
-  useEffect(loadCreators, [ownerId, activeTab, sortBy, sortDir, search, offset, pageSize]);
-  useEffect(loadTabCounts, [ownerId, search]);
+  useEffect(loadCreators, [ownerId, sourceFilter, activeTab, sortBy, sortDir, search, offset, pageSize]);
+  useEffect(loadTabCounts, [ownerId, sourceFilter, search]);
 
   if (user && (user.role === "marketer" || user.role === "editor")) {
     return <Navigate to="/" replace />;
@@ -419,6 +422,24 @@ export default function Database() {
             </select>
           </label>
         )}
+        {user?.role === "admin" && (
+          <label className="flex items-center gap-2">
+            <span className="text-[8px] text-[#918d97]">Filter by source</span>
+            <select
+              value={sourceFilter}
+              onChange={(e) => {
+                setOffset(0);
+                setSourceFilter(e.target.value);
+              }}
+              className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
+            >
+              <option value="">All sources</option>
+              <option value="user">User</option>
+              <option value="system">System</option>
+              <option value="unset">Unset</option>
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -522,6 +543,7 @@ export default function Database() {
           onSortChange={handleSortChange}
           onPageChange={setOffset}
           onView={setDetailCreatorId}
+          onChanged={refresh}
         />
       )}
 
