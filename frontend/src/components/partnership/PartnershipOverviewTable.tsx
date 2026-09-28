@@ -61,7 +61,7 @@ export function PartnershipOverviewTable({
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="min-w-max">
+        <table className="w-full min-w-max">
           <thead>
             <tr className="border-b border-[#e7e5e4] bg-[#fbfbfc] text-left">
               {canTakeAction && (
