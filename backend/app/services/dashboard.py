@@ -14,6 +14,7 @@ from app.db.models.enums import ApprovalStatus, ApprovalTarget, CollabStage, Fol
 from app.db.models.follow_up import FollowUp
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
+from app.db.models.product_target import ProductTarget
 from app.db.models.stage_event import StageEvent
 from app.db.models.user import User
 from app.schemas.approval_request import ApprovalRequestOut
@@ -36,6 +37,7 @@ from app.services.collab_pipeline import (
     load_stage_deadline_days,
 )
 from app.services.partnership_pipeline import scoped_ticket_ids
+from app.services.product_targets import derive_weekly_target, get_video_credit_by_product_since
 
 
 async def get_followup_progress_today(
@@ -261,6 +263,15 @@ async def _latest_announcement(db: AsyncSession, owner_ids: list[int] | None) ->
 
 
 async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | None = None) -> list[TargetRow]:
+    """Weekly/monthly LIVE VIDEO count against each advisor's product
+    targets -- due is the sum of their ProductTarget.monthly_target rows
+    (weekly derived the same way Settings > My Targets does), completed is
+    their actual live-video credit in that window. This used to be wired to
+    FollowUp due/done counts instead, an unrelated concept that happened to
+    always read 0/0 in practice (nothing here sets FollowUp.due_at from a
+    video going live) -- confirmed with the client and fixed to the real
+    video-target concept used everywhere else in the app (Settings > My
+    Targets, Analytics' Target vs achieved)."""
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=today_start.weekday())
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -272,38 +283,20 @@ async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | No
 
     rows: list[TargetRow] = []
     for advisor in advisors:
-        weekly_due = (
-            await db.execute(
-                select(func.count(FollowUp.id)).where(
-                    FollowUp.assigned_to == advisor.id, FollowUp.due_at >= week_start
-                )
-            )
-        ).scalar_one()
-        weekly_completed = (
-            await db.execute(
-                select(func.count(FollowUp.id)).where(
-                    FollowUp.assigned_to == advisor.id,
-                    FollowUp.status == FollowUpStatus.done,
-                    FollowUp.completed_at >= week_start,
-                )
-            )
-        ).scalar_one()
         monthly_due = (
             await db.execute(
-                select(func.count(FollowUp.id)).where(
-                    FollowUp.assigned_to == advisor.id, FollowUp.due_at >= month_start
+                select(func.coalesce(func.sum(ProductTarget.monthly_target), 0)).where(
+                    ProductTarget.user_id == advisor.id
                 )
             )
         ).scalar_one()
-        monthly_completed = (
-            await db.execute(
-                select(func.count(FollowUp.id)).where(
-                    FollowUp.assigned_to == advisor.id,
-                    FollowUp.status == FollowUpStatus.done,
-                    FollowUp.completed_at >= month_start,
-                )
-            )
-        ).scalar_one()
+        weekly_due = derive_weekly_target(monthly_due, now)
+
+        weekly_credit = await get_video_credit_by_product_since(db, advisor.id, week_start)
+        monthly_credit = await get_video_credit_by_product_since(db, advisor.id, month_start)
+        weekly_completed = round(sum(weekly_credit.values()), 2)
+        monthly_completed = round(sum(monthly_credit.values()), 2)
+
         weekly_pct = (weekly_completed / weekly_due * 100) if weekly_due else 100.0
         monthly_pct = (monthly_completed / monthly_due * 100) if monthly_due else 100.0
 

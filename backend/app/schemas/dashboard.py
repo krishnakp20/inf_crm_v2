@@ -39,10 +39,10 @@ class FunnelStage(BaseModel):
 class TargetRow(BaseModel):
     user_id: int
     name: str
-    weekly_completed: int
+    weekly_completed: float
     weekly_due: int
     weekly_pct: float
-    monthly_completed: int
+    monthly_completed: float
     monthly_due: int
     monthly_pct: float
 
