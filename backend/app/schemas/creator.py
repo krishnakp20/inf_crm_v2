@@ -1,8 +1,16 @@
+import re
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.db.models.enums import CreatorSource, CreatorStage, CreatorStatus
+
+# A real username only ever has letters, numbers, periods and underscores
+# (Instagram's own rule) -- anything else (a "/", ":", "?", "=", a space)
+# means a full profile link got pasted in by mistake. Shared with the
+# frontend's usernameLinkError (lib/format.ts), which blocks this same
+# thing at entry time; this is the server-side backstop.
+USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9._]+$")
 
 
 class CreatorCreate(BaseModel):
@@ -18,6 +26,14 @@ class CreatorCreate(BaseModel):
     owner_id: int | None = None
     status: CreatorStatus = CreatorStatus.none
     notes: str | None = None
+
+    @field_validator("instagram_handle")
+    @classmethod
+    def handle_must_not_be_a_link(cls, v: str) -> str:
+        cleaned = v.strip().lstrip("@")
+        if not USERNAME_PATTERN.match(cleaned):
+            raise ValueError("Enter just the username (e.g. creator_name), not a profile link.")
+        return v
 
 
 class CreatorUpdate(BaseModel):

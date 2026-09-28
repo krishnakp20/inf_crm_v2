@@ -2,6 +2,7 @@ import { Plus, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER, STARTABLE_COLLAB_STAGES } from "../../lib/collab-stages";
+import { usernameLinkError } from "../../lib/format";
 import type {
   CollabStage,
   ContentBucket,
@@ -204,6 +205,12 @@ export function AddCollaborationModal({
         const cleanHandle = newHandle.replace(/^@/, "").trim();
         if (!newName.trim() || !cleanHandle || !newFollowers) {
           setError("Fill in all required creator profile details.");
+          setSubmitting(false);
+          return;
+        }
+        const handleError = usernameLinkError(cleanHandle);
+        if (handleError) {
+          setError(handleError);
           setSubmitting(false);
           return;
         }
@@ -447,8 +454,13 @@ export function AddCollaborationModal({
               value={newHandle}
               onChange={(e) => setNewHandle(e.target.value)}
               placeholder="@username"
-              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="mb-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
+            {usernameLinkError(newHandle) ? (
+              <p className="mb-2 text-xs font-medium text-red-600">{usernameLinkError(newHandle)}</p>
+            ) : (
+              <div className="mb-2" />
+            )}
 
             <label className="mb-1 block text-sm font-medium text-gray-700">Phone / WhatsApp · Optional</label>
             <input

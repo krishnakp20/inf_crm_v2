@@ -1,6 +1,7 @@
 import { Plus, ShieldCheck, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { usernameLinkError } from "../../lib/format";
 import type { ContentCategory, CreatorStage, User } from "../../lib/types";
 
 export function AddCreatorModal({
@@ -43,11 +44,12 @@ export function AddCreatorModal({
   const ownerName = (ownerIdToFind: number) =>
     users.find((u) => u.id === ownerIdToFind)?.name ?? "another advisor";
 
-  const canSubmit = name.trim() && handle.trim() && (!canAssignOwner || ownerId);
+  const handleError = usernameLinkError(handle);
+  const canSubmit = name.trim() && handle.trim() && !handleError && (!canAssignOwner || ownerId);
 
   async function checkHandleOwnership() {
     const cleanHandle = handle.replace(/^@/, "").trim();
-    if (!cleanHandle) {
+    if (!cleanHandle || usernameLinkError(cleanHandle)) {
       setOwnershipWarning(null);
       return;
     }
@@ -85,6 +87,10 @@ export function AddCreatorModal({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (handleError) {
+      setError(handleError);
+      return;
+    }
     setSubmitting(true);
     try {
       const { data: created } = await api.post("/creators", {
@@ -162,7 +168,8 @@ export function AddCreatorModal({
             placeholder="@username"
             className="mb-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
-          {ownershipWarning && (
+          {handleError && <p className="mb-2 text-xs font-medium text-red-600">{handleError}</p>}
+          {!handleError && ownershipWarning && (
             <div className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
               <p>{ownershipWarning}</p>
               {revivableCollabId && (
@@ -177,7 +184,7 @@ export function AddCreatorModal({
               )}
             </div>
           )}
-          {!ownershipWarning && <div className="mb-3" />}
+          {!handleError && !ownershipWarning && <div className="mb-3" />}
 
           <label className="mb-1 block text-sm font-medium text-gray-700">Creator name · Required</label>
           <input

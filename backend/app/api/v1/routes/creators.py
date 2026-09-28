@@ -32,6 +32,7 @@ from app.db.models.stage_event import StageEvent
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.creator import (
+    USERNAME_PATTERN,
     BoardStats,
     BulkAssign,
     BulkSetSource,
@@ -414,6 +415,15 @@ async def bulk_upload_creators(
         handle = (row.get("instagram_handle") or row.get("handle") or "").strip().lstrip("@")
         if not name or not handle:
             reason = "Missing name or instagram_handle"
+            errors.append(f"Row {line_num}: {reason.lower()}")
+            row_results.append(
+                BulkUploadRowResult(
+                    row=line_num, instagram_handle=handle, name=name, status="error", reason=reason
+                )
+            )
+            continue
+        if not USERNAME_PATTERN.match(handle):
+            reason = "instagram_handle is a link, not a username"
             errors.append(f"Row {line_num}: {reason.lower()}")
             row_results.append(
                 BulkUploadRowResult(

@@ -66,6 +66,24 @@ export function displayHandle(handle: string): string {
   return value.replace(/^@/, "");
 }
 
+// A real username only ever has letters, numbers, periods and underscores
+// (Instagram's own rule) -- anything else (a "/", ":", "?", "=", a space)
+// means a full profile link got pasted in by mistake, exactly the
+// malformed-handle records displayHandle() above exists to paper over.
+// Blocking it at entry is better than cleaning it up after the fact.
+const USERNAME_PATTERN = /^[a-zA-Z0-9._]+$/;
+
+/** null when the entered username is clean; an error message to show
+ * otherwise. Takes the raw field value (leading "@" is fine). */
+export function usernameLinkError(rawHandle: string): string | null {
+  const value = rawHandle.trim().replace(/^@/, "");
+  if (!value) return null;
+  if (!USERNAME_PATTERN.test(value)) {
+    return "Enter just the username (e.g. creator_name), not a profile link.";
+  }
+  return null;
+}
+
 export function maskPhone(phone: string | null): string {
   if (!phone) return "—";
   const match = phone.match(/^(\+\d+)\s*(\d+)$/);
