@@ -33,6 +33,21 @@ const REQUIRED_COLUMNS: { label: string; hint: string }[] = [
   { label: "ROAS", hint: "Revenue ÷ spend" },
 ];
 
+// Optional -- a blank or missing cell leaves that field unchanged. Content
+// Bucket/Language/Meta ROAS/Google ROAS update the video record; Collab
+// Status/Ad Code/CTA Link/Remarks write straight to Partnership Hub,
+// bypassing its usual Take Action workflow (confirmed with the client).
+const OPTIONAL_COLUMNS: { label: string; hint: string }[] = [
+  { label: "Content Bucket", hint: "Partnership Hub" },
+  { label: "Language", hint: "Partnership Hub" },
+  { label: "Meta ROAS", hint: "Revenue ÷ Meta spend" },
+  { label: "Google ROAS", hint: "Revenue ÷ Google spend" },
+  { label: "Collab Status", hint: "Overwrites directly" },
+  { label: "Ad Code", hint: "Overwrites directly" },
+  { label: "CTA Link", hint: "Overwrites directly" },
+  { label: "Remarks", hint: "Adds a new remark" },
+];
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" });
 }
@@ -55,7 +70,7 @@ export function MetricUploadPanel() {
   useEffect(loadHistory, []);
 
   function downloadTemplate() {
-    const lines = [REQUIRED_COLUMNS.map((c) => c.label).join(",")];
+    const lines = [[...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS].map((c) => c.label).join(",")];
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -149,6 +164,25 @@ export function MetricUploadPanel() {
         <p className="mt-2 text-[11px] text-gray-400">
           A row updates only when both the POC code and video link match the same Live record. Revenue and ROAS are
           accepted only in this Admin view.
+        </p>
+      </div>
+
+      <div className="mb-5">
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-gray-400">3. Optional columns</p>
+        <p className="mb-2 text-xs text-gray-500">
+          A blank or missing cell leaves that field unchanged -- add only the ones you're updating.
+        </p>
+        <div className="grid grid-cols-4 gap-2">
+          {OPTIONAL_COLUMNS.map((c) => (
+            <div key={c.label} className="rounded-card border border-[#e7e5e4] p-2.5">
+              <div className="text-xs font-bold text-ink">{c.label}</div>
+              <div className="text-[10px] text-gray-500">{c.hint}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-gray-400">
+          Collab Status, Ad Code and CTA Link overwrite Partnership Hub directly, skipping its usual Take Action
+          workflow -- use with care.
         </p>
       </div>
 

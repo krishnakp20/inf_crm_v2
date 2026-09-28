@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import scoped_owner_ids
 from app.db.models.collaboration import Collaboration
-from app.db.models.enums import TicketStatus, UserRole
+from app.db.models.enums import PartnershipCollabStatus, TicketStatus, UserRole
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.user import User
 from app.schemas.partnership import PartnershipStats
@@ -16,6 +16,19 @@ REMARK_TAG_CTA_SUBMITTED = "CTA submitted"
 REMARK_TAG_ADMIN_COUNTER = "Admin countered"
 REMARK_TAG_CHANGE_REQUESTED = "Change requested"
 REMARK_TAG_VERIFIED_CLOSED = "Closed & Live"
+REMARK_TAG_METRIC_UPLOAD = "Metric upload"
+
+# Shared with services/metric_upload.py, which needs the reverse (label ->
+# enum) direction to parse the "Collab Status" column on upload.
+COLLAB_STATUS_LABELS = {
+    PartnershipCollabStatus.open: "Open",
+    PartnershipCollabStatus.partnership_sent: "Partnership Sent",
+    PartnershipCollabStatus.need_tag: "Need Tag",
+    PartnershipCollabStatus.ad_code_not_working: "Ad Code Not Working",
+    PartnershipCollabStatus.closed: "Closed",
+    PartnershipCollabStatus.closed_and_live: "Closed & Live",
+}
+COLLAB_STATUS_BY_LABEL = {label.lower(): status for status, label in COLLAB_STATUS_LABELS.items()}
 
 _COMMERCIAL_FIELDS = (
     "ad_rights_creator_quote",

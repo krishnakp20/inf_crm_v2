@@ -36,8 +36,10 @@ from app.schemas.partnership import (
     PartnershipVerifyCloseRequest,
 )
 from app.services.collab_pipeline import effective_live_dates
+from app.services.metric_upload import OPTIONAL_COLUMNS as METRIC_UPLOAD_OPTIONAL_COLUMNS
 from app.services.metric_upload import REQUIRED_COLUMNS as METRIC_UPLOAD_COLUMNS
 from app.services.partnership_pipeline import (
+    COLLAB_STATUS_LABELS,
     REMARK_TAG_ADMIN_COUNTER,
     REMARK_TAG_ADMIN_REQUEST,
     REMARK_TAG_AGENT_RESPONSE,
@@ -353,9 +355,16 @@ async def export_metrics_template(
     """A ready-to-edit sheet for every video in the current Overview filter,
     in the exact column shape Settings > Upload metrics expects (POC Code +
     Video Link pre-filled so an admin never has to type them by hand,
-    current Views/Likes/Comments/Revenue/Ad Spend/ROAS pre-filled so they
-    can see and only change what's actually different) -- fill it in and
-    upload the same file straight back through that same import."""
+    current Views/Likes/Comments/Revenue/Ad Spend/ROAS/Meta ROAS/Google
+    ROAS/Content Bucket/Language/Ad Code/CTA Link/Collab Status pre-filled
+    so they can see and only change what's actually different) -- fill it
+    in and upload the same file straight back through that same import.
+
+    Remarks is deliberately left blank, not pre-filled with the latest
+    remark -- process_metric_upload appends a new remark for any non-blank
+    cell, so pre-filling it would duplicate that same remark on every
+    re-upload unless the admin remembered to clear it first.
+    """
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
@@ -364,7 +373,7 @@ async def export_metrics_template(
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(METRIC_UPLOAD_COLUMNS)
+    writer.writerow(METRIC_UPLOAD_COLUMNS + METRIC_UPLOAD_OPTIONAL_COLUMNS)
     for ticket in tickets:
         collab, _, _ = batch["collabs"][ticket.collaboration_id]
         writer.writerow(
@@ -377,6 +386,14 @@ async def export_metrics_template(
                 collab.revenue if collab.revenue is not None else "",
                 collab.ad_spend if collab.ad_spend is not None else "",
                 collab.roas if collab.roas is not None else "",
+                ticket.content_bucket or "",
+                ticket.language or "",
+                collab.meta_roas if collab.meta_roas is not None else "",
+                collab.google_roas if collab.google_roas is not None else "",
+                COLLAB_STATUS_LABELS[ticket.collab_status],
+                ticket.ad_code or "",
+                ticket.cta_link or "",
+                "",
             ]
         )
     buffer.seek(0)
@@ -412,16 +429,6 @@ _MASTER_DATA_COLUMNS = [
     "Updated on",
 ]
 
-_COLLAB_STATUS_LABELS = {
-    PartnershipCollabStatus.open: "Open",
-    PartnershipCollabStatus.partnership_sent: "Partnership Sent",
-    PartnershipCollabStatus.need_tag: "Need Tag",
-    PartnershipCollabStatus.ad_code_not_working: "Ad Code Not Working",
-    PartnershipCollabStatus.closed: "Closed",
-    PartnershipCollabStatus.closed_and_live: "Closed & Live",
-}
-
-
 @router.get("/export-master-data")
 async def export_master_data(
     owner_id: int | None = None,
@@ -451,14 +458,8 @@ async def export_master_data(
       mapped by the client's own column order (Reel Commercials sits next
       to Product/Reel Link; Collab Commercials sits next to the ad-rights
       fields), which is the reverse of what the names alone suggest.
-    - Meta ROAs / Google ROAs: left blank -- the app only tracks one
-      generic ROAS today, with no per-ad-platform split; these columns
-      exist so the sheet shape already matches the reference, ready for
-      that split whenever it's built.
-    - Updated on: PartnershipTicket has no updated_at column, and
-      Collaboration.last_activity_at isn't touched by anything that
-      happens inside Partnership Hub -- uses the latest remark's
-      created_at instead, since every Hub action writes one.
+    - Meta ROAs / Google ROAs / Updated on are all real now -- see
+      Collaboration.meta_roas/.google_roas and PartnershipTicket.updated_at.
     """
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
@@ -474,7 +475,7 @@ async def export_master_data(
         products = batch["products"].get(collab.id, [])
         live_date = batch["live_dates"].get(collab.id)
         remarks = batch["remarks"].get(ticket.id, [])
-        latest_remark, updated_on = (remarks[0][0].body, remarks[0][0].created_at) if remarks else ("", ticket.created_at)
+        latest_remark = remarks[0][0].body if remarks else ""
         handle = creator.instagram_handle.lstrip("@").strip()
 
         writer.writerow(
@@ -496,11 +497,11 @@ async def export_master_data(
                 ticket.ad_rights_amount if ticket.ad_rights_amount is not None else "",
                 ticket.ad_code or "",
                 ticket.cta_link or "",
-                _COLLAB_STATUS_LABELS[ticket.collab_status],
+                COLLAB_STATUS_LABELS[ticket.collab_status],
                 latest_remark,
-                "",
-                "",
-                updated_on.isoformat(),
+                collab.meta_roas if collab.meta_roas is not None else "",
+                collab.google_roas if collab.google_roas is not None else "",
+                ticket.updated_at.isoformat(),
             ]
         )
     buffer.seek(0)

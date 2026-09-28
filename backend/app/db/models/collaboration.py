@@ -50,6 +50,13 @@ class Collaboration(Base):
     revenue: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     ad_spend: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     roas: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    # Per-ad-platform split of the generic roas above -- populated by Metric
+    # Upload only, same as roas itself. Distinct from Analytics'
+    # meta_roas/google_roas placeholders, which stay null there (this is a
+    # per-collaboration figure; aggregating it meaningfully per-user/per-
+    # range is a separate, not-yet-built question).
+    meta_roas: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    google_roas: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
     campaign_id: Mapped[int | None] = mapped_column(
         ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
     )
