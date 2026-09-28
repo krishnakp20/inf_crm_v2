@@ -397,8 +397,8 @@ export default function Database() {
 
       <OwnershipCheck owners={owners} onRevived={refresh} />
 
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-5">
           <button
             onClick={() => {
               setActiveTab("all");
@@ -427,121 +427,127 @@ export default function Database() {
             Unassigned pool <span className="text-gray-400">{tabCounts.unassigned}</span>
           </button>
         </div>
-        {(user?.role === "admin" || user?.role === "supervisor") && activeTab !== "unassigned" && (
-          <label className="flex items-center gap-2">
-            <span className="text-[8px] text-[#918d97]">Filter by user</span>
-            <select
-              value={ownerId}
-              onChange={(e) => {
-                setOffset(0);
-                setOwnerId(e.target.value);
-              }}
-              className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
-            >
-              <option value="">All users</option>
-              {filterableUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {user?.role === "admin" && (
-          <label className="flex items-center gap-2">
-            <span className="text-[8px] text-[#918d97]">Filter by source</span>
-            <select
-              value={sourceFilter}
-              onChange={(e) => {
-                setOffset(0);
-                setSourceFilter(e.target.value);
-              }}
-              className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
-            >
-              <option value="">All sources</option>
-              <option value="user">User</option>
-              <option value="system">System</option>
-              <option value="unset">Unset</option>
-            </select>
-          </label>
-        )}
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2.5">
-        <div className="flex h-9 w-full max-w-[510px] items-center gap-2 rounded-[9px] border border-[#e7e5e4] bg-white px-2.5">
-          <Search size={14} className="shrink-0 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => {
-              setOffset(0);
-              setSearch(e.target.value);
-            }}
-            placeholder={activeTab === "archived" ? "Search archived creators..." : "Search name, username, phone or category..."}
-            className="w-full text-xs text-ink placeholder:text-gray-400 focus:outline-none"
-          />
-        </div>
-        <DateRangePicker
-          preset={rangePreset}
-          customFrom={customFrom}
-          customTo={customTo}
-          align="left"
-          onSelectPreset={(p) => {
-            setOffset(0);
-            setRangePreset(p);
-          }}
-          onApplyCustom={(from, to) => {
-            setOffset(0);
-            setCustomFrom(from);
-            setCustomTo(to);
-            setRangePreset("custom");
-          }}
-        />
-        {activeTab === "all" && (
-          <>
-            <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
-              <ArrowUpDown size={14} className="text-gray-400" />
+        <div className="flex flex-wrap items-center gap-3">
+          {(user?.role === "admin" || user?.role === "supervisor") && activeTab !== "unassigned" && (
+            <label className="flex shrink-0 items-center gap-2">
+              <span className="text-[8px] text-[#918d97]">Filter by user</span>
               <select
-                aria-label="Sort creator database"
-                value={sortBy}
+                value={ownerId}
                 onChange={(e) => {
                   setOffset(0);
-                  setSortBy(e.target.value);
+                  setOwnerId(e.target.value);
                 }}
-                className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
+                className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
               >
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                <option value="">All users</option>
+                {filterableUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
                   </option>
                 ))}
               </select>
             </label>
-            <button
-              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              className="flex h-9 shrink-0 items-center rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-bold text-[#655f6b] hover:bg-surface"
-            >
-              {sortDir === "asc" ? "Low to high ↑" : "High to low ↓"}
-            </button>
-          </>
-        )}
-        <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
-          <span className="text-xs text-gray-400">Per page</span>
-          <select
-            aria-label="Creators per page"
-            value={pageSize}
-            onChange={(e) => {
+          )}
+          {user?.role === "admin" && (
+            <label className="flex shrink-0 items-center gap-2">
+              <span className="text-[8px] text-[#918d97]">Filter by source</span>
+              <select
+                value={sourceFilter}
+                onChange={(e) => {
+                  setOffset(0);
+                  setSourceFilter(e.target.value);
+                }}
+                className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
+              >
+                <option value="">All sources</option>
+                <option value="user">User</option>
+                <option value="system">System</option>
+                <option value="unset">Unset</option>
+              </select>
+            </label>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex h-9 min-w-[220px] max-w-[400px] flex-1 items-center gap-2 rounded-[9px] border border-[#e7e5e4] bg-white px-2.5">
+            <Search size={14} className="shrink-0 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => {
+                setOffset(0);
+                setSearch(e.target.value);
+              }}
+              placeholder={activeTab === "archived" ? "Search archived creators..." : "Search name, username, phone or category..."}
+              className="w-full text-xs text-ink placeholder:text-gray-400 focus:outline-none"
+            />
+          </div>
+          <DateRangePicker
+            preset={rangePreset}
+            customFrom={customFrom}
+            customTo={customTo}
+            align="left"
+            onSelectPreset={(p) => {
               setOffset(0);
-              setPageSize(Number(e.target.value));
+              setRangePreset(p);
             }}
-            className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
+            onApplyCustom={(from, to) => {
+              setOffset(0);
+              setCustomFrom(from);
+              setCustomTo(to);
+              setRangePreset("custom");
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {activeTab === "all" && (
+            <>
+              <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
+                <ArrowUpDown size={14} className="text-gray-400" />
+                <select
+                  aria-label="Sort creator database"
+                  value={sortBy}
+                  onChange={(e) => {
+                    setOffset(0);
+                    setSortBy(e.target.value);
+                  }}
+                  className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                className="flex h-9 shrink-0 items-center rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-bold text-[#655f6b] hover:bg-surface"
+              >
+                {sortDir === "asc" ? "Low to high ↑" : "High to low ↓"}
+              </button>
+            </>
+          )}
+          <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
+            <span className="text-xs text-gray-400">Per page</span>
+            <select
+              aria-label="Creators per page"
+              value={pageSize}
+              onChange={(e) => {
+                setOffset(0);
+                setPageSize(Number(e.target.value));
+              }}
+              className="bg-transparent text-xs font-semibold text-ink focus:outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       {activeTab === "archived" ? (
