@@ -66,7 +66,7 @@ export function PipelineFunnel({
               </div>
               <div className="min-h-[20px] text-[8px] font-extrabold leading-tight text-muted">{stage.label}</div>
               <div className="mt-1.5 text-[21px] font-bold tracking-tight text-ink">{stage.count}</div>
-              <div className="mt-1 text-[6px] text-[#99949e]">
+              <div className="mt-1 min-h-[23px] text-[6px] leading-tight text-[#99949e]">
                 {i === 0 ? "Starting stage" : `${stage.conversion_pct ?? 0}% from previous`}
               </div>
               <div className="mt-1.5 h-[5px] w-full rounded-full bg-[#edecf0]">
