@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDownWideNarrow, ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ProductPerformance as ProductPerformanceType } from "../../lib/types";
 
@@ -20,9 +20,15 @@ function progressPct(videosLive: number, targetVideos: number): number {
   return videosLive > 0 ? 100 : 0;
 }
 
+function achievedFor(row: DisplayRow, userFilter: string): number {
+  if (row.kind === "product") return videosLiveFor(row.product, userFilter);
+  return row.members.reduce((sum, m) => sum + videosLiveFor(m, userFilter), 0);
+}
+
 export function ProductPerformance({ products }: { products: ProductPerformanceType[] }) {
   const [userFilter, setUserFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
+  const [sortByPerformance, setSortByPerformance] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Real contributors (who actually delivered each product's live videos),
@@ -56,8 +62,10 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
         );
       }
     }
-    return groupFilter ? rows.filter((r) => (r.kind === "group" ? r.parent === groupFilter : false)) : rows;
-  }, [byCredit, groupFilter]);
+    const filtered = groupFilter ? rows.filter((r) => (r.kind === "group" ? r.parent === groupFilter : false)) : rows;
+    if (!sortByPerformance) return filtered;
+    return [...filtered].sort((a, b) => achievedFor(b, userFilter) - achievedFor(a, userFilter));
+  }, [byCredit, groupFilter, sortByPerformance, userFilter]);
 
   function toggleExpanded(parent: string) {
     setExpanded((prev) => {
@@ -98,6 +106,19 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
           <p className="mt-1 text-[10px] text-muted">Videos live against each product target</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSortByPerformance((v) => !v)}
+            title="Sort by top performers"
+            className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold ${
+              sortByPerformance
+                ? "border-brand-200 bg-brand-50 text-brand-600"
+                : "border-[#e7e5e4] text-ink hover:bg-surface"
+            }`}
+          >
+            <ArrowDownWideNarrow size={12} />
+            Top performers
+          </button>
           {groups.length > 0 && (
             <select
               aria-label="Filter products by group"
