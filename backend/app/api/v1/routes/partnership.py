@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_, select
+from sqlalchemy import DateTime, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, scoped_owner_ids
@@ -196,6 +196,8 @@ async def _filtered_tickets(
     language: str | None,
     category: str | None,
     search: str | None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> list[PartnershipTicket]:
     scope = await scoped_ticket_ids(user, db)
     stmt = select(PartnershipTicket).join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
@@ -222,6 +224,29 @@ async def _filtered_tickets(
         if search:
             pattern = f"%{search}%"
             stmt = stmt.where(or_(Creator.name.ilike(pattern), Creator.instagram_handle.ilike(pattern)))
+    if date_from is not None or date_to is not None:
+        # Same effective-live-date rule as everywhere else in the app
+        # (Analytics' _scoped_live_collab_ids, collab_pipeline.effective_live_dates):
+        # the explicit video_live_date if the user entered one, else the
+        # first transition-to-Live event -- filtered at the SQL level so
+        # pagination/sorting downstream still sees the right total.
+        live_date_subq = (
+            select(
+                CollabStageEvent.collaboration_id.label("collaboration_id"),
+                func.min(CollabStageEvent.created_at).label("live_date"),
+            )
+            .where(CollabStageEvent.to_stage == CollabStage.live)
+            .group_by(CollabStageEvent.collaboration_id)
+            .subquery()
+        )
+        effective_date = func.coalesce(
+            cast(Collaboration.video_live_date, DateTime(timezone=True)), live_date_subq.c.live_date
+        )
+        stmt = stmt.outerjoin(live_date_subq, live_date_subq.c.collaboration_id == Collaboration.id)
+        if date_from is not None:
+            stmt = stmt.where(effective_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(effective_date < date_to)
 
     return list((await db.execute(stmt)).scalars().all())
 
@@ -274,6 +299,8 @@ async def list_overview(
     language: str | None = None,
     category: str | None = None,
     search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     sort_by: str = Query("live_date"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(25, le=500),
@@ -283,7 +310,9 @@ async def list_overview(
 ) -> PartnershipOverviewResponse:
     if sort_by not in OVERVIEW_SORTABLE_FIELDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
-    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    tickets = await _filtered_tickets(
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+    )
     batch = await _batch_load(db, tickets)
     rows = [_to_overview_row(t, batch, user) for t in tickets]
 
@@ -306,10 +335,14 @@ async def list_open(
     language: str | None = None,
     category: str | None = None,
     search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOpenRow]:
-    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    tickets = await _filtered_tickets(
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+    )
     # A ticket lands here only once an admin/marketer has actually taken
     # action on it (Take Action -> pending_at_user, or the advisor/editor's
     # response bouncing it back -> pending_at_admin). A freshly auto-created
@@ -331,10 +364,14 @@ async def list_closed(
     language: str | None = None,
     category: str | None = None,
     search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOverviewRow]:
-    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    tickets = await _filtered_tickets(
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+    )
     tickets = [t for t in tickets if t.ticket_status == TicketStatus.closed_and_live]
     batch = await _batch_load(db, tickets)
     return [_to_overview_row(t, batch, user) for t in tickets]
@@ -349,6 +386,8 @@ async def export_metrics_template(
     language: str | None = None,
     category: str | None = None,
     search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> StreamingResponse:
@@ -368,7 +407,9 @@ async def export_metrics_template(
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
-    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    tickets = await _filtered_tickets(
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+    )
     batch = await _batch_load(db, tickets)
 
     buffer = io.StringIO()
@@ -438,6 +479,8 @@ async def export_master_data(
     language: str | None = None,
     category: str | None = None,
     search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> StreamingResponse:
@@ -464,7 +507,9 @@ async def export_master_data(
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
-    tickets = await _filtered_tickets(db, user, owner_id, product_id, platform, content_bucket, language, category, search)
+    tickets = await _filtered_tickets(
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+    )
     batch = await _batch_load(db, tickets)
 
     buffer = io.StringIO()

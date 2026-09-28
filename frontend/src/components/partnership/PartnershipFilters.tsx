@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { DateRangePicker, type RangePreset } from "../dashboard/DateRangePicker";
 import { PLATFORM_OPTIONS } from "../../lib/campaign-stages";
 import type { ContentBucket, ContentCategory, Language, Platform, Product, User } from "../../lib/types";
 
@@ -17,6 +18,11 @@ export function PartnershipFilters({
   onLanguageChange,
   category,
   onCategoryChange,
+  rangePreset,
+  customFrom,
+  customTo,
+  onSelectPreset,
+  onApplyCustom,
   products,
   users,
   contentBuckets,
@@ -37,6 +43,11 @@ export function PartnershipFilters({
   onLanguageChange: (value: string) => void;
   category: string;
   onCategoryChange: (value: string) => void;
+  rangePreset: RangePreset;
+  customFrom: string;
+  customTo: string;
+  onSelectPreset: (preset: RangePreset) => void;
+  onApplyCustom: (from: string, to: string) => void;
   products: Product[];
   users: User[];
   contentBuckets: ContentBucket[];
@@ -54,6 +65,15 @@ export function PartnershipFilters({
           className="w-full text-xs text-ink placeholder:text-gray-400 focus:outline-none"
         />
       </div>
+
+      <DateRangePicker
+        preset={rangePreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onSelectPreset={onSelectPreset}
+        onApplyCustom={onApplyCustom}
+        align="left"
+      />
 
       <select
         value={ownerId}

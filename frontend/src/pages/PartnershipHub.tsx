@@ -7,9 +7,11 @@ import { PartnershipOverviewTable } from "../components/partnership/PartnershipO
 import { PartnershipStatsRow } from "../components/partnership/PartnershipStatsRow";
 import { TakeActionModal } from "../components/partnership/TakeActionModal";
 import { TicketDetailDrawer } from "../components/partnership/TicketDetailDrawer";
+import { type RangePreset } from "../components/dashboard/DateRangePicker";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
+import { rangeToDates } from "../lib/dateRange";
 import type {
   ContentBucket,
   ContentCategory,
@@ -51,10 +53,15 @@ export default function PartnershipHub() {
   const [contentBucket, setContentBucket] = useState("");
   const [language, setLanguage] = useState("");
   const [category, setCategory] = useState("");
+  const [rangePreset, setRangePreset] = useState<RangePreset>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [takeActionIds, setTakeActionIds] = useState<number[] | null>(null);
   const [detailTicketId, setDetailTicketId] = useState<number | null>(null);
+
+  const { from: dateFrom, to: dateTo } = rangeToDates(rangePreset, customFrom, customTo);
 
   const params = {
     search: search || undefined,
@@ -64,6 +71,8 @@ export default function PartnershipHub() {
     content_bucket: contentBucket || undefined,
     language: language || undefined,
     category: category || undefined,
+    date_from: dateFrom,
+    date_to: dateTo,
   };
 
   useEffect(() => {
@@ -137,12 +146,15 @@ export default function PartnershipHub() {
     contentBucket,
     language,
     category,
+    rangePreset,
+    customFrom,
+    customTo,
     overviewSortBy,
     overviewSortDir,
     overviewOffset,
   ]);
-  useEffect(loadOpen, [search, ownerId, productId, platform, contentBucket, language, category]);
-  useEffect(loadClosed, [search, ownerId, productId, platform, contentBucket, language, category]);
+  useEffect(loadOpen, [search, ownerId, productId, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
+  useEffect(loadClosed, [search, ownerId, productId, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
   useEffect(loadStats, []);
 
   function refresh() {
@@ -259,6 +271,19 @@ export default function PartnershipHub() {
         onLanguageChange={(v) => changeFilter(setLanguage, v)}
         category={category}
         onCategoryChange={(v) => changeFilter(setCategory, v)}
+        rangePreset={rangePreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onSelectPreset={(p) => {
+          setOverviewOffset(0);
+          setRangePreset(p);
+        }}
+        onApplyCustom={(from, to) => {
+          setOverviewOffset(0);
+          setCustomFrom(from);
+          setCustomTo(to);
+          setRangePreset("custom");
+        }}
         products={products}
         users={users}
         contentBuckets={contentBuckets}
