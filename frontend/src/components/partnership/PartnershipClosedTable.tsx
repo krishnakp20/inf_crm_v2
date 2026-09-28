@@ -1,5 +1,5 @@
 import { useSort } from "../../hooks/useSort";
-import { formatCurrency, initials } from "../../lib/format";
+import { displayHandle, formatCurrency, initials } from "../../lib/format";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { PartnershipOverviewRow } from "../../lib/types";
 
@@ -69,7 +69,7 @@ export function PartnershipClosedTable({
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-ink">{row.video_name}</div>
-                      <div className="text-[9px] text-[#716d78]">@{row.creator_handle}</div>
+                      <div className="max-w-[180px] truncate text-[9px] text-[#716d78]">@{displayHandle(row.creator_handle)}</div>
                     </div>
                   </div>
                 </td>

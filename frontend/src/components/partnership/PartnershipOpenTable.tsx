@@ -1,5 +1,5 @@
 import { useSort } from "../../hooks/useSort";
-import { initials } from "../../lib/format";
+import { displayHandle, initials } from "../../lib/format";
 import { AGING_BADGE, COLLAB_STATUS_LABELS, TICKET_STATUS_BADGE, TICKET_STATUS_LABELS } from "../../lib/partnership-stages";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { PartnershipOpenRow, UserRole } from "../../lib/types";
@@ -89,7 +89,7 @@ export function PartnershipOpenTable({
                         >
                           {row.video_name}
                         </button>
-                        <div className="text-[9px] text-[#716d78]">@{row.creator_handle}</div>
+                        <div className="max-w-[180px] truncate text-[9px] text-[#716d78]">@{displayHandle(row.creator_handle)}</div>
                       </div>
                     </div>
                   </td>

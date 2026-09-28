@@ -51,6 +51,21 @@ export function instagramUrl(handle: string): string {
   return `https://instagram.com/${handle.replace(/^@/, "").trim()}`;
 }
 
+/** Some older creator records have a full profile URL (with query params)
+ * stored as their "handle" instead of a clean username -- shows a long,
+ * ugly string that breaks row layout wherever it's displayed. Extracts
+ * just the username portion for DISPLAY only; the stored value is left
+ * untouched since other things (Metric Upload matching, etc.) may depend
+ * on it exactly as entered. Same extraction OwnershipCheck already does
+ * for pasted profile links. */
+export function displayHandle(handle: string): string {
+  let value = handle.trim();
+  if (/instagram\.com/i.test(value)) {
+    value = value.split("?")[0].replace(/\/+$/, "").split("/").pop() ?? value;
+  }
+  return value.replace(/^@/, "");
+}
+
 export function maskPhone(phone: string | null): string {
   if (!phone) return "—";
   const match = phone.match(/^(\+\d+)\s*(\d+)$/);

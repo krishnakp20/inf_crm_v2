@@ -1,4 +1,4 @@
-import { compactNumber, formatCurrency, initials } from "../../lib/format";
+import { compactNumber, displayHandle, formatCurrency, initials } from "../../lib/format";
 import { PLATFORM_LABELS } from "../../lib/campaign-stages";
 import { COLLAB_STATUS_LABELS, TICKET_STATUS_BADGE, TICKET_STATUS_LABELS } from "../../lib/partnership-stages";
 import type { SortDirection } from "../../lib/sort";
@@ -121,8 +121,8 @@ export function PartnershipOverviewTable({
                         >
                           {row.video_name}
                         </button>
-                        <div className="text-[9px] text-[#716d78]">
-                          @{row.creator_handle} · {row.platform ? PLATFORM_LABELS[row.platform] : "—"}
+                        <div className="max-w-[180px] truncate text-[9px] text-[#716d78]">
+                          @{displayHandle(row.creator_handle)} · {row.platform ? PLATFORM_LABELS[row.platform] : "—"}
                         </div>
                       </div>
                     </div>
@@ -136,12 +136,20 @@ export function PartnershipOverviewTable({
                   </td>
                   <td className={TD}>
                     {row.product_names.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {row.product_names.map((name) => (
+                      <div className="flex items-center gap-1">
+                        {row.product_names.slice(0, 2).map((name) => (
                           <span key={name} className={`${CHIP} border border-[#e2e3e7] bg-[#fafafa] text-[#5f626e]`}>
                             {name}
                           </span>
                         ))}
+                        {row.product_names.length > 2 && (
+                          <span
+                            title={row.product_names.slice(2).join(", ")}
+                            className={`${CHIP} border border-[#e2e3e7] bg-[#f1f2f4] font-semibold text-[#838590]`}
+                          >
+                            +{row.product_names.length - 2}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-[#97939d]">—</span>
