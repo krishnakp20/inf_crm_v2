@@ -6,7 +6,6 @@ import type {
   CollabStage,
   ContentBucket,
   ContentType,
-  Creator,
   DealType,
   Language,
   Platform,
@@ -17,6 +16,15 @@ import type {
 interface VideoLinkRow {
   platform: Platform | "";
   url: string;
+}
+
+// Matches backend OwnershipMatch (GET /creators/check-ownership) -- a
+// database-wide search result, deliberately not scoped to any one owner.
+interface ExistingCreatorMatch {
+  id: number;
+  name: string;
+  instagram_handle: string;
+  owner_id: number;
 }
 
 const STAGE_INDEX: Record<CollabStage, number> = Object.fromEntries(
@@ -68,10 +76,11 @@ export function AddCollaborationModal({
   const [ownerId, setOwnerId] = useState(defaultOwnerId ?? currentUserId);
 
   const [tab, setTab] = useState<CreatorTab>("existing");
-  const [existingCreators, setExistingCreators] = useState<Creator[]>([]);
-  const [selectedCreatorId, setSelectedCreatorId] = useState<number | "">("");
+  const [existingCreators, setExistingCreators] = useState<ExistingCreatorMatch[]>([]);
+  const [selectedCreator, setSelectedCreator] = useState<ExistingCreatorMatch | null>(null);
   const [creatorSearch, setCreatorSearch] = useState("");
   const [creatorDropdownOpen, setCreatorDropdownOpen] = useState(false);
+  const selectedCreatorId = selectedCreator?.id ?? "";
 
   const [newName, setNewName] = useState("");
   const [newHandle, setNewHandle] = useState("");
@@ -140,29 +149,36 @@ export function AddCollaborationModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, additionalProductIds.join(",")]);
 
+  // Searches every creator in the database, not just this owner's own --
+  // matches the field's own label ("already in Database"). Previously this
+  // pre-loaded only owner_id=ownerId's first 500 creators and filtered
+  // client-side, so a creator owned by anyone else could never be found
+  // here even though they're right there in the Database page -- picking
+  // an existing creator only links a new Collaboration to them, it never
+  // touches Creator.owner_id, so searching across everyone is safe.
   useEffect(() => {
-    api.get<{ items: Creator[]; total: number }>("/creators", { params: { owner_id: ownerId, limit: 500 } }).then((res) => {
-      setExistingCreators(res.data.items);
-      const first = res.data.items[0];
-      setSelectedCreatorId(first?.id ?? "");
-      setCreatorSearch(first ? `@${first.instagram_handle} · ${first.name}` : "");
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerId]);
+    const query = creatorSearch.trim();
+    if (query.length < 2) {
+      setExistingCreators([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api.get<ExistingCreatorMatch[]>("/creators/check-ownership", { params: { query } }).then((res) => {
+        setExistingCreators(res.data);
+      });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [creatorSearch]);
 
   useEffect(() => {
     api.get<Language[]>("/languages").then((res) => setLanguages(res.data));
     api.get<ContentBucket[]>("/content-buckets").then((res) => setContentBuckets(res.data));
   }, []);
 
-  const filteredCreators = creatorSearch.trim()
-    ? existingCreators.filter((c) =>
-        `${c.instagram_handle} ${c.name}`.toLowerCase().includes(creatorSearch.trim().toLowerCase())
-      )
-    : existingCreators;
+  const ownerNames = Object.fromEntries(users.map((u) => [u.id, u.name]));
 
-  function selectCreator(c: Creator) {
-    setSelectedCreatorId(c.id);
+  function selectCreator(c: ExistingCreatorMatch) {
+    setSelectedCreator(c);
     setCreatorSearch(`@${c.instagram_handle} · ${c.name}`);
     setCreatorDropdownOpen(false);
   }
@@ -371,8 +387,7 @@ export function AddCollaborationModal({
                 onBlur={() =>
                   setTimeout(() => {
                     setCreatorDropdownOpen(false);
-                    const selected = existingCreators.find((c) => c.id === selectedCreatorId);
-                    setCreatorSearch(selected ? `@${selected.instagram_handle} · ${selected.name}` : "");
+                    setCreatorSearch(selectedCreator ? `@${selectedCreator.instagram_handle} · ${selectedCreator.name}` : "");
                   }, 150)
                 }
                 placeholder="Search by username or name..."
@@ -380,10 +395,13 @@ export function AddCollaborationModal({
               />
               {creatorDropdownOpen && (
                 <div className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
-                  {filteredCreators.length === 0 && (
+                  {creatorSearch.trim().length < 2 && (
+                    <div className="px-3 py-2 text-sm text-gray-400">Type at least 2 characters to search</div>
+                  )}
+                  {creatorSearch.trim().length >= 2 && existingCreators.length === 0 && (
                     <div className="px-3 py-2 text-sm text-gray-400">No matching creators</div>
                   )}
-                  {filteredCreators.map((c) => (
+                  {existingCreators.map((c) => (
                     <button
                       key={c.id}
                       type="button"
@@ -393,13 +411,15 @@ export function AddCollaborationModal({
                       }`}
                     >
                       @{c.instagram_handle} · {c.name}
+                      <span className="text-gray-400"> · {ownerNames[c.owner_id] ?? "Unassigned"}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
             <p className="mb-3 text-[11px] text-gray-400">
-              A new Collab ID will be created. The creator username and Creator ID remain unchanged.
+              Searches every creator in the database, not just yours. A new Collab ID will be created. The creator
+              username and Creator ID remain unchanged.
             </p>
           </>
         )}
