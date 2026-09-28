@@ -346,8 +346,19 @@ async def get_product_performance(
     stmt = select(Product, User.name).join(User, User.id == Product.owner_id)
     rows = (await db.execute(stmt.order_by(Product.name))).all()
 
+    # A disabled product that has never been put on a single collaboration
+    # is pure clutter here (an org-wide leaderboard) -- unlike a specific
+    # collaboration's own record, which keeps showing a disabled product's
+    # name/history untouched regardless (see Product.is_active's comment),
+    # there's no history to protect for one nobody ever assigned.
+    used_product_ids = {
+        row[0] for row in (await db.execute(select(CollaborationProduct.product_id).distinct())).all()
+    }
+
     result: list[ProductPerformance] = []
     for product, creator_name in rows:
+        if not product.is_active and product.id not in used_product_ids:
+            continue
         by_owner = credit_by_product_and_owner.get(product.id, {})
         credit_by_owner_name = {
             owner_names.get(oid, "Unknown"): round(cred, 2) for oid, cred in by_owner.items() if cred
