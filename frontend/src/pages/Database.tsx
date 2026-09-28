@@ -7,9 +7,11 @@ import { CreatorLifecyclePanel } from "../components/creators/CreatorLifecyclePa
 import { CreatorTable } from "../components/creators/CreatorTable";
 import { OwnershipCheck } from "../components/creators/OwnershipCheck";
 import { UnassignedPoolTable } from "../components/creators/UnassignedPoolTable";
+import { DateRangePicker, type RangePreset } from "../components/dashboard/DateRangePicker";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
+import { rangeToDates } from "../lib/dateRange";
 import type { BulkUploadResult, BulkUploadRowResult, CreatorTableRow, Product, User } from "../lib/types";
 
 const SORT_OPTIONS = [
@@ -41,6 +43,9 @@ export default function Database() {
   const [products, setProducts] = useState<Product[]>([]);
   const [ownerId, setOwnerId] = useState<string>("");
   const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [rangePreset, setRangePreset] = useState<RangePreset>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "archived" | "unassigned">("all");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -89,6 +94,9 @@ export default function Database() {
     if (ownerId && activeTab !== "unassigned") params.owner_id = ownerId;
     if (sourceFilter) params.source = sourceFilter;
     if (search) params.search = search;
+    const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
+    if (from) params.date_from = from;
+    if (to) params.date_to = to;
 
     api.get("/creators/table", { params }).then((res) => {
       setCreators(res.data.items);
@@ -101,17 +109,34 @@ export default function Database() {
     if (ownerId) base.owner_id = ownerId;
     if (sourceFilter) base.source = sourceFilter;
     if (search) base.search = search;
+    const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
+    if (from) base.date_from = from;
+    if (to) base.date_to = to;
     Promise.all([
       api.get("/creators/table", { params: { ...base, is_archived: false } }),
       api.get("/creators/table", { params: { ...base, is_archived: true } }),
-      api.get("/creators/table", { params: { limit: 1, offset: 0, pool: true, search: search || undefined } }),
+      api.get("/creators/table", {
+        params: { limit: 1, offset: 0, pool: true, search: search || undefined, date_from: from, date_to: to },
+      }),
     ]).then(([allRes, archivedRes, unassignedRes]) => {
       setTabCounts({ all: allRes.data.total, archived: archivedRes.data.total, unassigned: unassignedRes.data.total });
     });
   }
 
-  useEffect(loadCreators, [ownerId, sourceFilter, activeTab, sortBy, sortDir, search, offset, pageSize]);
-  useEffect(loadTabCounts, [ownerId, sourceFilter, search]);
+  useEffect(loadCreators, [
+    ownerId,
+    sourceFilter,
+    rangePreset,
+    customFrom,
+    customTo,
+    activeTab,
+    sortBy,
+    sortDir,
+    search,
+    offset,
+    pageSize,
+  ]);
+  useEffect(loadTabCounts, [ownerId, sourceFilter, rangePreset, customFrom, customTo, search]);
 
   if (user && (user.role === "marketer" || user.role === "editor")) {
     return <Navigate to="/" replace />;
@@ -455,6 +480,22 @@ export default function Database() {
             className="w-full text-xs text-ink placeholder:text-gray-400 focus:outline-none"
           />
         </div>
+        <DateRangePicker
+          preset={rangePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          align="left"
+          onSelectPreset={(p) => {
+            setOffset(0);
+            setRangePreset(p);
+          }}
+          onApplyCustom={(from, to) => {
+            setOffset(0);
+            setCustomFrom(from);
+            setCustomTo(to);
+            setRangePreset("custom");
+          }}
+        />
         {activeTab === "all" && (
           <>
             <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">

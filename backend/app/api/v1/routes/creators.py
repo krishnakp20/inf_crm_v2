@@ -239,6 +239,8 @@ async def list_creators_table(
     is_archived: bool = False,
     pool: bool = False,
     source: str | None = Query(None, pattern="^(system|user|unset)$"),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     sort_by: str = Query("created_at"),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(10, le=5000),
@@ -268,6 +270,10 @@ async def list_creators_table(
         stmt = stmt.where(Creator.source.is_(None))
     elif source is not None:
         stmt = stmt.where(Creator.source == CreatorSource(source))
+    if date_from is not None:
+        stmt = stmt.where(Creator.created_at >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(Creator.created_at < date_to)
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
