@@ -1,9 +1,9 @@
-import { AlertTriangle, Check, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import { initials, instagramUrl } from "../../lib/format";
+import { externalUrl, initials, instagramUrl } from "../../lib/format";
 import type {
   ApprovalRequest,
   Collaboration,
@@ -538,11 +538,24 @@ export function CollabDetailPanel({
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
                 <label className="mb-1 block text-[11px] text-gray-500">Tracking link</label>
-                <input
-                  value={trackingLink}
-                  onChange={(e) => setTrackingLink(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                />
+                <div className="flex gap-1">
+                  <input
+                    value={trackingLink}
+                    onChange={(e) => setTrackingLink(e.target.value)}
+                    className="w-full min-w-0 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                  {trackingLink.trim() && (
+                    <a
+                      href={externalUrl(trackingLink)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open tracking link"
+                      className="flex h-[30px] w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-surface hover:text-brand-600"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-[11px] text-gray-500">Order ID</label>

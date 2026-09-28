@@ -51,6 +51,15 @@ export function instagramUrl(handle: string): string {
   return `https://instagram.com/${handle.replace(/^@/, "").trim()}`;
 }
 
+/** Older tracking-link records sometimes hold a bare domain or an AWB/order
+ * number rather than a full URL -- as a raw href that resolves as a path on
+ * our own site (a broken internal route) instead of an external link. Always
+ * force it out to https:// so the browser treats it as external. */
+export function externalUrl(link: string): string {
+  const trimmed = link.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 /** Some older creator records have a full profile URL (with query params)
  * stored as their "handle" instead of a clean username -- shows a long,
  * ugly string that breaks row layout wherever it's displayed. Extracts

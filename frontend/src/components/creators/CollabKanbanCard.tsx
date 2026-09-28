@@ -1,8 +1,8 @@
-import { Copy, ShieldCheck } from "lucide-react";
+import { Copy, ShieldCheck, Truck } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import { initials, instagramUrl } from "../../lib/format";
+import { externalUrl, initials, instagramUrl } from "../../lib/format";
 import type { Collaboration, CollabStage } from "../../lib/types";
 
 function formatCredit(credit: number): string {
@@ -124,6 +124,18 @@ export function CollabKanbanCard({
           >
             <ShieldCheck size={12} />
           </button>
+          {collab.tracking_link && (
+            <a
+              href={externalUrl(collab.tracking_link)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Open tracking link"
+              className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-surface hover:text-brand-600"
+            >
+              <Truck size={12} />
+            </a>
+          )}
         </div>
       </div>
 
