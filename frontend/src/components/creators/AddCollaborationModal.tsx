@@ -26,6 +26,7 @@ interface ExistingCreatorMatch {
   name: string;
   instagram_handle: string;
   owner_id: number;
+  owner_name: string | null;
 }
 
 const STAGE_INDEX: Record<CollabStage, number> = Object.fromEntries(
@@ -418,7 +419,7 @@ export function AddCollaborationModal({
                       }`}
                     >
                       @{c.instagram_handle} · {c.name}
-                      <span className="text-gray-400"> · {ownerNames[c.owner_id] ?? "Unassigned"}</span>
+                      <span className="text-gray-400"> · {c.owner_name ?? ownerNames[c.owner_id] ?? "Unassigned"}</span>
                     </button>
                   ))}
                 </div>

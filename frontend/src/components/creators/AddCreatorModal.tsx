@@ -41,8 +41,8 @@ export function AddCreatorModal({
     api.get<ContentCategory[]>("/content-categories").then((res) => setCategories(res.data));
   }, []);
 
-  const ownerName = (ownerIdToFind: number) =>
-    users.find((u) => u.id === ownerIdToFind)?.name ?? "another advisor";
+  const ownerName = (ownerIdToFind: number, resolvedName?: string | null) =>
+    resolvedName ?? users.find((u) => u.id === ownerIdToFind)?.name ?? "another advisor";
 
   const handleError = usernameLinkError(handle);
   const canSubmit = name.trim() && handle.trim() && !handleError && (!canAssignOwner || ownerId);
@@ -59,7 +59,7 @@ export function AddCreatorModal({
     );
     if (exactMatch) {
       const stageSuffix = exactMatch.current_stage_label ? ` (${exactMatch.current_stage_label})` : "";
-      setOwnershipWarning(`@${exactMatch.instagram_handle} is already owned by ${ownerName(exactMatch.owner_id)}${stageSuffix}.`);
+      setOwnershipWarning(`@${exactMatch.instagram_handle} is already owned by ${ownerName(exactMatch.owner_id, exactMatch.owner_name)}${stageSuffix}.`);
       setRevivableCollabId(
         exactMatch.current_stage_label === "Dead Leads" ? exactMatch.current_collaboration_id ?? null : null
       );

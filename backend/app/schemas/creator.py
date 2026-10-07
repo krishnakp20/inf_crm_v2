@@ -153,6 +153,9 @@ class OwnershipMatch(BaseModel):
     name: str
     instagram_handle: str
     owner_id: int
+    # Resolved server-side: a non-admin's own users list only contains
+    # themselves, so the client can't map other owners' ids to names.
+    owner_name: str | None = None
     # The creator's real current stage, from their most recently active
     # collaboration -- None if they have no collaborations at all yet.
     current_stage_label: str | None = None

@@ -6,6 +6,7 @@ interface Match {
   name: string;
   instagram_handle: string;
   owner_id: number;
+  owner_name: string | null;
   current_stage_label: string | null;
   current_collaboration_id: number | null;
 }
@@ -91,7 +92,7 @@ export function OwnershipCheck({
               {matches.map((m) => (
                 <li key={m.id} className="flex items-center gap-2 text-amber-700">
                   <span>
-                    @{m.instagram_handle} is already owned by {owners[m.owner_id] ?? "another advisor"}
+                    @{m.instagram_handle} is already owned by {m.owner_name ?? owners[m.owner_id] ?? "another advisor"}
                     {m.current_stage_label ? ` (${m.current_stage_label})` : ""}
                   </span>
                   {m.current_stage_label === "Dead Leads" && m.current_collaboration_id && (

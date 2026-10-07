@@ -118,12 +118,20 @@ async def check_ownership(
         stage_label_by_creator = {cid: COLLAB_STAGE_LABELS[stage] for cid, (_, stage, _) in latest_by_creator.items()}
         latest_collab_id_by_creator = {cid: collab_id for cid, (collab_id, _, _) in latest_by_creator.items()}
 
+    owner_ids = {c.owner_id for c in creators}
+    owner_name_by_id: dict[int, str] = (
+        {uid: name for uid, name in (await db.execute(select(User.id, User.name).where(User.id.in_(owner_ids)))).all()}
+        if owner_ids
+        else {}
+    )
+
     return [
         OwnershipMatch(
             id=c.id,
             name=c.name,
             instagram_handle=c.instagram_handle,
             owner_id=c.owner_id,
+            owner_name=owner_name_by_id.get(c.owner_id),
             current_stage_label=stage_label_by_creator.get(c.id),
             current_collaboration_id=latest_collab_id_by_creator.get(c.id),
         )

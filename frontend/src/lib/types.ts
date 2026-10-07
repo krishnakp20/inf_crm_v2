@@ -186,6 +186,7 @@ export interface OwnershipMatch {
   name: string;
   instagram_handle: string;
   owner_id: number;
+  owner_name?: string | null;
   current_stage: CreatorStage;
 }
 
