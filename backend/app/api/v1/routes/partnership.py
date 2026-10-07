@@ -198,6 +198,7 @@ async def _filtered_tickets(
     search: str | None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    product_group: str | None = None,
 ) -> list[PartnershipTicket]:
     scope = await scoped_ticket_ids(user, db)
     stmt = select(PartnershipTicket).join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
@@ -215,6 +216,16 @@ async def _filtered_tickets(
         stmt = stmt.where(
             Collaboration.id.in_(
                 select(CollaborationProduct.collaboration_id).where(CollaborationProduct.product_id == product_id)
+            )
+        )
+    if product_group:
+        # Any linked product whose Parent (Settings > products) is this group --
+        # same "any linked product" rule as the single-product filter above.
+        stmt = stmt.where(
+            Collaboration.id.in_(
+                select(CollaborationProduct.collaboration_id)
+                .join(Product, Product.id == CollaborationProduct.product_id)
+                .where(Product.parent == product_group)
             )
         )
     if category is not None or search:
@@ -294,6 +305,7 @@ async def get_partnership_stats(
 async def list_overview(
     owner_id: int | None = None,
     product_id: int | None = None,
+    product_group: str | None = None,
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -311,7 +323,7 @@ async def list_overview(
     if sort_by not in OVERVIEW_SORTABLE_FIELDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
     )
     batch = await _batch_load(db, tickets)
     rows = [_to_overview_row(t, batch, user) for t in tickets]
@@ -330,6 +342,7 @@ async def list_overview(
 async def list_open(
     owner_id: int | None = None,
     product_id: int | None = None,
+    product_group: str | None = None,
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -341,7 +354,7 @@ async def list_open(
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOpenRow]:
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
     )
     # A ticket lands here only once an admin/marketer has actually taken
     # action on it (Take Action -> pending_at_user, or the advisor/editor's
@@ -359,6 +372,7 @@ async def list_open(
 async def list_closed(
     owner_id: int | None = None,
     product_id: int | None = None,
+    product_group: str | None = None,
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -370,7 +384,7 @@ async def list_closed(
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOverviewRow]:
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
     )
     tickets = [t for t in tickets if t.ticket_status == TicketStatus.closed_and_live]
     batch = await _batch_load(db, tickets)
@@ -381,6 +395,7 @@ async def list_closed(
 async def export_metrics_template(
     owner_id: int | None = None,
     product_id: int | None = None,
+    product_group: str | None = None,
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -408,7 +423,7 @@ async def export_metrics_template(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
     )
     batch = await _batch_load(db, tickets)
 
@@ -474,6 +489,7 @@ _MASTER_DATA_COLUMNS = [
 async def export_master_data(
     owner_id: int | None = None,
     product_id: int | None = None,
+    product_group: str | None = None,
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -508,7 +524,7 @@ async def export_master_data(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to
+        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
     )
     batch = await _batch_load(db, tickets)
 

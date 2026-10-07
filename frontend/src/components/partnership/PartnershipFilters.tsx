@@ -10,6 +10,8 @@ export function PartnershipFilters({
   onOwnerChange,
   productId,
   onProductChange,
+  productGroup,
+  onProductGroupChange,
   platform,
   onPlatformChange,
   contentBucket,
@@ -35,6 +37,8 @@ export function PartnershipFilters({
   onOwnerChange: (value: string) => void;
   productId: string;
   onProductChange: (value: string) => void;
+  productGroup: string;
+  onProductGroupChange: (value: string) => void;
   platform: Platform | "";
   onPlatformChange: (value: Platform | "") => void;
   contentBucket: string;
@@ -84,6 +88,20 @@ export function PartnershipFilters({
         {users.filter((u) => u.is_active).map((u) => (
           <option key={u.id} value={u.id}>
             {u.name}
+          </option>
+        ))}
+      </select>
+
+      <select
+        aria-label="Filter by product group"
+        value={productGroup}
+        onChange={(e) => onProductGroupChange(e.target.value)}
+        className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
+      >
+        <option value="">All product groups</option>
+        {[...new Set(products.map((p) => p.parent).filter((g): g is string => !!g))].sort().map((g) => (
+          <option key={g} value={g}>
+            {g}
           </option>
         ))}
       </select>

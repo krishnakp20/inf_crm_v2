@@ -49,6 +49,7 @@ export default function PartnershipHub() {
   const [search, setSearch] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [productId, setProductId] = useState("");
+  const [productGroup, setProductGroup] = useState("");
   const [platform, setPlatform] = useState<Platform | "">("");
   const [contentBucket, setContentBucket] = useState("");
   const [language, setLanguage] = useState("");
@@ -67,6 +68,7 @@ export default function PartnershipHub() {
     search: search || undefined,
     owner_id: ownerId || undefined,
     product_id: productId || undefined,
+    product_group: productGroup || undefined,
     platform: platform || undefined,
     content_bucket: contentBucket || undefined,
     language: language || undefined,
@@ -142,6 +144,7 @@ export default function PartnershipHub() {
     search,
     ownerId,
     productId,
+    productGroup,
     platform,
     contentBucket,
     language,
@@ -153,8 +156,8 @@ export default function PartnershipHub() {
     overviewSortDir,
     overviewOffset,
   ]);
-  useEffect(loadOpen, [search, ownerId, productId, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
-  useEffect(loadClosed, [search, ownerId, productId, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
+  useEffect(loadOpen, [search, ownerId, productId, productGroup, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
+  useEffect(loadClosed, [search, ownerId, productId, productGroup, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
   useEffect(loadStats, []);
 
   function refresh() {
@@ -263,6 +266,8 @@ export default function PartnershipHub() {
         onOwnerChange={(v) => changeFilter(setOwnerId, v)}
         productId={productId}
         onProductChange={(v) => changeFilter(setProductId, v)}
+        productGroup={productGroup}
+        onProductGroupChange={(v) => changeFilter(setProductGroup, v)}
         platform={platform}
         onPlatformChange={(v) => changeFilter(setPlatform, v)}
         contentBucket={contentBucket}
