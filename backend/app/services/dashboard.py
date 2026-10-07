@@ -1,7 +1,7 @@
 import math
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import DateTime, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.announcement import Announcement
@@ -70,36 +70,25 @@ async def get_kpis(
     range_start: datetime | None = None,
     range_end: datetime | None = None,
 ) -> KpiSummary:
-    window_start = range_start or now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Every card is ONE number for the selected range -- no cumulative total
+    # next to a "+N this period" badge. No range picked (the "all time"
+    # preset) means everything up to now.
+    window_start = range_start or ALL_TIME_START
     window_end = range_end or now
 
-    def _in_window(stmt, column):
-        return stmt.where(column >= window_start, column < window_end)
-
-    # Total creators is cumulative AS OF the end of the selected range (every
-    # creator added up to that point), not always today's grand total
-    # regardless of which range is picked -- the +N badge underneath is this
-    # period's contribution to that running total, via new_in_range below.
-    total_creators_stmt = select(func.count(Creator.id)).where(Creator.created_at < window_end)
-    new_in_range_stmt = _in_window(select(func.count(Creator.id)), Creator.created_at)
+    # Creators added in the range.
+    creators_stmt = select(func.count(Creator.id)).where(
+        Creator.created_at >= window_start, Creator.created_at < window_end
+    )
     if owner_ids is not None:
-        total_creators_stmt = total_creators_stmt.where(Creator.owner_id.in_(owner_ids))
-        new_in_range_stmt = new_in_range_stmt.where(Creator.owner_id.in_(owner_ids))
+        creators_stmt = creators_stmt.where(Creator.owner_id.in_(owner_ids))
+    total_creators = (await db.execute(creators_stmt)).scalar_one()
 
-    total_creators = (await db.execute(total_creators_stmt)).scalar_one()
-    new_in_range = (await db.execute(new_in_range_stmt)).scalar_one()
-
-    # Active reels = videos that had gone Live by the end of the selected
-    # range, cumulative by effective live date (video_live_date, or first
-    # CollabStageEvent.to_stage==live -- same rule and helper Analytics uses,
-    # see _scoped_live_collab_ids), not "every collab currently sitting at
-    # stage=Live" -- that count never changed with the date range at all.
-    # reels_added_in_range is the same helper narrowed to just this window
-    # (by live date, not by when the collaboration record was created --
-    # a brand-new lead isn't a "reel added" until it actually goes live).
-    active_reels = len(await _scoped_live_collab_ids(db, owner_ids, ALL_TIME_START, window_end))
-    reels_added_in_range = len(await _scoped_live_collab_ids(db, owner_ids, window_start, window_end))
-    reels_growth_pct = (reels_added_in_range / active_reels * 100) if active_reels else 0.0
+    # Reels that went live in the range, by effective live date (video_live_date,
+    # else first CollabStageEvent.to_stage==live -- same rule and helper
+    # Analytics uses, see _scoped_live_collab_ids), not by when the collaboration
+    # record was created: a brand-new lead isn't a "reel" until it goes live.
+    active_reels = len(await _scoped_live_collab_ids(db, owner_ids, window_start, window_end))
 
     # Partnership Pending / Ads Live both come from Partnership Hub ticket
     # status, not the collaboration's Kanban stage -- "Pending" mirrors the
@@ -120,6 +109,28 @@ async def get_kpis(
     if owner_ids is not None:
         partnership_pending_stmt = partnership_pending_stmt.where(Collaboration.owner_id.in_(owner_ids))
         ads_live_stmt = ads_live_stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if range_start is not None or range_end is not None:
+        # Scoped by the same effective live date Partnership Hub's own date
+        # filter uses, so these two cards match the Hub for the same range.
+        live_date_subq = (
+            select(
+                CollabStageEvent.collaboration_id.label("collaboration_id"),
+                func.min(CollabStageEvent.created_at).label("live_date"),
+            )
+            .where(CollabStageEvent.to_stage == CollabStage.live)
+            .group_by(CollabStageEvent.collaboration_id)
+            .subquery()
+        )
+        effective_date = func.coalesce(
+            cast(Collaboration.video_live_date, DateTime(timezone=True)), live_date_subq.c.live_date
+        )
+        in_window = (effective_date >= window_start, effective_date < window_end)
+        partnership_pending_stmt = partnership_pending_stmt.outerjoin(
+            live_date_subq, live_date_subq.c.collaboration_id == Collaboration.id
+        ).where(*in_window)
+        ads_live_stmt = ads_live_stmt.outerjoin(
+            live_date_subq, live_date_subq.c.collaboration_id == Collaboration.id
+        ).where(*in_window)
 
     partnership_pending = (await db.execute(partnership_pending_stmt)).scalar_one()
     ads_live = (await db.execute(ads_live_stmt)).scalar_one()
@@ -128,10 +139,7 @@ async def get_kpis(
 
     return KpiSummary(
         total_creators=total_creators,
-        new_this_month=new_in_range,
         active_reels=active_reels,
-        active_reels_growth_pct=round(reels_growth_pct, 1),
-        active_reels_added_this_month=reels_added_in_range,
         partnership_pending=partnership_pending,
         ads_live=ads_live,
         follow_ups_completed_today=follow_ups_completed_today,

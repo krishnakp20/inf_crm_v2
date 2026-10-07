@@ -147,30 +147,36 @@ export default function Dashboard() {
           tone="indigo"
           label="Total creators"
           value={kpis.total_creators.toLocaleString()}
-          meta={`+${kpis.new_this_month} ${rangePhrase(rangePreset)}`}
-          subtext="Across the master database"
+          subtext={rangePreset === "all" ? "Across the master database" : `Added ${rangePhrase(rangePreset)}`}
         />
         <KpiCard
           icon={Megaphone}
           tone="green"
           label="Active reels"
           value={kpis.active_reels.toLocaleString()}
-          meta={`+${kpis.active_reels_growth_pct}%`}
-          subtext={`${kpis.active_reels_added_this_month} reels added ${rangePhrase(rangePreset)}`}
+          subtext={rangePreset === "all" ? "All reels gone live" : `Reels gone live ${rangePhrase(rangePreset)}`}
         />
         <KpiCard
           icon={Calendar}
           tone="amber"
           label="Partnership pending"
           value={kpis.partnership_pending.toLocaleString()}
-          subtext="Open tickets in Partnership Hub"
+          subtext={
+            rangePreset === "all"
+              ? "Open tickets in Partnership Hub"
+              : `Open tickets that went live ${rangePhrase(rangePreset)}`
+          }
         />
         <KpiCard
           icon={Bell}
           tone="coral"
           label="Ads live"
           value={kpis.ads_live.toLocaleString()}
-          subtext="Closed & Live in Partnership Hub"
+          subtext={
+            rangePreset === "all"
+              ? "Closed & Live in Partnership Hub"
+              : `Closed & Live that went live ${rangePhrase(rangePreset)}`
+          }
         />
       </div>
 

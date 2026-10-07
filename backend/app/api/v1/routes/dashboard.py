@@ -34,10 +34,7 @@ async def dashboard(
         return DashboardResponse(
             kpis=KpiSummary(
                 total_creators=0,
-                new_this_month=0,
                 active_reels=0,
-                active_reels_growth_pct=0.0,
-                active_reels_added_this_month=0,
                 partnership_pending=0,
                 ads_live=0,
                 follow_ups_completed_today=0,

@@ -19,10 +19,7 @@ class NotificationOut(BaseModel):
 
 class KpiSummary(BaseModel):
     total_creators: int
-    new_this_month: int
     active_reels: int
-    active_reels_growth_pct: float
-    active_reels_added_this_month: int
     partnership_pending: int
     ads_live: int
     follow_ups_completed_today: int

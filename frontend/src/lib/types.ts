@@ -387,10 +387,7 @@ export interface CreatorFile {
 
 export interface KpiSummary {
   total_creators: number;
-  new_this_month: number;
   active_reels: number;
-  active_reels_growth_pct: number;
-  active_reels_added_this_month: number;
   partnership_pending: number;
   ads_live: number;
   follow_ups_completed_today: number;
