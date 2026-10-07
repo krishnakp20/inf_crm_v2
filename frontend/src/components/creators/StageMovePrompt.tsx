@@ -301,6 +301,7 @@ export function StageMovePrompt({
                       <option value="">Platform</option>
                       <option value="instagram">Instagram</option>
                       <option value="youtube">YouTube</option>
+                      <option value="facebook">Facebook</option>
                     </select>
                     <input
                       value={row.url}

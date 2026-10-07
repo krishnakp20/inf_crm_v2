@@ -19,6 +19,7 @@ export const CAMPAIGN_STATUS_BADGE: Record<CampaignStatus, string> = Object.from
 export const PLATFORM_OPTIONS: { key: Platform; label: string }[] = [
   { key: "instagram", label: "Instagram" },
   { key: "youtube", label: "YouTube" },
+  { key: "facebook", label: "Facebook" },
 ];
 
 export const PLATFORM_LABELS: Record<Platform, string> = Object.fromEntries(

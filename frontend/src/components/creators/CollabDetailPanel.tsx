@@ -648,6 +648,7 @@ export function CollabDetailPanel({
                         <option value="">Platform</option>
                         <option value="instagram">Instagram</option>
                         <option value="youtube">YouTube</option>
+                        <option value="facebook">Facebook</option>
                       </select>
                       <input
                         type="url"

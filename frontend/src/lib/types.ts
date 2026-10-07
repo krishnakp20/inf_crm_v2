@@ -452,7 +452,7 @@ export interface DashboardResponse {
   placeholder_notice: string | null;
 }
 
-export type Platform = "instagram" | "youtube";
+export type Platform = "instagram" | "youtube" | "facebook";
 
 export type CampaignStatus = "draft" | "scheduled" | "live" | "paused" | "completed";
 

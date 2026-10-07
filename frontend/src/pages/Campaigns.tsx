@@ -202,6 +202,7 @@ export default function Campaigns() {
               <option value="">All platforms</option>
               <option value="instagram">Instagram</option>
               <option value="youtube">YouTube</option>
+              <option value="facebook">Facebook</option>
             </select>
             <select
               value={userId}

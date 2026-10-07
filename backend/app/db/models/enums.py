@@ -96,6 +96,7 @@ class PaymentStatus(str, enum.Enum):
 class Platform(str, enum.Enum):
     instagram = "instagram"
     youtube = "youtube"
+    facebook = "facebook"
 
 
 class CampaignStatus(str, enum.Enum):
