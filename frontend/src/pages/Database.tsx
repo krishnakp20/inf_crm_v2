@@ -33,6 +33,9 @@ function csvEscape(value: string): string {
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 50, 100, 150];
 
+// The API caps one request at 5000 rows; the export pages through in chunks of this size.
+const EXPORT_PAGE_SIZE = 5000;
+
 export default function Database() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -219,18 +222,31 @@ export default function Database() {
     setExporting(true);
     setExportError(null);
     try {
+      // Same filters as the table on screen (tab, user, source, search, date
+      // range) -- the export is exactly "everything the table is showing",
+      // not just the current page.
       const params: Record<string, string | number | boolean> = {
-        limit: 5000,
-        offset: 0,
+        limit: EXPORT_PAGE_SIZE,
         is_archived: activeTab === "archived",
         sort_by: sortBy,
         sort_dir: sortDir,
       };
-      if (ownerId) params.owner_id = ownerId;
+      if (activeTab === "unassigned") params.pool = true;
+      if (ownerId && activeTab !== "unassigned") params.owner_id = ownerId;
+      if (sourceFilter) params.source = sourceFilter;
       if (search) params.search = search;
+      const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
+      if (from) params.date_from = from;
+      if (to) params.date_to = to;
 
-      const res = await api.get("/creators/table", { params });
-      const rows: CreatorTableRow[] = res.data.items;
+      const rows: CreatorTableRow[] = [];
+      let total = 0;
+      do {
+        const res = await api.get("/creators/table", { params: { ...params, offset: rows.length } });
+        total = res.data.total;
+        rows.push(...res.data.items);
+        if (res.data.items.length === 0) break;
+      } while (rows.length < total);
 
       const header = [
         "Name",
