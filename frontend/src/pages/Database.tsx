@@ -261,6 +261,9 @@ export default function Database() {
         "Last video live",
         "Comments",
         "Current stage",
+        "Active collaborations",
+        "In progress",
+        "Live",
         "Status",
       ];
       const lines = [
@@ -279,6 +282,9 @@ export default function Database() {
             c.last_video_live_at ?? "",
             String(c.comments_count ?? 0),
             c.current_collab_stage_label ?? "",
+            String(c.active_collaborations),
+            String(c.in_progress_collaborations),
+            String(c.live_collaborations),
             c.status,
           ]
             .map((v) => csvEscape(v))

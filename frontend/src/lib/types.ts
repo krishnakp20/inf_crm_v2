@@ -236,7 +236,10 @@ export interface CreatorTableRow {
   last_video_live_at: string | null;
   last_video_product_name: string | null;
   comments_count: number | null;
-  current_collab_stage_label: string | null;
+  current_collab_stage_label: string | null;
+  in_progress_collaborations: number;
+  live_collaborations: number;
+  active_collaborations: number;
 }
 
 export interface CreatorTableResponse {

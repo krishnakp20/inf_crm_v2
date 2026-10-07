@@ -318,10 +318,26 @@ async def list_creators_table(
                 best_collab.comments_count,
             )
 
+    # In-progress / live card counts per creator, straight from the cards --
+    # not from collabs_by_creator above, whose inner join on a primary
+    # product drops any card with no product linked (legacy data), which
+    # would undercount here. Dead Leads are excluded from both.
+    stage_counts: dict[int, tuple[int, int]] = {}
+    if creator_ids:
+        count_rows = await db.execute(
+            select(Collaboration.creator_id, Collaboration.stage, func.count(Collaboration.id))
+            .where(Collaboration.creator_id.in_(creator_ids), Collaboration.stage != CollabStage.dead_leads)
+            .group_by(Collaboration.creator_id, Collaboration.stage)
+        )
+        for cid, stage, n in count_rows.all():
+            in_prog, live_n = stage_counts.get(cid, (0, 0))
+            stage_counts[cid] = (in_prog, live_n + n) if stage == CollabStage.live else (in_prog + n, live_n)
+
     rows: list[CreatorTableRow] = []
     for creator in creators:
         collabs = collabs_by_creator.get(creator.id, [])
         videos_delivered = sum(1 for c, _ in collabs if is_video_live(c.stage))
+        in_progress, live_total = stage_counts.get(creator.id, (0, 0))
         last_cost = None
         current_stage_label = None
         if collabs:
@@ -354,6 +370,9 @@ async def list_creators_table(
                 last_video_product_name=last_live_product,
                 comments_count=last_live_comments,
                 current_collab_stage_label=current_stage_label,
+                in_progress_collaborations=in_progress,
+                live_collaborations=live_total,
+                active_collaborations=in_progress + live_total,
             )
         )
 

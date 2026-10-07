@@ -115,6 +115,10 @@ class CreatorTableRow(BaseModel):
     last_video_product_name: str | None
     comments_count: int | None
     current_collab_stage_label: str | None
+    # Dead Leads excluded; active = in progress + live (videos_delivered).
+    in_progress_collaborations: int = 0
+    live_collaborations: int = 0
+    active_collaborations: int = 0
 
 
 class CreatorTableResponse(BaseModel):
