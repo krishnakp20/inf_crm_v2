@@ -92,6 +92,30 @@ async def _creator_aggregates(db: AsyncSession, creator_ids: list[int]) -> dict[
     return aggregates
 
 
+async def _ensure_poc_code_unused(db: AsyncSession, poc_code: str | None, exclude_collab_id: int | None = None) -> None:
+    """A POC code identifies one video: Metric Upload matches rows by it, and
+    two cards sharing one put the same reel in Partnership Hub twice. Refuses
+    a code (compared ignoring case and surrounding spaces) already on another
+    card, naming that card."""
+    code = (poc_code or "").strip()
+    if not code:
+        return
+    stmt = (
+        select(Collaboration.collab_code, Creator.instagram_handle)
+        .join(Creator, Creator.id == Collaboration.creator_id)
+        .where(func.lower(func.trim(Collaboration.poc_code)) == code.lower())
+    )
+    if exclude_collab_id is not None:
+        stmt = stmt.where(Collaboration.id != exclude_collab_id)
+    existing = (await db.execute(stmt.limit(1))).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"POC code '{code}' is already used on card {existing[0]} (@{existing[1]}). "
+            "Each video needs its own POC code.",
+        )
+
+
 async def _reject_disabled_attribution(db: AsyncSession, product_ids: set[int]) -> None:
     if not product_ids:
         return
@@ -489,6 +513,7 @@ async def _create_collaboration(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order ID is required for this stage.")
     if "poc_code" in required and not (payload.poc_code and payload.poc_code.strip()):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="POC code is required for this stage.")
+    await _ensure_poc_code_unused(db, payload.poc_code)
     if "video_link" in required and not (
         payload.video_link and payload.video_link.strip() and payload.platform is not None
     ):
@@ -723,6 +748,9 @@ async def update_collaboration(
     has_additional_video_links = "additional_video_links" in update_data
     update_data.pop("additional_video_links", None)
 
+    if "poc_code" in update_data and (update_data["poc_code"] or "").strip() != (collab.poc_code or "").strip():
+        await _ensure_poc_code_unused(db, update_data["poc_code"], exclude_collab_id=collab.id)
+
     for field, value in update_data.items():
         setattr(collab, field, value)
 
@@ -934,6 +962,8 @@ async def transition_collab_stage(
         if payload.order_id is not None:
             collab.order_id = payload.order_id
         if payload.poc_code is not None:
+            if payload.poc_code.strip() != (collab.poc_code or "").strip():
+                await _ensure_poc_code_unused(db, payload.poc_code, exclude_collab_id=collab.id)
             collab.poc_code = payload.poc_code
         if payload.video_link is not None:
             collab.video_link = payload.video_link

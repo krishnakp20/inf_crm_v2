@@ -129,6 +129,7 @@ async def process_metric_upload(
     updated = 0
     skipped = 0
     errors: list[str] = []
+    seen_rows: set[tuple[str, str]] = set()
 
     for line_num, row in enumerate(rows, start=2):
         poc_code = (row.get("POC Code") or "").strip()
@@ -137,19 +138,59 @@ async def process_metric_upload(
             skipped += 1
             continue
 
-        collab = (
-            await db.execute(select(Collaboration).where(Collaboration.poc_code == poc_code))
-        ).scalar_one_or_none()
-        if collab is None:
+        video_link = (row.get("Video Link") or "").strip()
+
+        # POC code is meant to be unique per video, but the same code has been
+        # saved on more than one card in real data -- never assume exactly one
+        # match (that used to crash the whole upload). Narrow by Video Link;
+        # if that still doesn't single out one card, skip the row and say why.
+        candidates = (
+            (
+                await db.execute(
+                    select(Collaboration).where(Collaboration.poc_code == poc_code).order_by(Collaboration.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not candidates:
             errors.append(f"Row {line_num}: no collaboration found for POC code '{poc_code}'")
             skipped += 1
             continue
+        if len(candidates) == 1:
+            collab = candidates[0]
+        else:
+            card_codes = ", ".join(c.collab_code for c in candidates)
+            if not video_link:
+                errors.append(
+                    f"Row {line_num}: POC code '{poc_code}' is on {len(candidates)} cards ({card_codes}) -- "
+                    "add the Video Link so the right one can be picked, row skipped"
+                )
+                skipped += 1
+                continue
+            by_link = [c for c in candidates if (c.video_link or "").strip().lower() == video_link.lower()]
+            narrowed = [c for c in by_link if c.stage == CollabStage.live] or by_link
+            if not by_link:
+                errors.append(
+                    f"Row {line_num}: video link does not match any of the {len(candidates)} cards "
+                    f"using POC code '{poc_code}' ({card_codes}), row skipped"
+                )
+                skipped += 1
+                continue
+            if len(narrowed) != 1:
+                errors.append(
+                    f"Row {line_num}: POC code '{poc_code}' is on {len(narrowed)} cards with the same Video Link "
+                    f"({', '.join(c.collab_code for c in narrowed)}), so it can't tell which to update -- row "
+                    "skipped, fix the duplicate first"
+                )
+                skipped += 1
+                continue
+            collab = narrowed[0]
         if collab.stage != CollabStage.live:
             errors.append(f"Row {line_num}: '{poc_code}' is not a Live record")
             skipped += 1
             continue
 
-        video_link = (row.get("Video Link") or "").strip()
         if not video_link:
             errors.append(f"Row {line_num}: missing Video Link")
             skipped += 1
@@ -159,6 +200,17 @@ async def process_metric_upload(
             errors.append(f"Row {line_num}: video link does not match the Live record for '{poc_code}'")
             skipped += 1
             continue
+
+        # The same video listed twice in one sheet must not be applied twice
+        # (it double-counted "updated" and double-posted the Remark).
+        row_key = (poc_code.lower(), video_link.lower())
+        if row_key in seen_rows:
+            errors.append(
+                f"Row {line_num}: duplicate of an earlier row for '{poc_code}' (same POC code and Video Link), skipped"
+            )
+            skipped += 1
+            continue
+        seen_rows.add(row_key)
 
         views = _parse_int(row.get("Views"))
         likes = _parse_int(row.get("Likes"))
@@ -238,11 +290,22 @@ async def process_metric_upload(
 
             remark_body = (row.get("Remarks") or "").strip()
             if remark_body:
-                db.add(
-                    PartnershipRemark(
-                        ticket_id=ticket.id, author_id=uploaded_by, body=remark_body, tag=REMARK_TAG_METRIC_UPLOAD
+                # Re-uploading the same sheet (or a weekly sheet that repeats an
+                # unchanged remark) must not stack identical remarks on the thread.
+                latest_body = (
+                    await db.execute(
+                        select(PartnershipRemark.body)
+                        .where(PartnershipRemark.ticket_id == ticket.id)
+                        .order_by(PartnershipRemark.created_at.desc(), PartnershipRemark.id.desc())
+                        .limit(1)
                     )
-                )
+                ).scalar_one_or_none()
+                if (latest_body or "").strip() != remark_body:
+                    db.add(
+                        PartnershipRemark(
+                            ticket_id=ticket.id, author_id=uploaded_by, body=remark_body, tag=REMARK_TAG_METRIC_UPLOAD
+                        )
+                    )
 
         updated += 1
 

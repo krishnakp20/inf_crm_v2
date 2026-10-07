@@ -151,7 +151,10 @@ export function StageMovePrompt({
       onMoved();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.detail?.message ?? "Could not move this card. Check the fields and try again.");
+      const detail = err.response?.data?.detail;
+      setError(
+        (typeof detail === "string" ? detail : detail?.message) ?? "Could not move this card. Check the fields and try again."
+      );
     } finally {
       setSubmitting(false);
     }
