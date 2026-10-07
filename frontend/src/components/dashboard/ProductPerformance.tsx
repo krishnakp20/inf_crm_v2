@@ -64,7 +64,12 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
     }
     const filtered = groupFilter ? rows.filter((r) => (r.kind === "group" ? r.parent === groupFilter : false)) : rows;
     if (!sortByPerformance) return filtered;
-    return [...filtered].sort((a, b) => achievedFor(b, userFilter) - achievedFor(a, userFilter));
+    const withSortedMembers = filtered.map((row) =>
+      row.kind === "group"
+        ? { ...row, members: [...row.members].sort((a, b) => videosLiveFor(b, userFilter) - videosLiveFor(a, userFilter)) }
+        : row
+    );
+    return withSortedMembers.sort((a, b) => achievedFor(b, userFilter) - achievedFor(a, userFilter));
   }, [byCredit, groupFilter, sortByPerformance, userFilter]);
 
   function toggleExpanded(parent: string) {
