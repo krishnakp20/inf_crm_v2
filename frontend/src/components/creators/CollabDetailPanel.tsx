@@ -876,7 +876,9 @@ export function CollabDetailPanel({
           collabId={collab.id}
           targetStage={pendingMove.toStage}
           missingFields={pendingMove.missingFields}
-          linkedProducts={collab.products.map((p) => ({ id: p.product_id, name: p.product_name }))}
+          linkedProducts={collab.products
+            .filter((p) => products.some((active) => active.id === p.product_id))
+            .map((p) => ({ id: p.product_id, name: p.product_name }))}
           onClose={() => setPendingMove(null)}
           onMoved={() => {
             onChanged();

@@ -401,7 +401,8 @@ export default function MyCreators() {
           linkedProducts={
             collaborations
               .find((c) => c.id === pendingMove.collabId)
-              ?.products.map((p) => ({ id: p.product_id, name: p.product_name })) ?? []
+              ?.products.filter((p) => products.some((active) => active.id === p.product_id))
+              .map((p) => ({ id: p.product_id, name: p.product_name })) ?? []
           }
           onClose={() => setPendingMove(null)}
           onMoved={() => selectedOwnerId && loadBoard(selectedOwnerId)}

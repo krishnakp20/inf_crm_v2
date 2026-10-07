@@ -365,6 +365,11 @@ export function StageMovePrompt({
               <label className="mb-1 block text-xs font-medium text-gray-700">
                 Products featured in the video · Required
               </label>
+              {linkedProducts.length === 0 && (
+                <p className="text-xs text-[#cf4e43]">
+                  None of this card's products are active. Add an active product to the card first.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-1">
                 {linkedProducts.map((p) => (
                   <label key={p.id} className="flex items-center gap-1.5 text-xs text-gray-600">

@@ -92,6 +92,19 @@ async def _creator_aggregates(db: AsyncSession, creator_ids: list[int]) -> dict[
     return aggregates
 
 
+async def _reject_disabled_attribution(db: AsyncSession, product_ids: set[int]) -> None:
+    if not product_ids:
+        return
+    disabled = (
+        await db.execute(select(Product.name).where(Product.id.in_(product_ids), Product.is_active.is_(False)))
+    ).scalars().all()
+    if disabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Disabled products can't be added to live video attribution: {', '.join(disabled)}.",
+        )
+
+
 async def _validate_product_variants(
     db: AsyncSession, product_variants: dict[int, int], linked_product_ids: set[int]
 ) -> dict[int, int]:
@@ -503,6 +516,7 @@ async def _create_collaboration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Live attribution can only include products already linked to this collaboration.",
         )
+    await _reject_disabled_attribution(db, live_attribution_ids)
 
     variant_by_product = await _validate_product_variants(db, payload.product_variants, set(all_product_ids))
 
@@ -772,6 +786,8 @@ async def update_collaboration(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Live attribution can only include products already linked to this collaboration.",
                 )
+            already_attributed = {link.product_id for link in existing_links if link.is_live_attributed}
+            await _reject_disabled_attribution(db, set(live_attribution_product_ids) - already_attributed)
             for link in existing_links:
                 link.is_live_attributed = link.product_id in live_attribution_product_ids
 
@@ -947,6 +963,10 @@ async def transition_collab_stage(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Live attribution can only include products already linked to this collaboration.",
                 )
+            already_attributed = {link.product_id for link in links if link.is_live_attributed}
+            await _reject_disabled_attribution(
+                db, set(payload.live_attribution_product_ids) - already_attributed
+            )
             for link in links:
                 link.is_live_attributed = link.product_id in payload.live_attribution_product_ids
 
