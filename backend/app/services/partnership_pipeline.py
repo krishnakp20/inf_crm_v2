@@ -31,6 +31,7 @@ COLLAB_STATUS_LABELS = {
 COLLAB_STATUS_BY_LABEL = {label.lower(): status for status, label in COLLAB_STATUS_LABELS.items()}
 
 _COMMERCIAL_FIELDS = (
+    "commercial_amount",
     "ad_rights_creator_quote",
     "ad_rights_agent_counter",
     "ad_rights_admin_counter",

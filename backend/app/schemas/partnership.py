@@ -105,11 +105,17 @@ class PartnershipOverviewRow(BaseModel):
     live_date: datetime | None
     comments_count: int | None
     views_count: int | None
+    likes_count: int | None
+    video_link: str | None
     content_bucket: str | None
     language: str | None
     creator_category: str
     platform: Platform | None
+    meta_roas: float | None
+    google_roas: float | None
+    updated_at: datetime
     # Commercial figures -- null for Marketer/Supervisor via redact_commercial().
+    commercial_amount: float | None
     ad_rights_creator_quote: float | None
     ad_rights_agent_counter: float | None
     ad_rights_admin_counter: float | None

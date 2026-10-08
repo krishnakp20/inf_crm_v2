@@ -1,4 +1,4 @@
-import { compactNumber, displayHandle, formatCurrency, initials } from "../../lib/format";
+import { compactNumber, displayHandle, externalUrl, formatCurrency, initials } from "../../lib/format";
 import { PLATFORM_LABELS } from "../../lib/campaign-stages";
 import { COLLAB_STATUS_LABELS, TICKET_STATUS_BADGE, TICKET_STATUS_LABELS } from "../../lib/partnership-stages";
 import type { SortDirection } from "../../lib/sort";
@@ -80,17 +80,28 @@ export function PartnershipOverviewTable({
               <SortableHeader label="Product" field="product" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Owner" field="owner_name" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Live date" field="live_date" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <th className={TH}>Reel link</th>
+              <SortableHeader label="Language" field="language" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Content bucket" field="content_bucket" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Category" field="creator_category" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Comments" field="comments_count" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Likes" field="likes_count" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Views" field="views_count" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               {showCommercial && (
                 <SortableHeader label="Commercial" field="commercial" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               )}
+              {showCommercial && (
+                <SortableHeader label="Reel commercials" field="commercial_amount" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              )}
               <SortableHeader label="Ad code" field="ad_code" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Ad right & time" field="ad_right_duration_days" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className={TH}>CTA link</th>
+              <SortableHeader label="Meta ROAS" field="meta_roas" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Google ROAS" field="google_roas" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Ticket status" field="ticket_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Collab status" field="collab_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Latest remark" field="latest_remark" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Updated on" field="updated_at" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className="w-28 py-3 pr-4"></th>
             </tr>
           </thead>
@@ -164,7 +175,20 @@ export function PartnershipOverviewTable({
                     </div>
                   </td>
                   <td className={TD}>{formatDate(row.live_date)}</td>
+                  <td className={TD}>
+                    {row.video_link ? (
+                      <a href={externalUrl(row.video_link)} target="_blank" rel="noreferrer" className="font-semibold text-brand-600 hover:underline">
+                        Open reel
+                      </a>
+                    ) : (
+                      <span className="text-[#97939d]">—</span>
+                    )}
+                  </td>
+                  <td className={TD}>{row.language ?? <span className="text-[#97939d]">—</span>}</td>
+                  <td className={TD}>{row.content_bucket ?? <span className="text-[#97939d]">—</span>}</td>
+                  <td className={TD}>{row.creator_category || <span className="text-[#97939d]">—</span>}</td>
                   <td className={`${TD} font-semibold`}>{row.comments_count ?? "—"}</td>
+                  <td className={`${TD} font-semibold`}>{row.likes_count != null ? compactNumber(row.likes_count) : "—"}</td>
                   <td className={`${TD} font-semibold`}>
                     {row.views_count != null ? compactNumber(row.views_count) : "—"}
                   </td>
@@ -173,6 +197,7 @@ export function PartnershipOverviewTable({
                       {formatCurrency(row.ad_rights_amount ?? row.ad_rights_agent_counter ?? row.ad_rights_creator_quote)}
                     </td>
                   )}
+                  {showCommercial && <td className={`${TD} font-semibold`}>{formatCurrency(row.commercial_amount)}</td>}
                   <td className={TD}>
                     {row.ad_code ? (
                       <span className={`${CHIP} bg-[#f1f1ff] font-mono text-[#3f428f]`}>{row.ad_code}</span>
@@ -199,6 +224,8 @@ export function PartnershipOverviewTable({
                       <span className="text-[#97939d]">—</span>
                     )}
                   </td>
+                  <td className={`${TD} font-semibold`}>{row.meta_roas != null ? row.meta_roas.toFixed(2) : "—"}</td>
+                  <td className={`${TD} font-semibold`}>{row.google_roas != null ? row.google_roas.toFixed(2) : "—"}</td>
                   <td className={TD}>
                     <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold ${badge}`}>
                       {TICKET_STATUS_LABELS[row.ticket_status]}
@@ -221,6 +248,7 @@ export function PartnershipOverviewTable({
                       <span className="text-[#97939d]">No remarks</span>
                     )}
                   </td>
+                  <td className={TD}>{formatDate(row.updated_at)}</td>
                   <td className="py-3.5 pr-4">
                     {row.ticket_status === "closed_and_live" ? (
                       <span className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-[9px] font-bold text-emerald-600">
