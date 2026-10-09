@@ -5,6 +5,7 @@ from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import UNASSIGNED_OWNER_EMAIL
 from app.core.deps import (
     get_current_user,
     owner_scope_filter,
@@ -482,8 +483,27 @@ async def create_collaboration(
     return await _create_collaboration(db, payload, user)
 
 
+async def _ensure_creator_not_owned_by_other(db: AsyncSession, creator: Creator, user: User) -> None:
+    """Lead clash protection: a creator belongs to one user, and only that
+    user (an admin for anyone, a supervisor for their team) may open a new
+    card on them. A creator sitting in the Unassigned pool has no owner, so
+    nobody is clashing with anyone there."""
+    scope = await scoped_owner_ids(user, db)
+    if scope is None or creator.owner_id in scope:
+        return
+    owner = await db.get(User, creator.owner_id)
+    if owner is not None and owner.email == UNASSIGNED_OWNER_EMAIL:
+        return
+    handle = creator.instagram_handle.lstrip("@")
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"@{handle} is already owned by {owner.name if owner else 'another user'}. "
+        "Only the owner can add a collaboration for this creator (lead clash protection).",
+    )
+
+
 async def _create_collaboration(
-    db: AsyncSession, payload: CollaborationCreate, user: User
+    db: AsyncSession, payload: CollaborationCreate, user: User, enforce_creator_ownership: bool = True
 ) -> CollaborationOut:
     if payload.stage not in STARTABLE_STAGES:
         raise HTTPException(
@@ -528,6 +548,8 @@ async def _create_collaboration(
     creator = await db.get(Creator, payload.creator_id)
     if creator is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found")
+    if enforce_creator_ownership:
+        await _ensure_creator_not_owned_by_other(db, creator, user)
 
     additional_ids = [pid for pid in dict.fromkeys(payload.additional_product_ids) if pid != payload.primary_product_id]
     all_product_ids = [payload.primary_product_id, *additional_ids]
@@ -700,7 +722,9 @@ async def clone_collaboration(
         tracking_link=source.tracking_link,
         order_id=source.order_id,
     )
-    return await _create_collaboration(db, payload, user)
+    # Cloning works from a card the user can already open, so the creator-ownership
+    # rule that guards brand-new cards doesn't apply to it.
+    return await _create_collaboration(db, payload, user, enforce_creator_ownership=False)
 
 
 @router.delete("/{collab_id}", status_code=status.HTTP_204_NO_CONTENT)

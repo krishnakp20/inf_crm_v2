@@ -1,5 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER, STARTABLE_COLLAB_STAGES } from "../../lib/collab-stages";
 import { usernameLinkError } from "../../lib/format";
@@ -75,6 +76,7 @@ export function AddCollaborationModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { user: authUser } = useAuth();
   const [ownerId, setOwnerId] = useState(defaultOwnerId ?? currentUserId);
 
   const [tab, setTab] = useState<CreatorTab>("existing");
@@ -179,7 +181,17 @@ export function AddCollaborationModal({
 
   const ownerNames = Object.fromEntries(users.map((u) => [u.id, u.name]));
 
+  // Lead clash protection: an admin may open a card on anyone's creator; everyone
+  // else only on their own (a supervisor: their team's) or on an Unassigned-pool lead.
+  const allowedOwnerIds = new Set([currentUserId, ...users.map((u) => u.id)]);
+  function isClashing(c: ExistingCreatorMatch): boolean {
+    if (authUser?.role === "admin") return false;
+    if (allowedOwnerIds.has(c.owner_id)) return false;
+    return c.owner_name !== "Unassigned";
+  }
+
   function selectCreator(c: ExistingCreatorMatch) {
+    if (isClashing(c)) return;
     setSelectedCreator(c);
     setCreatorSearch(`@${c.instagram_handle} · ${c.name}`);
     setCreatorDropdownOpen(false);
@@ -409,25 +421,40 @@ export function AddCollaborationModal({
                   {creatorSearch.trim().length >= 2 && existingCreators.length === 0 && (
                     <div className="px-3 py-2 text-sm text-gray-400">No matching creators</div>
                   )}
-                  {existingCreators.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onMouseDown={() => selectCreator(c)}
-                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface ${
-                        c.id === selectedCreatorId ? "bg-brand-50 font-medium text-brand-700" : "text-ink"
-                      }`}
-                    >
-                      @{c.instagram_handle} · {c.name}
-                      <span className="text-gray-400"> · {c.owner_name ?? ownerNames[c.owner_id] ?? "Unassigned"}</span>
-                    </button>
-                  ))}
+                  {existingCreators.map((c) =>
+                    isClashing(c) ? (
+                      <div
+                        key={c.id}
+                        title="Lead clash protection: only the owner can add a collaboration for this creator."
+                        className="block w-full cursor-not-allowed bg-gray-50 px-3 py-2 text-left text-sm text-gray-400"
+                      >
+                        @{c.instagram_handle} · {c.name}
+                        <span> · Owned by {c.owner_name ?? "another user"}</span>
+                        <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Can't add
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => selectCreator(c)}
+                        className={`block w-full px-3 py-2 text-left text-sm hover:bg-surface ${
+                          c.id === selectedCreatorId ? "bg-brand-50 font-medium text-brand-700" : "text-ink"
+                        }`}
+                      >
+                        @{c.instagram_handle} · {c.name}
+                        <span className="text-gray-400"> · {c.owner_name ?? ownerNames[c.owner_id] ?? "Unassigned"}</span>
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>
             <p className="mb-3 text-[11px] text-gray-400">
-              Searches every creator in the database, not just yours. A new Collab ID will be created. The creator
-              username and Creator ID remain unchanged.
+              Searches every creator in the database. A creator owned by another user is shown but can't be added
+              (lead clash protection). A new Collab ID will be created; the creator username and Creator ID remain
+              unchanged.
             </p>
           </>
         )}
