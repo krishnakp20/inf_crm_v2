@@ -10,8 +10,6 @@ function getValue(row: TargetRow, field: string): unknown {
   switch (field) {
     case "name":
       return row.name;
-    case "weekly_pct":
-      return row.weekly_pct;
     case "monthly_pct":
       return row.monthly_pct;
     default:
@@ -30,7 +28,7 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-normal text-ink">Targets</h2>
-          <p className="mt-1 text-[10px] text-muted">Weekly and monthly performance by user</p>
+          <p className="mt-1 text-[10px] text-muted">Monthly performance by user</p>
         </div>
         {users.length > 1 && (
           <select
@@ -53,7 +51,6 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
             <SortableHeader label="Name" field="name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-            <SortableHeader label="Weekly target" field="weekly_pct" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
             <SortableHeader label="Monthly target" field="monthly_pct" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
           </tr>
         </thead>
@@ -71,17 +68,6 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
                       {initials(row.name)}
                     </div>
                     <span className="font-medium text-ink">{row.name}</span>
-                  </div>
-                </td>
-                <td>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-600">
-                      {row.weekly_completed}/{row.weekly_due}
-                    </span>
-                    <div className="h-1.5 w-16 rounded-full bg-[#eee]">
-                      <div className="h-1.5 rounded-full" style={{ width: `${row.weekly_pct}%`, backgroundColor: color }} />
-                    </div>
-                    <span className="text-[11px] text-gray-500">{row.weekly_pct}%</span>
                   </div>
                 </td>
                 <td>
