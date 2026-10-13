@@ -562,7 +562,9 @@ export interface PartnershipOverviewRow {
   likes_count: number | null;
   video_link: string | null;
   meta_roas: number | null;
+  meta_orders: number | null;
   google_roas: number | null;
+  google_orders: number | null;
   updated_at: string;
   commercial_amount: number | null;
   content_bucket: string | null;

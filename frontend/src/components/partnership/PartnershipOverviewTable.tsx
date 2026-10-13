@@ -97,7 +97,9 @@ export function PartnershipOverviewTable({
               <SortableHeader label="Ad right & time" field="ad_right_duration_days" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className={TH}>CTA link</th>
               <SortableHeader label="Meta ROAS" field="meta_roas" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Meta orders" field="meta_orders" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Google ROAS" field="google_roas" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Google orders" field="google_orders" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Ticket status" field="ticket_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Collab status" field="collab_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Latest remark" field="latest_remark" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
@@ -225,7 +227,9 @@ export function PartnershipOverviewTable({
                     )}
                   </td>
                   <td className={`${TD} font-semibold`}>{row.meta_roas != null ? row.meta_roas.toFixed(2) : "—"}</td>
+                  <td className={`${TD} font-semibold`}>{row.meta_orders ?? "—"}</td>
                   <td className={`${TD} font-semibold`}>{row.google_roas != null ? row.google_roas.toFixed(2) : "—"}</td>
+                  <td className={`${TD} font-semibold`}>{row.google_orders ?? "—"}</td>
                   <td className={TD}>
                     <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold ${badge}`}>
                       {TICKET_STATUS_LABELS[row.ticket_status]}

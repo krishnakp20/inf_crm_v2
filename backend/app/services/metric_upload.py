@@ -32,7 +32,9 @@ OPTIONAL_COLUMNS = [
     "Content Bucket",
     "Language",
     "Meta ROAS",
+    "Meta Order",
     "Google ROAS",
+    "Google Orders",
     "Collab Status",
     "Ad Code",
     "CTA Link",
@@ -244,6 +246,13 @@ async def process_metric_upload(
         google_roas = _parse_decimal(row.get("Google ROAS"))
         if google_roas is not None:
             collab.google_roas = google_roas
+        # Whole-number order counts; the singular/plural header spellings are both accepted.
+        meta_orders = _parse_int(row.get("Meta Order") or row.get("Meta Orders"))
+        if meta_orders is not None:
+            collab.meta_orders = meta_orders
+        google_orders = _parse_int(row.get("Google Orders") or row.get("Google Order"))
+        if google_orders is not None:
+            collab.google_orders = google_orders
 
         # Since the stage-gate above already requires stage == live, the
         # ticket auto-created on that first transition to Live is always

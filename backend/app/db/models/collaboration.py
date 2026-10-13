@@ -57,6 +57,9 @@ class Collaboration(Base):
     # range is a separate, not-yet-built question).
     meta_roas: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
     google_roas: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    # Order counts from the same Metric Upload sheet, per ad platform.
+    meta_orders: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    google_orders: Mapped[int | None] = mapped_column(Integer, nullable=True)
     campaign_id: Mapped[int | None] = mapped_column(
         ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
     )

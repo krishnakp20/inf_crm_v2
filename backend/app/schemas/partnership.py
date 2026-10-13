@@ -112,7 +112,9 @@ class PartnershipOverviewRow(BaseModel):
     creator_category: str
     platform: Platform | None
     meta_roas: float | None
+    meta_orders: int | None
     google_roas: float | None
+    google_orders: int | None
     updated_at: datetime
     # Commercial figures -- null for Marketer/Supervisor via redact_commercial().
     commercial_amount: float | None

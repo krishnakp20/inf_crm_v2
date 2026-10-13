@@ -153,6 +153,8 @@ def _to_overview_row(ticket: PartnershipTicket, batch: dict, user: User) -> Part
         video_link=collab.video_link,
         meta_roas=float(collab.meta_roas) if collab.meta_roas is not None else None,
         google_roas=float(collab.google_roas) if collab.google_roas is not None else None,
+        meta_orders=collab.meta_orders,
+        google_orders=collab.google_orders,
         updated_at=ticket.updated_at,
         commercial_amount=float(collab.commercial_amount) if collab.commercial_amount is not None else None,
         content_bucket=ticket.content_bucket,
@@ -282,7 +284,9 @@ OVERVIEW_SORTABLE_FIELDS = {
     "creator_category",
     "commercial_amount",
     "meta_roas",
+    "meta_orders",
     "google_roas",
+    "google_orders",
     "updated_at",
     "commercial",
     "ad_code",
@@ -459,7 +463,9 @@ async def export_metrics_template(
                 ticket.content_bucket or "",
                 ticket.language or "",
                 collab.meta_roas if collab.meta_roas is not None else "",
+                collab.meta_orders if collab.meta_orders is not None else "",
                 collab.google_roas if collab.google_roas is not None else "",
+                collab.google_orders if collab.google_orders is not None else "",
                 COLLAB_STATUS_LABELS[ticket.collab_status],
                 ticket.ad_code or "",
                 ticket.cta_link or "",
@@ -495,7 +501,9 @@ _MASTER_DATA_COLUMNS = [
     "Collab Status",
     "Remarks",
     "Meta ROAs",
+    "Meta Order",
     "Google ROAs",
+    "Google Orders",
     "Updated on",
 ]
 
@@ -575,7 +583,9 @@ async def export_master_data(
                 COLLAB_STATUS_LABELS[ticket.collab_status],
                 latest_remark,
                 collab.meta_roas if collab.meta_roas is not None else "",
+                collab.meta_orders if collab.meta_orders is not None else "",
                 collab.google_roas if collab.google_roas is not None else "",
+                collab.google_orders if collab.google_orders is not None else "",
                 ticket.updated_at.isoformat(),
             ]
         )
