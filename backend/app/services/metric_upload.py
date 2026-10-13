@@ -17,10 +17,17 @@ from app.services.partnership_pipeline import COLLAB_STATUS_BY_LABEL, REMARK_TAG
 
 # Exact header names the upload template uses -- validated before any row is
 # processed, per "Column names are validated before any record changes."
-REQUIRED_COLUMNS = ["POC Code", "Video Link", "Views", "Likes", "Comments", "Revenue", "Ad Spend", "ROAS"]
+# Only POC Code is mandatory -- the one column a sheet must have, and the one cell
+# every row must fill (it finds the video). Everything else is optional: a missing
+# column or blank cell leaves that field as it is.
+MANDATORY_COLUMNS = ["POC Code"]
+
+# The columns the downloadable template always lists, in this order (the optional
+# ones follow in OPTIONAL_COLUMNS). Not enforced -- see MANDATORY_COLUMNS.
+CORE_COLUMNS = ["POC Code", "Video Link", "Views", "Likes", "Comments", "Revenue", "Ad Spend", "ROAS"]
 
 # Added later, alongside the Partnership Hub master-data field set -- kept
-# optional (not in REQUIRED_COLUMNS) so a sheet built before these existed
+# optional (not in MANDATORY_COLUMNS) so a sheet built before these existed
 # still uploads fine; a blank or missing cell just leaves that field
 # unchanged, same convention as the required numeric columns above. These
 # write to the collaboration's linked PartnershipTicket, not Collaboration
@@ -121,7 +128,7 @@ async def process_metric_upload(
             total_rows=0, updated=0, skipped=0, errors=["Could not read this file. Check the format and try again."]
         )
 
-    missing_columns = [col for col in REQUIRED_COLUMNS if col not in header]
+    missing_columns = [col for col in MANDATORY_COLUMNS if col not in header]
     if missing_columns:
         await _record_import(db, filename, 0, 0, 0, MetricImportStatus.failed, uploaded_by)
         return MetricUploadResult(
@@ -193,15 +200,14 @@ async def process_metric_upload(
             skipped += 1
             continue
 
-        if not video_link:
-            errors.append(f"Row {line_num}: missing Video Link")
-            skipped += 1
-            continue
-        existing_link = (collab.video_link or "").strip().lower()
-        if video_link.lower() != existing_link:
-            errors.append(f"Row {line_num}: video link does not match the Live record for '{poc_code}'")
-            skipped += 1
-            continue
+        # Video Link is optional: blank means "match on POC Code alone" (fine when that
+        # code is on one video). When it IS given it must match, to catch a mistyped code.
+        if video_link:
+            existing_link = (collab.video_link or "").strip().lower()
+            if video_link.lower() != existing_link:
+                errors.append(f"Row {line_num}: video link does not match the Live record for '{poc_code}'")
+                skipped += 1
+                continue
 
         # The same video listed twice in one sheet must not be applied twice
         # (it double-counted "updated" and double-posted the Remark).

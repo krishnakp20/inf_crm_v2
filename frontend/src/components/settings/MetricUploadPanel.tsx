@@ -22,8 +22,14 @@ function getHistoryValue(h: MetricImport, field: string): unknown {
   }
 }
 
-const REQUIRED_COLUMNS: { label: string; hint: string }[] = [
-  { label: "POC Code", hint: "Unique match key" },
+// Only POC Code is mandatory: it finds the video. Every other column may be missing
+// or blank -- a blank cell leaves that field unchanged.
+const REQUIRED_COLUMNS: { label: string; hint: string }[] = [{ label: "POC Code", hint: "Unique match key" }];
+
+// Optional -- a blank or missing cell leaves that field unchanged. The first six used to
+// be mandatory. Video Link double-checks the match when given (and tells apart a POC code
+// that is on several videos).
+const OPTIONAL_COLUMNS: { label: string; hint: string }[] = [
   { label: "Video Link", hint: "Cross-check" },
   { label: "Views", hint: "Whole number" },
   { label: "Likes", hint: "Whole number" },
@@ -31,13 +37,9 @@ const REQUIRED_COLUMNS: { label: string; hint: string }[] = [
   { label: "Revenue", hint: "Attributed revenue" },
   { label: "Ad Spend", hint: "Media spend" },
   { label: "ROAS", hint: "Revenue ÷ spend" },
-];
-
-// Optional -- a blank or missing cell leaves that field unchanged. Content
-// Bucket/Language/Meta ROAS/Google ROAS update the video record; Collab
-// Status/Ad Code/CTA Link/Remarks write straight to Partnership Hub,
-// bypassing its usual Take Action workflow (confirmed with the client).
-const OPTIONAL_COLUMNS: { label: string; hint: string }[] = [
+  // Content Bucket/Language/Meta ROAS/Google ROAS update the video record; Collab
+  // Status/Ad Code/CTA Link/Remarks write straight to Partnership Hub, bypassing
+  // its usual Take Action workflow (confirmed with the client).
   { label: "Content Bucket", hint: "Partnership Hub" },
   { label: "Language", hint: "Partnership Hub" },
   { label: "Meta ROAS", hint: "Revenue ÷ Meta spend" },
@@ -154,7 +156,9 @@ export function MetricUploadPanel() {
 
       <div className="mb-5">
         <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-gray-400">2. Required columns</p>
-        <p className="mb-2 text-xs text-gray-500">Column names are validated before any record changes.</p>
+        <p className="mb-2 text-xs text-gray-500">
+          The only mandatory column. Every other column is optional; a blank cell leaves that value unchanged.
+        </p>
         <div className="grid grid-cols-4 gap-2">
           {REQUIRED_COLUMNS.map((c) => (
             <div key={c.label} className="rounded-card border border-[#e7e5e4] p-2.5">
@@ -164,8 +168,9 @@ export function MetricUploadPanel() {
           ))}
         </div>
         <p className="mt-2 text-[11px] text-gray-400">
-          A row updates only when both the POC code and video link match the same Live record. Revenue and ROAS are
-          accepted only in this Admin view.
+          A row updates the Live video with that POC code. If a Video Link is also given, it must match that video;
+          if the POC code is on more than one video, the Video Link is needed to tell them apart. Revenue and ROAS
+          are accepted only in this Admin view.
         </p>
       </div>
 

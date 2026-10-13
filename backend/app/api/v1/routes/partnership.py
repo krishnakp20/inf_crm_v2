@@ -37,7 +37,7 @@ from app.schemas.partnership import (
 )
 from app.services.collab_pipeline import effective_live_dates
 from app.services.metric_upload import OPTIONAL_COLUMNS as METRIC_UPLOAD_OPTIONAL_COLUMNS
-from app.services.metric_upload import REQUIRED_COLUMNS as METRIC_UPLOAD_COLUMNS
+from app.services.metric_upload import CORE_COLUMNS as METRIC_UPLOAD_COLUMNS
 from app.services.partnership_pipeline import (
     COLLAB_STATUS_LABELS,
     REMARK_TAG_ADMIN_COUNTER,
