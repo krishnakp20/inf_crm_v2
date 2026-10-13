@@ -129,6 +129,10 @@ export default function MyCreators() {
           product_id: productFilter || undefined,
           date_from: dateFrom,
           date_to: dateTo,
+          // Videos live counts by when the video went live, over the same exact
+          // window the Dashboard uses for this preset.
+          live_from: from,
+          live_to: to,
         },
       })
       .then((res) => setStats(res.data));

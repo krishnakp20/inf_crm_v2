@@ -37,6 +37,7 @@ from app.schemas.collaboration import (
     CollaborationUpdate,
     CollaborationVideoLinkOut,
 )
+from app.services.analytics import ALL_TIME_START, _scoped_live_collab_ids
 from app.services.collab_pipeline import (
     COLLAB_STAGE_INDEX,
     COLLAB_STAGE_LABELS,
@@ -400,6 +401,8 @@ async def collab_board_stats(
     product_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    live_from: datetime | None = None,
+    live_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CollabBoardStats:
@@ -433,6 +436,29 @@ async def collab_board_stats(
     unique_creators = len({c.creator_id for c in collabs})
     active_collaborations = sum(1 for c in collabs if c.stage != CollabStage.dead_leads)
     videos_live = sum(1 for c in collabs if is_video_live(c.stage))
+    if live_from is not None or live_to is not None:
+        # "Videos live" in a date range = videos that WENT LIVE in it (live date), the
+        # same rule and helper as the Dashboard's Active reels -- not cards that were
+        # created in it. live_from/live_to are the exact instants the Dashboard uses
+        # for the same preset, so the two screens show the same number.
+        live_ids = await _scoped_live_collab_ids(
+            db, owner_ids, live_from or ALL_TIME_START, live_to or datetime.now(timezone.utc)
+        )
+        if product_id is not None and live_ids:
+            live_ids = [
+                row[0]
+                for row in (
+                    await db.execute(
+                        select(CollaborationProduct.collaboration_id)
+                        .where(
+                            CollaborationProduct.collaboration_id.in_(live_ids),
+                            CollaborationProduct.product_id == product_id,
+                        )
+                        .distinct()
+                    )
+                ).all()
+            ]
+        videos_live = len(live_ids)
     dead_leads = sum(1 for c in collabs if c.stage == CollabStage.dead_leads)
 
     return CollabBoardStats(
