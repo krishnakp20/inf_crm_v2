@@ -1,6 +1,9 @@
+import csv
+import io
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +22,7 @@ from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.collaboration_video_link import CollaborationVideoLink
 from app.db.models.creator import Creator
-from app.db.models.enums import CollabStage, UserRole
+from app.db.models.enums import CollabStage, CreatorStatus, PaymentStatus, UserRole
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.product_variant import ProductVariant
@@ -36,6 +39,7 @@ from app.schemas.collaboration import (
 )
 from app.services.collab_pipeline import (
     COLLAB_STAGE_INDEX,
+    COLLAB_STAGE_LABELS,
     STAGE_REQUIRED_FIELDS,
     STARTABLE_STAGES,
     apply_stage_transition,
@@ -436,6 +440,127 @@ async def collab_board_stats(
         active_collaborations=active_collaborations,
         videos_live=videos_live,
         dead_leads=dead_leads,
+    )
+
+
+_EXPORT_PRIORITY_LABELS = {
+    CreatorStatus.priority: "High",
+    CreatorStatus.overdue: "High",
+    CreatorStatus.ndr: "High",
+    CreatorStatus.active: "Medium",
+    CreatorStatus.review_due: "Medium",
+    CreatorStatus.none: "Low",
+}
+_EXPORT_PAYMENT_LABELS = {
+    PaymentStatus.pending: "Pending",
+    PaymentStatus.partial_payment: "Partial Payment",
+    PaymentStatus.payment_done: "Payment Done",
+}
+
+
+@router.get("/export")
+async def export_collaborations(
+    owner_id: int | None = None,
+    product_id: int | None = None,
+    search: str | None = None,
+    priority: CreatorStatus | None = None,
+    payment_status: PaymentStatus | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """One row per collaboration card, with the same filters (and the same
+    role scoping) as the My Creators board -- but every matching card, not
+    just the 500 the board loads. Includes the card's Stage."""
+    owner_ids = await owner_scope_filter(user, db, owner_id)
+
+    stmt = (
+        select(Collaboration, Creator, User)
+        .join(Creator, Creator.id == Collaboration.creator_id)
+        .join(User, User.id == Collaboration.owner_id)
+    )
+    if owner_ids is not None:
+        stmt = stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if product_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(CollaborationProduct.id).where(
+                    CollaborationProduct.collaboration_id == Collaboration.id,
+                    CollaborationProduct.product_id == product_id,
+                )
+            )
+        )
+    if priority is not None:
+        stmt = stmt.where(Collaboration.priority == priority)
+    if payment_status is not None:
+        stmt = stmt.where(Collaboration.payment_status == payment_status)
+    if date_from is not None:
+        stmt = stmt.where(Collaboration.created_at >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(Collaboration.created_at < date_to + timedelta(days=1))
+    if search:
+        pattern = f"%{search.strip()}%"
+        stmt = stmt.where(or_(Creator.name.ilike(pattern), Creator.instagram_handle.ilike(pattern)))
+    rows = (await db.execute(stmt.order_by(Collaboration.last_activity_at.desc()))).all()
+
+    collab_ids = [collab.id for collab, _, _ in rows]
+    products_by_collab = await _load_products_for_collabs(db, collab_ids)
+    live_dates = await effective_live_dates(db, collab_ids)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "Collab ID",
+            "Creator",
+            "Instagram handle",
+            "Owner",
+            "Stage",
+            "Priority",
+            "Payment status",
+            "Products",
+            "Deal type",
+            "Content type",
+            "Commercial locked",
+            "POC code",
+            "Video link",
+            "Live date",
+            "Created on",
+            "Last activity",
+        ]
+    )
+    for collab, creator, owner in rows:
+        products = ", ".join(
+            p.product_name + (f" - {p.variant_name}" if p.variant_name else "")
+            for p in products_by_collab.get(collab.id, [])
+        )
+        live_date = live_dates.get(collab.id)
+        writer.writerow(
+            [
+                collab.collab_code,
+                creator.name,
+                creator.instagram_handle.lstrip("@").strip(),
+                owner.name,
+                COLLAB_STAGE_LABELS[collab.stage],
+                _EXPORT_PRIORITY_LABELS.get(collab.priority, ""),
+                _EXPORT_PAYMENT_LABELS[collab.payment_status],
+                products,
+                collab.deal_type.value.title() if collab.deal_type else "",
+                collab.content_type.value.title() if collab.content_type else "",
+                collab.commercial_amount if collab.commercial_amount is not None else "",
+                collab.poc_code or "",
+                collab.video_link or "",
+                live_date.isoformat() if live_date else "",
+                collab.created_at.isoformat(),
+                collab.last_activity_at.isoformat(),
+            ]
+        )
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="my-creators-export.csv"'},
     )
 
 

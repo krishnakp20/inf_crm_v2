@@ -1,4 +1,4 @@
-import { LayoutGrid, List, Plus, Search, Target } from "lucide-react";
+import { Download, LayoutGrid, List, Plus, Search, Target } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { AddCollaborationModal } from "../components/creators/AddCollaborationModal";
@@ -48,6 +48,8 @@ export default function MyCreators() {
   // id rather than requiring it to already be loaded.
   const [deepLinkCollab, setDeepLinkCollab] = useState<Collaboration | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [rangePreset, setRangePreset] = useState<RangePreset>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -158,6 +160,38 @@ export default function MyCreators() {
     return <Navigate to="/" replace />;
   }
 
+  // Every card the board's current filters match (user, product, priority, payment,
+  // search, date range) -- not just the 500 the board loads -- with its Stage.
+  async function exportCards() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
+      const res = await api.get("/collaborations/export", {
+        params: {
+          owner_id: typeof selectedOwnerId === "number" ? selectedOwnerId : undefined,
+          product_id: productFilter || undefined,
+          priority: priorityFilter || undefined,
+          payment_status: paymentFilter || undefined,
+          search: searchQuery.trim() || undefined,
+          date_from: from ? toLocalDateString(from) : undefined,
+          date_to: to ? toLocalDateString(to) : undefined,
+        },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(res.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `my-creators-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError("Could not export your creators. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function handleAdvance(collabId: number, nextStage: CollabStage) {
     try {
       await api.post(`/collaborations/${collabId}/stage`, { to_stage: nextStage });
@@ -202,6 +236,14 @@ export default function MyCreators() {
         subtitle="One creator username can hold multiple collaboration cards without duplicating the creator record."
         actions={
           <div className="flex gap-2">
+            <button
+              onClick={exportCards}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-[10px] border border-[#e7e5e4] px-4 py-2.5 text-xs font-bold text-ink hover:bg-surface disabled:opacity-50"
+            >
+              <Download size={16} />
+              {exporting ? "Exporting..." : "Export"}
+            </button>
             {(user?.role === "advisor" || user?.role === "admin") && (
               <button
                 onClick={() => setShowSetTarget(true)}
@@ -224,6 +266,15 @@ export default function MyCreators() {
           </div>
         }
       />
+
+      {exportError && (
+        <div className="mb-3 flex items-center justify-between rounded-md bg-[#fff0ed] px-3 py-2 text-xs text-[#cf4e43]">
+          <span>{exportError}</span>
+          <button onClick={() => setExportError(null)} className="font-semibold hover:opacity-70">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {showAddCollab && user && (
         <AddCollaborationModal
