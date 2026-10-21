@@ -102,6 +102,19 @@ async def list_approval_requests(
     ]
 
 
+async def _next_request_code(db: AsyncSession, year: int) -> str:
+    """Next APR-{year}-XXXX code, based on the highest number actually in use
+    for this year rather than a total row count -- COUNT(*) starts colliding
+    with existing codes as soon as any request is deleted (or the year rolls
+    over), since the count then undercounts the highest number already issued."""
+    prefix = f"APR-{year}-"
+    codes = (
+        await db.execute(select(ApprovalRequest.request_code).where(ApprovalRequest.request_code.like(f"{prefix}%")))
+    ).scalars().all()
+    max_num = max((int(suffix) for code in codes if (suffix := code[len(prefix) :]).isdigit()), default=0)
+    return f"{prefix}{max_num + 1:04d}"
+
+
 @router.post("", response_model=ApprovalRequestOut, status_code=status.HTTP_201_CREATED)
 async def create_approval_request(
     payload: ApprovalRequestCreate,
@@ -123,9 +136,7 @@ async def create_approval_request(
                 detail="This creator's owner has no supervisor assigned -- send to Admin instead.",
             )
 
-    year = datetime.now(timezone.utc).year
-    count = (await db.execute(select(func.count(ApprovalRequest.id)))).scalar_one()
-    request_code = f"APR-{year}-{count + 1:04d}"
+    request_code = await _next_request_code(db, datetime.now(timezone.utc).year)
 
     req = ApprovalRequest(
         request_code=request_code,
