@@ -750,6 +750,7 @@ export interface AnalyticsUserRef {
 export interface AnalyticsProductUserMatrixRow {
   product_id: number;
   product_name: string;
+  parent: string | null;
   cells: AnalyticsMatrixCell[];
   total: AnalyticsMatrixCell;
 }

@@ -1,5 +1,6 @@
-import { useState } from "react";
-import type { AnalyticsMatrixCell, AnalyticsProductUserMatrix } from "../../lib/types";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import type { AnalyticsMatrixCell, AnalyticsProductUserMatrix, AnalyticsProductUserMatrixRow } from "../../lib/types";
 
 const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
@@ -17,8 +18,74 @@ function formatCell(cell: AnalyticsMatrixCell, view: ViewMode): string {
   return `${cell.achieved} / ${cell.target}`;
 }
 
+type DisplayRow =
+  | { kind: "product"; row: AnalyticsProductUserMatrixRow }
+  | {
+      kind: "group";
+      parent: string;
+      members: AnalyticsProductUserMatrixRow[];
+      cells: AnalyticsMatrixCell[];
+      total: AnalyticsMatrixCell;
+    };
+
+function sumCells(cells: AnalyticsMatrixCell[]): AnalyticsMatrixCell {
+  return {
+    achieved: Math.round(cells.reduce((sum, c) => sum + c.achieved, 0) * 100) / 100,
+    target: Math.round(cells.reduce((sum, c) => sum + c.target, 0) * 100) / 100,
+  };
+}
+
+// Products that share a group roll up into one expandable row (groups A-Z first, then ungrouped products).
+// The Total row/column still come from the server, so grouping never changes any figure.
+function buildDisplayRows(matrix: AnalyticsProductUserMatrix): DisplayRow[] {
+  const grouped = new Map<string, AnalyticsProductUserMatrixRow[]>();
+  const loose: AnalyticsProductUserMatrixRow[] = [];
+  for (const row of matrix.rows) {
+    if (!row.parent) loose.push(row);
+    else grouped.set(row.parent, [...(grouped.get(row.parent) ?? []), row]);
+  }
+  const groups = [...grouped.keys()].sort().map((parent): DisplayRow => {
+    const members = grouped.get(parent)!;
+    return {
+      kind: "group",
+      parent,
+      members,
+      cells: matrix.users.map((_, idx) => sumCells(members.map((m) => m.cells[idx]))),
+      total: sumCells(members.map((m) => m.total)),
+    };
+  });
+  return [...groups, ...loose.map((row): DisplayRow => ({ kind: "product", row }))];
+}
+
 export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUserMatrix }) {
   const [view, setView] = useState<ViewMode>("comparison");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const displayRows = useMemo(() => buildDisplayRows(matrix), [matrix]);
+
+  function toggleExpanded(parent: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(parent)) next.delete(parent);
+      else next.add(parent);
+      return next;
+    });
+  }
+
+  function renderProductRow(row: AnalyticsProductUserMatrixRow, indented: boolean) {
+    return (
+      <tr key={row.product_id} className="border-t border-gray-100">
+        <td className={`py-2.5 pr-3 text-[9px] font-extrabold text-ink ${indented ? "pl-9" : "pl-4"}`}>
+          {row.product_name}
+        </td>
+        {row.cells.map((cell, idx) => (
+          <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[8px] text-[#55515c]">
+            {formatCell(cell, view)}
+          </td>
+        ))}
+        <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{formatCell(row.total, view)}</td>
+      </tr>
+    );
+  }
 
   return (
     <div className="mb-4">
@@ -56,17 +123,40 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
               </tr>
             </thead>
             <tbody>
-              {matrix.rows.map((row) => (
-                <tr key={row.product_id} className="border-t border-gray-100">
-                  <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">{row.product_name}</td>
-                  {row.cells.map((cell, idx) => (
-                    <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[8px] text-[#55515c]">
-                      {formatCell(cell, view)}
-                    </td>
-                  ))}
-                  <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{formatCell(row.total, view)}</td>
-                </tr>
-              ))}
+              {displayRows.map((entry) => {
+                if (entry.kind === "product") return renderProductRow(entry.row, false);
+                const isOpen = expanded.has(entry.parent);
+                return (
+                  <Fragment key={`group-${entry.parent}`}>
+                    <tr
+                      onClick={() => toggleExpanded(entry.parent)}
+                      aria-expanded={isOpen}
+                      className="cursor-pointer border-t border-gray-100 hover:bg-surface"
+                    >
+                      <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">
+                        <span className="flex items-center gap-1.5">
+                          {isOpen ? (
+                            <ChevronDown size={12} className="shrink-0 text-gray-400" />
+                          ) : (
+                            <ChevronRight size={12} className="shrink-0 text-gray-400" />
+                          )}
+                          {entry.parent}
+                          <span className="text-[8px] font-normal text-gray-400">
+                            ({entry.members.length} product{entry.members.length !== 1 ? "s" : ""})
+                          </span>
+                        </span>
+                      </td>
+                      {entry.cells.map((cell, idx) => (
+                        <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[8px] font-bold text-ink">
+                          {formatCell(cell, view)}
+                        </td>
+                      ))}
+                      <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{formatCell(entry.total, view)}</td>
+                    </tr>
+                    {isOpen && entry.members.map((m) => renderProductRow(m, true))}
+                  </Fragment>
+                );
+              })}
               {matrix.rows.length === 0 && (
                 <tr>
                   <td colSpan={matrix.users.length + 2} className="py-6 text-center text-sm text-gray-400">

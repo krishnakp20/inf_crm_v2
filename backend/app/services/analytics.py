@@ -591,7 +591,9 @@ async def product_user_target_matrix(
     ).all()
     products = (
         await db.execute(
-            select(Product.id, Product.name).where(Product.id.in_(product_ids_with_target)).order_by(Product.name)
+            select(Product.id, Product.name, Product.parent)
+            .where(Product.id.in_(product_ids_with_target))
+            .order_by(Product.name)
         )
     ).all()
 
@@ -610,7 +612,7 @@ async def product_user_target_matrix(
     grand_target = 0.0
 
     rows: list[AnalyticsProductUserMatrixRow] = []
-    for product_id, product_name in products:
+    for product_id, product_name, product_parent in products:
         cells: list[AnalyticsMatrixCell] = []
         row_achieved = 0.0
         row_target = 0.0
@@ -627,6 +629,7 @@ async def product_user_target_matrix(
             AnalyticsProductUserMatrixRow(
                 product_id=product_id,
                 product_name=product_name,
+                parent=product_parent or None,
                 cells=cells,
                 total=AnalyticsMatrixCell(achieved=round(row_achieved, 2), target=round(row_target, 2)),
             )

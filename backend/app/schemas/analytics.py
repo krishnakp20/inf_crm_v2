@@ -89,6 +89,8 @@ class AnalyticsMatrixCell(BaseModel):
 class AnalyticsProductUserMatrixRow(BaseModel):
     product_id: int
     product_name: str
+    # The product's group (Settings > products); the table rolls rows up into expandable groups.
+    parent: str | None = None
     # Aligned by position with AnalyticsProductUserMatrix.users -- cells[i]
     # is this product's figures for users[i].
     cells: list[AnalyticsMatrixCell]
