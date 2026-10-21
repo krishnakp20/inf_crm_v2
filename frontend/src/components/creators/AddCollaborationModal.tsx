@@ -3,8 +3,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER, STARTABLE_COLLAB_STAGES } from "../../lib/collab-stages";
+import { findTier, tierLabel } from "../../lib/creator-tiers";
 import { usernameLinkError } from "../../lib/format";
 import type {
+  CreatorCategoryTier,
   CollabStage,
   ContentBucket,
   ContentType,
@@ -14,6 +16,7 @@ import type {
   Product,
   User,
 } from "../../lib/types";
+import { SearchableSelect } from "../shared/SearchableSelect";
 
 interface VideoLinkRow {
   platform: Platform | "";
@@ -116,6 +119,7 @@ export function AddCollaborationModal({
   const [contentBucket, setContentBucket] = useState("");
   const [languages, setLanguages] = useState<Language[]>([]);
   const [contentBuckets, setContentBuckets] = useState<ContentBucket[]>([]);
+  const [tiers, setTiers] = useState<CreatorCategoryTier[]>([]);
   const [additionalProductIds, setAdditionalProductIds] = useState<number[]>([]);
   const [liveAttributionProductIds, setLiveAttributionProductIds] = useState<number[]>([]);
   const [productVariants, setProductVariants] = useState<Record<number, number>>({});
@@ -177,6 +181,7 @@ export function AddCollaborationModal({
   useEffect(() => {
     api.get<Language[]>("/languages").then((res) => setLanguages(res.data));
     api.get<ContentBucket[]>("/content-buckets").then((res) => setContentBuckets(res.data));
+    api.get<CreatorCategoryTier[]>("/creator-category-tiers").then((res) => setTiers(res.data));
   }, []);
 
   const ownerNames = Object.fromEntries(users.map((u) => [u.id, u.name]));
@@ -512,17 +517,29 @@ export function AddCollaborationModal({
             </p>
 
             <label className="mb-1 block text-sm font-medium text-gray-700">Category · Required</label>
-            <select
+            <SearchableSelect
+              fullWidth
+              wrapperClassName="mb-2"
+              ariaLabel="Category"
               value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={setNewCategory}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+            />
+
+            <label className="mb-1 block text-sm font-medium text-gray-700">Creator category · Optional</label>
+            <SearchableSelect
+              fullWidth
+              wrapperClassName="mb-2"
+              ariaLabel="Creator category"
+              value={newFollowers ? String(findTier(tiers, Number(newFollowers))?.id ?? "") : ""}
+              onChange={(v) => {
+                const tier = tiers.find((t) => String(t.id) === v);
+                if (tier) setNewFollowers(String(tier.min_followers));
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              options={[{ value: "", label: "Select..." }, ...tiers.map((t) => ({ value: String(t.id), label: tierLabel(t) }))]}
+            />
 
             <label className="mb-1 block text-sm font-medium text-gray-700">Follower count · Required</label>
             <input
@@ -534,7 +551,8 @@ export function AddCollaborationModal({
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
             <p className="mb-2 text-[11px] text-gray-400">
-              Use numbers only. For example, enter 85000 instead of 85K.
+              Use numbers only. For example, enter 85000 instead of 85K. Picking a creator category fills in its
+              minimum; you can still type the exact number.
             </p>
 
             <label className="mb-1 block text-sm font-medium text-gray-700">City · Optional</label>
@@ -592,37 +610,28 @@ export function AddCollaborationModal({
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Primary product</label>
-            <select
-              value={productId}
-              onChange={(e) => setProductId(Number(e.target.value))}
+            <SearchableSelect
+              fullWidth
+              ariaLabel="Primary product"
+              value={String(productId)}
+              onChange={(v) => setProductId(Number(v))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              options={products.map((p) => ({ value: String(p.id), label: p.name }))}
+            />
             <p className="mt-1 text-[11px] text-gray-400">Synced product master · no free-text duplicates</p>
             {(() => {
               const selected = products.find((p) => p.id === productId);
               if (!selected || selected.variants.length === 0) return null;
               return (
-                <select
-                  value={productId ? productVariants[productId] ?? "" : ""}
-                  onChange={(e) =>
-                    productId &&
-                    setProductVariants((prev) => ({ ...prev, [productId]: Number(e.target.value) }))
-                  }
-                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="">No shade selected</option>
-                  {selected.variants.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  fullWidth
+                  wrapperClassName="mt-2"
+                  ariaLabel="Shade"
+                  value={productId ? String(productVariants[productId] ?? "") : ""}
+                  onChange={(v) => productId && setProductVariants((prev) => ({ ...prev, [productId]: Number(v) }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  options={[{ value: "", label: "No shade selected" }, ...selected.variants.map((v) => ({ value: String(v.id), label: v.name }))]}
+                />
               );
             })()}
           </div>
@@ -630,17 +639,14 @@ export function AddCollaborationModal({
           {canAssignOwner && (
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Assign to user</label>
-              <select
-                value={ownerId}
-                onChange={(e) => setOwnerId(Number(e.target.value))}
+              <SearchableSelect
+                fullWidth
+                ariaLabel="Assign to user"
+                value={String(ownerId)}
+                onChange={(v) => setOwnerId(Number(v))}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
+                options={users.map((u) => ({ value: String(u.id), label: u.name }))}
+              />
             </div>
           )}
         </div>
@@ -759,20 +765,14 @@ export function AddCollaborationModal({
               .map((p) => (
                 <div key={p.id} className="mt-2">
                   <label className="mb-1 block text-[11px] text-gray-500">{p.name} · Shade</label>
-                  <select
-                    value={productVariants[p.id] ?? ""}
-                    onChange={(e) =>
-                      setProductVariants((prev) => ({ ...prev, [p.id]: Number(e.target.value) }))
-                    }
+                  <SearchableSelect
+                    fullWidth
+                    ariaLabel={`${p.name} shade`}
+                    value={String(productVariants[p.id] ?? "")}
+                    onChange={(v) => setProductVariants((prev) => ({ ...prev, [p.id]: Number(v) }))}
                     className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs"
-                  >
-                    <option value="">No shade selected</option>
-                    {p.variants.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={[{ value: "", label: "No shade selected" }, ...p.variants.map((v) => ({ value: String(v.id), label: v.name }))]}
+                  />
                 </div>
               ))}
           </div>
@@ -834,32 +834,26 @@ export function AddCollaborationModal({
             </button>
 
             <label className="mb-1 block text-sm font-medium text-gray-700">Language · Required</label>
-            <select
+            <SearchableSelect
+              fullWidth
+              wrapperClassName="mb-2"
+              ariaLabel="Language"
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">Select...</option>
-              {languages.map((l) => (
-                <option key={l.id} value={l.name}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+              onChange={setLanguage}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              options={[{ value: "", label: "Select..." }, ...languages.map((l) => ({ value: l.name, label: l.name }))]}
+            />
 
             <label className="mb-1 block text-sm font-medium text-gray-700">Content bucket · Required</label>
-            <select
+            <SearchableSelect
+              fullWidth
+              wrapperClassName="mb-3"
+              ariaLabel="Content bucket"
               value={contentBucket}
-              onChange={(e) => setContentBucket(e.target.value)}
-              className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">Select...</option>
-              {contentBuckets.map((b) => (
-                <option key={b.id} value={b.name}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              onChange={setContentBucket}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              options={[{ value: "", label: "Select..." }, ...contentBuckets.map((b) => ({ value: b.name, label: b.name }))]}
+            />
 
             <p className="mb-1 text-sm font-medium text-gray-700">Live attribution · Required</p>
             <p className="mb-2 text-[11px] text-gray-500">Select every product featured in this video.</p>

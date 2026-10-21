@@ -4,6 +4,7 @@ import { useSort } from "../../hooks/useSort";
 import { formatCurrency } from "../../lib/format";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { AnalyticsProductPerformanceRow } from "../../lib/types";
+import { SearchableSelect } from "../shared/SearchableSelect";
 
 const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
@@ -113,19 +114,14 @@ export function ProductPerformanceTable({
           </p>
         </div>
         {groups.length > 0 && (
-          <select
-            aria-label="Filter products by group"
+          <SearchableSelect
+            ariaLabel="Filter products by group"
             value={groupFilter}
-            onChange={(e) => setGroupFilter(e.target.value)}
+            onChange={setGroupFilter}
+            align="right"
             className="h-8 rounded-lg border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-          >
-            <option value="">All groups</option>
-            {groups.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
+            options={[{ value: "", label: "All groups" }, ...groups.map((g) => ({ value: g, label: g }))]}
+          />
         )}
       </div>
       <div className="dashboard-card overflow-hidden p-0">

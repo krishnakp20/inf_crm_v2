@@ -22,6 +22,7 @@ import { api } from "../lib/api";
 import { downloadCsv } from "../lib/csv";
 import { rangeToDates } from "../lib/dateRange";
 import type { AnalyticsResponse, User } from "../lib/types";
+import { SearchableSelect } from "../components/shared/SearchableSelect";
 
 export default function Analytics() {
   const { user } = useAuth();
@@ -133,18 +134,13 @@ export default function Analytics() {
 
       {tab === "user" && (user?.role === "admin" || user?.role === "supervisor") && (
         <div className="mb-4">
-          <select
-            value={selectedUserId ?? ""}
-            onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : null)}
+          <SearchableSelect
+            ariaLabel="Select a user"
+            value={selectedUserId ? String(selectedUserId) : ""}
+            onChange={(v) => setSelectedUserId(v ? Number(v) : null)}
             className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-          >
-            <option value="">Select a user...</option>
-            {advisorOptions.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
+            options={[{ value: "", label: "Select a user..." }, ...advisorOptions.map((u) => ({ value: String(u.id), label: u.name }))]}
+          />
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { ArrowDownWideNarrow, ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ProductPerformance as ProductPerformanceType } from "../../lib/types";
+import { SearchableSelect } from "../shared/SearchableSelect";
 
 const ROW_COLORS = ["#5B5CE2", "#8B8BF2", "#F06E62", "#238B57", "#E6A23C"];
 
@@ -125,34 +126,24 @@ export function ProductPerformance({ products }: { products: ProductPerformanceT
             Top performers
           </button>
           {groups.length > 0 && (
-            <select
-              aria-label="Filter products by group"
+            <SearchableSelect
+              ariaLabel="Filter products by group"
               value={groupFilter}
-              onChange={(e) => setGroupFilter(e.target.value)}
+              onChange={setGroupFilter}
+              align="right"
               className="rounded-lg border border-[#e7e5e4] bg-white px-2 py-1 text-[10px] font-semibold text-ink"
-            >
-              <option value="">All groups</option>
-              {groups.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
+              options={[{ value: "", label: "All groups" }, ...groups.map((g) => ({ value: g, label: g }))]}
+            />
           )}
           {users.length > 1 && (
-            <select
-              aria-label="Filter products by user"
+            <SearchableSelect
+              ariaLabel="Filter products by user"
               value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
+              onChange={setUserFilter}
+              align="right"
               className="rounded-lg border border-[#e7e5e4] bg-white px-2 py-1 text-[10px] font-semibold text-ink"
-            >
-              <option value="">All users</option>
-              {users.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              options={[{ value: "", label: "All users" }, ...users.map((name) => ({ value: name, label: name }))]}
+            />
           )}
         </div>
       </div>

@@ -14,6 +14,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { rangeToDates, toLocalDateString } from "../lib/dateRange";
 import type { CollabBoardStats, Collaboration, CollabStage, Product, User } from "../lib/types";
+import { SearchableSelect } from "../components/shared/SearchableSelect";
 
 const PRIORITY_FILTERS = [
   { label: "All priorities", value: "" },
@@ -315,65 +316,47 @@ export default function MyCreators() {
         {canViewTeam && (
           <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
             <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">User</span>
-            <select
-              value={selectedOwnerId ?? ""}
-              onChange={(e) => setSelectedOwnerId(e.target.value === "all" ? "all" : Number(e.target.value))}
+            <SearchableSelect
+              ariaLabel="Filter by user"
+              value={selectedOwnerId === null ? "" : String(selectedOwnerId)}
+              onChange={(v) => setSelectedOwnerId(v === "all" ? "all" : Number(v))}
               className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
-            >
-              <option value="all">All team</option>
-              {activeAdvisors.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              options={[{ value: "all", label: "All team" }, ...activeAdvisors.map((a) => ({ value: String(a.id), label: a.name }))]}
+            />
           </label>
         )}
 
         <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
           <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">Priority</span>
-          <select
+          <SearchableSelect
+            ariaLabel="Filter by priority"
             value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
+            onChange={setPriorityFilter}
             className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
-          >
-            {PRIORITY_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+            options={PRIORITY_FILTERS.map((f) => ({ value: f.value, label: f.label }))}
+          />
         </label>
 
         <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
           <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">Payment</span>
-          <select
+          <SearchableSelect
+            ariaLabel="Filter by payment"
             value={paymentFilter}
-            onChange={(e) => setPaymentFilter(e.target.value)}
+            onChange={setPaymentFilter}
             className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
-          >
-            {PAYMENT_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+            options={PAYMENT_FILTERS.map((f) => ({ value: f.value, label: f.label }))}
+          />
         </label>
 
         <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-[#e7e5e4] bg-white px-2">
           <span className="text-[6px] font-extrabold uppercase tracking-wide text-[#99949e]">Product</span>
-          <select
+          <SearchableSelect
+            ariaLabel="Filter by product"
             value={productFilter}
-            onChange={(e) => setProductFilter(e.target.value)}
+            onChange={setProductFilter}
             className="bg-transparent text-[8px] font-bold text-ink focus:outline-none"
-          >
-            <option value="">All products</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            options={[{ value: "", label: "All products" }, ...products.map((p) => ({ value: String(p.id), label: p.name }))]}
+          />
         </label>
 
         <div className="shrink-0">

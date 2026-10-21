@@ -10,6 +10,7 @@ import { NewCampaignWizard } from "../components/campaigns/NewCampaignWizard";
 import { Topbar } from "../components/layout/Topbar";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
+import { SearchableSelect } from "../components/shared/SearchableSelect";
 import type { CampaignAd, CampaignListItem, CampaignStats, CampaignStatus, Platform, Product, User } from "../lib/types";
 
 type Tab = "campaigns" | "ads";
@@ -170,52 +171,39 @@ export default function Campaigns() {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-2.5">
-            <select
-              value={adsCampaignFilter}
-              onChange={(e) => setAdsCampaignFilter(e.target.value ? Number(e.target.value) : "")}
+            <SearchableSelect
+              ariaLabel="Filter by campaign"
+              value={String(adsCampaignFilter)}
+              onChange={(v) => setAdsCampaignFilter(v ? Number(v) : "")}
               className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-            >
-              <option value="">All campaigns</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <select
+              options={[{ value: "", label: "All campaigns" }, ...campaigns.map((c) => ({ value: String(c.id), label: c.name }))]}
+            />
+            <SearchableSelect
+              ariaLabel="Filter by product"
               value={productId}
-              onChange={(e) => setProductId(e.target.value)}
+              onChange={setProductId}
               className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-            >
-              <option value="">All products</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <select
+              options={[{ value: "", label: "All products" }, ...products.map((p) => ({ value: String(p.id), label: p.name }))]}
+            />
+            <SearchableSelect
+              ariaLabel="Filter by platform"
               value={platform}
-              onChange={(e) => setPlatform(e.target.value as Platform | "")}
+              onChange={(v) => setPlatform(v as Platform | "")}
               className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-            >
-              <option value="">All platforms</option>
-              <option value="instagram">Instagram</option>
-              <option value="youtube">YouTube</option>
-              <option value="facebook">Facebook</option>
-            </select>
-            <select
+              options={[
+                { value: "", label: "All platforms" },
+                { value: "instagram", label: "Instagram" },
+                { value: "youtube", label: "YouTube" },
+                { value: "facebook", label: "Facebook" },
+              ]}
+            />
+            <SearchableSelect
+              ariaLabel="Filter by user"
               value={userId}
-              onChange={(e) => setUserId(e.target.value)}
+              onChange={setUserId}
               className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-            >
-              <option value="">All users</option>
-              {advisors.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
+              options={[{ value: "", label: "All users" }, ...advisors.map((u) => ({ value: String(u.id), label: u.name }))]}
+            />
           </div>
           <AdsTable ads={ads} />
         </>

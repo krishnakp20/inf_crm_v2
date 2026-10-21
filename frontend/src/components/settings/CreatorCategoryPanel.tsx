@@ -1,17 +1,11 @@
 import { Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { findTier } from "../../lib/creator-tiers";
 import type { CreatorCategoryTier } from "../../lib/types";
 
 function formatFollowers(n: number): string {
   return n.toLocaleString();
-}
-
-function findTier(tiers: CreatorCategoryTier[], followers: number): CreatorCategoryTier | null {
-  return (
-    tiers.find((t) => followers >= t.min_followers && (t.max_followers === null || followers <= t.max_followers)) ??
-    null
-  );
 }
 
 export function CreatorCategoryPanel() {

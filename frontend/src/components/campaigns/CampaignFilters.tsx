@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { CAMPAIGN_STATUS_ORDER, PLATFORM_OPTIONS } from "../../lib/campaign-stages";
+import { SearchableSelect } from "../shared/SearchableSelect";
 import type { CampaignStatus, Platform, Product, User } from "../../lib/types";
 
 export function CampaignFilters({
@@ -41,57 +42,37 @@ export function CampaignFilters({
         />
       </div>
 
-      <select
+      <SearchableSelect
+        ariaLabel="Filter by status"
         value={status}
-        onChange={(e) => onStatusChange(e.target.value as CampaignStatus | "")}
+        onChange={(v) => onStatusChange(v as CampaignStatus | "")}
         className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-      >
-        <option value="">All statuses</option>
-        {CAMPAIGN_STATUS_ORDER.map((s) => (
-          <option key={s.key} value={s.key}>
-            {s.label}
-          </option>
-        ))}
-      </select>
+        options={[{ value: "", label: "All statuses" }, ...CAMPAIGN_STATUS_ORDER.map((s) => ({ value: s.key, label: s.label }))]}
+      />
 
-      <select
+      <SearchableSelect
+        ariaLabel="Filter by product"
         value={productId}
-        onChange={(e) => onProductChange(e.target.value)}
+        onChange={onProductChange}
         className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-      >
-        <option value="">All products</option>
-        {products.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+        options={[{ value: "", label: "All products" }, ...products.map((p) => ({ value: String(p.id), label: p.name }))]}
+      />
 
-      <select
+      <SearchableSelect
+        ariaLabel="Filter by platform"
         value={platform}
-        onChange={(e) => onPlatformChange(e.target.value as Platform | "")}
+        onChange={(v) => onPlatformChange(v as Platform | "")}
         className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-      >
-        <option value="">All platforms</option>
-        {PLATFORM_OPTIONS.map((p) => (
-          <option key={p.key} value={p.key}>
-            {p.label}
-          </option>
-        ))}
-      </select>
+        options={[{ value: "", label: "All platforms" }, ...PLATFORM_OPTIONS.map((p) => ({ value: p.key, label: p.label }))]}
+      />
 
-      <select
+      <SearchableSelect
+        ariaLabel="Filter by user"
         value={userId}
-        onChange={(e) => onUserChange(e.target.value)}
+        onChange={onUserChange}
         className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
-      >
-        <option value="">All users</option>
-        {users.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.name}
-          </option>
-        ))}
-      </select>
+        options={[{ value: "", label: "All users" }, ...users.map((u) => ({ value: String(u.id), label: u.name }))]}
+      />
     </div>
   );
 }

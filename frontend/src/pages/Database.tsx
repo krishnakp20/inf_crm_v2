@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 import { rangeToDates } from "../lib/dateRange";
 import type { BulkUploadResult, BulkUploadRowResult, CreatorTableRow, Product, User } from "../lib/types";
+import { SearchableSelect } from "../components/shared/SearchableSelect";
 
 const SORT_OPTIONS = [
   { label: "Creator name", value: "name" },
@@ -453,39 +454,36 @@ export default function Database() {
           {(user?.role === "admin" || user?.role === "supervisor") && activeTab !== "unassigned" && (
             <label className="flex shrink-0 items-center gap-2">
               <span className="text-[8px] text-[#918d97]">Filter by user</span>
-              <select
+              <SearchableSelect
+                ariaLabel="Filter by user"
                 value={ownerId}
-                onChange={(e) => {
+                onChange={(v) => {
                   setOffset(0);
-                  setOwnerId(e.target.value);
+                  setOwnerId(v);
                 }}
                 className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
-              >
-                <option value="">All users</option>
-                {filterableUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
+                options={[{ value: "", label: "All users" }, ...filterableUsers.map((u) => ({ value: String(u.id), label: u.name }))]}
+              />
             </label>
           )}
           {user?.role === "admin" && (
             <label className="flex shrink-0 items-center gap-2">
               <span className="text-[8px] text-[#918d97]">Filter by source</span>
-              <select
+              <SearchableSelect
+                ariaLabel="Filter by source"
                 value={sourceFilter}
-                onChange={(e) => {
+                onChange={(v) => {
                   setOffset(0);
-                  setSourceFilter(e.target.value);
+                  setSourceFilter(v);
                 }}
                 className="rounded-lg border border-[#e7e5e4] bg-white px-2.5 py-1.5 text-xs font-bold text-ink"
-              >
-                <option value="">All sources</option>
-                <option value="user">User</option>
-                <option value="system">System</option>
-                <option value="unset">Unset</option>
-              </select>
+                options={[
+                  { value: "", label: "All sources" },
+                  { value: "user", label: "User" },
+                  { value: "system", label: "System" },
+                  { value: "unset", label: "Unset" },
+                ]}
+              />
             </label>
           )}
         </div>

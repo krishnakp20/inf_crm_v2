@@ -1,8 +1,10 @@
 import { Plus, ShieldCheck, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { findTier, tierLabel } from "../../lib/creator-tiers";
 import { usernameLinkError } from "../../lib/format";
-import type { ContentCategory, CreatorStage, User } from "../../lib/types";
+import type { ContentCategory, CreatorCategoryTier, CreatorStage, User } from "../../lib/types";
+import { SearchableSelect } from "../shared/SearchableSelect";
 
 export function AddCreatorModal({
   users,
@@ -31,6 +33,7 @@ export function AddCreatorModal({
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState<ContentCategory[]>([]);
   const [followersCount, setFollowersCount] = useState("");
+  const [tiers, setTiers] = useState<CreatorCategoryTier[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ownershipWarning, setOwnershipWarning] = useState<string | null>(null);
   const [revivableCollabId, setRevivableCollabId] = useState<number | null>(null);
@@ -39,6 +42,7 @@ export function AddCreatorModal({
 
   useEffect(() => {
     api.get<ContentCategory[]>("/content-categories").then((res) => setCategories(res.data));
+    api.get<CreatorCategoryTier[]>("/creator-category-tiers").then((res) => setTiers(res.data));
   }, []);
 
   const ownerName = (ownerIdToFind: number, resolvedName?: string | null) =>
@@ -218,34 +222,42 @@ export function AddCreatorModal({
           {canAssignOwner && (
             <>
               <label className="mb-1 block text-sm font-medium text-gray-700">Assigned to · Required</label>
-              <select
-                value={ownerId}
-                onChange={(e) => setOwnerId(Number(e.target.value))}
-                className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                fullWidth
+                wrapperClassName="mb-3"
+                ariaLabel="Assigned to"
+                value={String(ownerId)}
+                onChange={(v) => setOwnerId(Number(v))}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                options={users.map((u) => ({ value: String(u.id), label: u.name }))}
+              />
             </>
           )}
 
           <label className="mb-1 block text-sm font-medium text-gray-700">Category · Optional</label>
-          <select
+          <SearchableSelect
+            fullWidth
+            wrapperClassName="mb-3"
+            ariaLabel="Category"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">Select...</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            onChange={setCategory}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            options={[{ value: "", label: "Select..." }, ...categories.map((c) => ({ value: c.name, label: c.name }))]}
+          />
 
+          <label className="mb-1 block text-sm font-medium text-gray-700">Creator category · Optional</label>
+          <SearchableSelect
+            fullWidth
+            wrapperClassName="mb-3"
+            ariaLabel="Creator category"
+            value={followersCount ? String(findTier(tiers, Number(followersCount))?.id ?? "") : ""}
+            onChange={(v) => {
+              const tier = tiers.find((t) => String(t.id) === v);
+              if (tier) setFollowersCount(String(tier.min_followers));
+            }}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            options={[{ value: "", label: "Select..." }, ...tiers.map((t) => ({ value: String(t.id), label: tierLabel(t) }))]}
+          />
           <label className="mb-1 block text-sm font-medium text-gray-700">Followers · Optional</label>
           <input
             type="number"
