@@ -1,5 +1,5 @@
-import { Copy, ShieldCheck, Truck } from "lucide-react";
-import { useState } from "react";
+import { Copy, Loader2, ShieldCheck, Truck } from "lucide-react";
+import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import { externalUrl, initials, instagramUrl } from "../../lib/format";
@@ -74,14 +74,25 @@ export function CollabKanbanCard({
   const isDead = collab.stage === "dead_leads";
   const isLockedDead = isDead && !isAdmin;
   const [cloning, setCloning] = useState(false);
+  // State updates are async, so two very fast clicks could both see cloning=false; the ref locks at once.
+  const cloneLock = useRef(false);
 
   return (
     <div
       onClick={() => onOpenDetail(collab.id)}
-      className={`dashboard-card cursor-pointer p-3 transition-shadow duration-500 hover:border-brand-100 ${
+      className={`dashboard-card relative cursor-pointer p-3 transition-shadow duration-500 hover:border-brand-100 ${
         isDead ? "opacity-50" : ""
       } ${highlighted ? "border-brand-300 bg-brand-50 ring-2 ring-brand-300" : ""}`}
     >
+      {cloning && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 z-10 flex cursor-wait items-center justify-center gap-1.5 rounded-[inherit] bg-white/80 text-[11px] font-semibold text-brand-600"
+        >
+          <Loader2 size={14} className="animate-spin" />
+          Cloning...
+        </div>
+      )}
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[10px] font-medium text-gray-400">
           {collab.collab_code} ·{" "}
@@ -96,11 +107,13 @@ export function CollabKanbanCard({
           <button
             onClick={async (e) => {
               e.stopPropagation();
-              if (cloning) return;
+              if (cloneLock.current) return;
+              cloneLock.current = true;
               setCloning(true);
               try {
                 await onClone(collab.id);
               } finally {
+                cloneLock.current = false;
                 setCloning(false);
               }
             }}
@@ -108,7 +121,7 @@ export function CollabKanbanCard({
             title="Clone this card for another deliverable from the same creator"
             className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-surface hover:text-brand-600 disabled:opacity-50"
           >
-            <Copy size={12} />
+            {cloning ? <Loader2 size={12} className="animate-spin text-brand-600" /> : <Copy size={12} />}
           </button>
           <button
             onClick={(e) => {

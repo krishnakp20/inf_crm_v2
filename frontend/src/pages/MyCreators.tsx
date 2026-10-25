@@ -112,31 +112,33 @@ export default function MyCreators() {
     const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
     const dateFrom = from ? toLocalDateString(from) : undefined;
     const dateTo = to ? toLocalDateString(to) : undefined;
-    api
-      .get<Collaboration[]>("/collaborations", {
-        params: {
-          owner_id: ownerParam,
-          product_id: productFilter || undefined,
-          date_from: dateFrom,
-          date_to: dateTo,
-          limit: 500,
-        },
-      })
-      .then((res) => setCollaborations(res.data));
-    api
-      .get<CollabBoardStats>("/collaborations/board-stats", {
-        params: {
-          owner_id: ownerParam,
-          product_id: productFilter || undefined,
-          date_from: dateFrom,
-          date_to: dateTo,
-          // Videos live counts by when the video went live, over the same exact
-          // window the Dashboard uses for this preset.
-          live_from: from,
-          live_to: to,
-        },
-      })
-      .then((res) => setStats(res.data));
+    return Promise.all([
+      api
+        .get<Collaboration[]>("/collaborations", {
+          params: {
+            owner_id: ownerParam,
+            product_id: productFilter || undefined,
+            date_from: dateFrom,
+            date_to: dateTo,
+            limit: 500,
+          },
+        })
+        .then((res) => setCollaborations(res.data)),
+      api
+        .get<CollabBoardStats>("/collaborations/board-stats", {
+          params: {
+            owner_id: ownerParam,
+            product_id: productFilter || undefined,
+            date_from: dateFrom,
+            date_to: dateTo,
+            // Videos live counts by when the video went live, over the same exact
+            // window the Dashboard uses for this preset.
+            live_from: from,
+            live_to: to,
+          },
+        })
+        .then((res) => setStats(res.data)),
+    ]);
   }
 
   useEffect(() => {
@@ -213,8 +215,9 @@ export default function MyCreators() {
 
   async function handleClone(collabId: number) {
     const res = await api.post<Collaboration>(`/collaborations/${collabId}/clone`);
-    if (selectedOwnerId) loadBoard(selectedOwnerId);
     const newId = res.data.id;
+    // Wait for the refreshed board so the card's loader stays until the new card is actually on screen.
+    if (selectedOwnerId) await loadBoard(selectedOwnerId);
     setJustClonedId(newId);
     setTimeout(() => setJustClonedId((cur) => (cur === newId ? null : cur)), 4000);
   }
