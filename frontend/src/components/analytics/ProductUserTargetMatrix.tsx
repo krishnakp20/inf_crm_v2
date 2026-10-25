@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
+import type { SortDirection } from "../../lib/sort";
 import type { AnalyticsMatrixCell, AnalyticsProductUserMatrix, AnalyticsProductUserMatrixRow } from "../../lib/types";
+import { SortableHeader } from "../shared/SortableHeader";
 
 const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
@@ -57,10 +59,69 @@ function buildDisplayRows(matrix: AnalyticsProductUserMatrix): DisplayRow[] {
   return [...groups, ...loose.map((row): DisplayRow => ({ kind: "product", row }))];
 }
 
+const NAME_FIELD = "name";
+const TOTAL_FIELD = "total";
+const userField = (userId: number) => `user-${userId}`;
+
 export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUserMatrix }) {
   const [view, setView] = useState<ViewMode>("comparison");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const displayRows = useMemo(() => buildDisplayRows(matrix), [matrix]);
+  // Click a header: numbers sort High -> Low first, then Low -> High, then back to the default order.
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
+  const baseRows = useMemo(() => buildDisplayRows(matrix), [matrix]);
+
+  function toggleSort(field: string) {
+    const firstDir: SortDirection = field === NAME_FIELD ? "asc" : "desc";
+    if (sortField !== field) {
+      setSortField(field);
+      setSortDir(firstDir);
+    } else if (sortDir === firstDir) {
+      setSortDir(firstDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(null);
+    }
+  }
+
+  // "Target" view sorts by target; "Achieved" and "Target vs Achieved" sort by achieved.
+  function sortValue(cell: AnalyticsMatrixCell): number {
+    return view === "target" ? cell.target : cell.achieved;
+  }
+
+  const displayRows = useMemo(() => {
+    if (!sortField) return baseRows;
+    const userIdx = sortField.startsWith("user-")
+      ? matrix.users.findIndex((u) => userField(u.user_id) === sortField)
+      : -1;
+    const nameOf = (r: DisplayRow) => (r.kind === "group" ? r.parent : r.row.product_name);
+    const cellOf = (cells: AnalyticsMatrixCell[], total: AnalyticsMatrixCell) =>
+      sortField === TOTAL_FIELD ? total : cells[userIdx];
+    const compareRows = (
+      a: { name: string; cell?: AnalyticsMatrixCell },
+      b: { name: string; cell?: AnalyticsMatrixCell }
+    ) => {
+      const cmp =
+        sortField === NAME_FIELD
+          ? a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
+          : sortValue(a.cell!) - sortValue(b.cell!);
+      const directed = sortDir === "asc" ? cmp : -cmp;
+      return directed !== 0 ? directed : a.name.localeCompare(b.name);
+    };
+    const sortProducts = (rows: AnalyticsProductUserMatrixRow[]) =>
+      [...rows].sort((a, b) =>
+        compareRows(
+          { name: a.product_name, cell: cellOf(a.cells, a.total) },
+          { name: b.product_name, cell: cellOf(b.cells, b.total) }
+        )
+      );
+    const sorted = baseRows.map((r): DisplayRow => (r.kind === "group" ? { ...r, members: sortProducts(r.members) } : r));
+    return sorted.sort((a, b) =>
+      compareRows(
+        { name: nameOf(a), cell: a.kind === "group" ? cellOf(a.cells, a.total) : cellOf(a.row.cells, a.row.total) },
+        { name: nameOf(b), cell: b.kind === "group" ? cellOf(b.cells, b.total) : cellOf(b.row.cells, b.row.total) }
+      )
+    );
+  }, [baseRows, sortField, sortDir, view, matrix.users]);
 
   function toggleExpanded(parent: string) {
     setExpanded((prev) => {
@@ -92,7 +153,7 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-ink">Product performance, user-wise</h3>
-          <p className="text-xs text-muted">Monthly target vs live-video credit, per product and user.</p>
+          <p className="text-xs text-muted">Monthly target vs live-video credit, per product and user. Click a user or Total to sort high to low.</p>
         </div>
         <div className="flex h-8 items-center gap-1 rounded-lg border border-[#e7e5e4] bg-white p-1">
           {VIEW_OPTIONS.map((o) => (
@@ -113,13 +174,19 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
           <table className="w-full">
             <thead>
               <tr className="border-b border-[#e7e5e4] bg-surface text-left">
-                <th className={`${TH} pl-4`}>Users</th>
+                <SortableHeader label="Users" field={NAME_FIELD} activeField={sortField} direction={sortDir} onSort={toggleSort} className={`${TH} pl-4`} />
                 {matrix.users.map((u) => (
-                  <th key={u.user_id} className={TH}>
-                    {u.user_name}
-                  </th>
+                  <SortableHeader
+                    key={u.user_id}
+                    label={u.user_name}
+                    field={userField(u.user_id)}
+                    activeField={sortField}
+                    direction={sortDir}
+                    onSort={toggleSort}
+                    className={TH}
+                  />
                 ))}
-                <th className={`${TH} pr-4`}>Total</th>
+                <SortableHeader label="Total" field={TOTAL_FIELD} activeField={sortField} direction={sortDir} onSort={toggleSort} className={`${TH} pr-4`} />
               </tr>
             </thead>
             <tbody>
