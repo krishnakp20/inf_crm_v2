@@ -263,7 +263,8 @@ export function CreatorLifecyclePanel({
   const isOwner =
     !!user &&
     !!detail &&
-    ((user.role === "advisor" && detail.creator.owner_id === user.id) ||
+    (user.role === "admin" ||
+      (user.role === "advisor" && detail.creator.owner_id === user.id) ||
       (user.role === "supervisor" && advisors.some((a) => a.id === detail.creator.owner_id)));
   const ownershipSince = data?.ownership_history.find((o) => o.status === "current")?.since_label;
 
