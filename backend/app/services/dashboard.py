@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.db.models.announcement import Announcement
 from app.db.models.approval_request import ApprovalRequest
@@ -453,6 +454,10 @@ async def get_dashboard_approval_requests(
     ]
 
 
+# Names of the pages a notification opens -- same labels as the sidebar.
+_PAGE_MY_CREATORS = "My Creators"
+_PAGE_PARTNERSHIP = "Partnership Hub"
+
 _PARTNERSHIP_NOTIFICATION_SUBTITLES: dict[TicketStatus, str] = {
     TicketStatus.pending_at_admin: "Advisor responded · awaiting your review",
     TicketStatus.pending_at_user: "Awaiting your response",
@@ -472,8 +477,9 @@ async def _deadline_warning_notifications(db: AsyncSession, owner_ids: list[int]
         return []
 
     stmt = (
-        select(Collaboration, Creator)
+        select(Collaboration, Creator, User)
         .join(Creator, Creator.id == Collaboration.creator_id)
+        .join(User, User.id == Collaboration.owner_id)
         .where(Collaboration.stage.in_(configured_stages))
     )
     if owner_ids is not None:
@@ -482,7 +488,7 @@ async def _deadline_warning_notifications(db: AsyncSession, owner_ids: list[int]
 
     now = datetime.now(timezone.utc)
     items: list[NotificationOut] = []
-    for collab, creator in rows:
+    for collab, creator, owner in rows:
         days_left = days_until_stage_deadline(collab, deadline_days)
         if days_left is None or not (0 < days_left <= 2):
             continue
@@ -492,8 +498,10 @@ async def _deadline_warning_notifications(db: AsyncSession, owner_ids: list[int]
             NotificationOut(
                 kind="deadline_warning",
                 id=collab.id,
+                agent_name=owner.name,
                 creator_name=creator.name,
                 creator_handle=creator.instagram_handle,
+                page_name=_PAGE_MY_CREATORS,
                 subtitle=(
                     f"{collab.collab_code} · {days_left_rounded} day{'s' if days_left_rounded != 1 else ''} left "
                     f"in {stage_label} -- will move to Dead Leads if no action is taken"
@@ -514,11 +522,13 @@ async def _resolved_approval_notifications(db: AsyncSession, user: User) -> list
     notification kind here, this one is requester-scoped rather than
     owner_ids-scoped -- you see it purely because you're the one who asked,
     regardless of role or team."""
+    owner = aliased(User)
     stmt = (
-        select(ApprovalRequest, Collaboration, Creator, User)
+        select(ApprovalRequest, Collaboration, Creator, User, owner)
         .join(Collaboration, Collaboration.id == ApprovalRequest.collaboration_id)
         .join(Creator, Creator.id == Collaboration.creator_id)
         .join(User, User.id == ApprovalRequest.resolved_by)
+        .join(owner, owner.id == Collaboration.owner_id)
         .where(
             ApprovalRequest.requested_by == user.id,
             ApprovalRequest.status != ApprovalStatus.pending,
@@ -530,7 +540,7 @@ async def _resolved_approval_notifications(db: AsyncSession, user: User) -> list
     rows = (await db.execute(stmt)).all()
 
     items: list[NotificationOut] = []
-    for req, collab, creator, resolver in rows:
+    for req, collab, creator, resolver, card_owner in rows:
         approved = req.status == ApprovalStatus.approved
         subtitle = f"{'Approved' if approved else 'Rejected'} by {resolver.name}"
         if not approved and req.resolution_note:
@@ -539,8 +549,10 @@ async def _resolved_approval_notifications(db: AsyncSession, user: User) -> list
             NotificationOut(
                 kind="approval_resolved",
                 id=req.id,
+                agent_name=card_owner.name,
                 creator_name=creator.name,
                 creator_handle=creator.instagram_handle,
+                page_name=_PAGE_MY_CREATORS,
                 subtitle=subtitle,
                 priority="normal" if approved else "high",
                 created_at=req.resolved_at,
@@ -570,9 +582,11 @@ async def get_dashboard_notifications(
         NotificationOut(
             kind="approval",
             id=a.id,
+            agent_name=a.requested_by_name,
             creator_name=a.creator_name,
             creator_handle=a.creator_handle,
-            subtitle=f"{a.requested_by_name} · {a.collab_stage_label}",
+            page_name=_PAGE_MY_CREATORS,
+            subtitle=f"Approval requested · {a.collab_stage_label}",
             priority=a.priority.value,
             created_at=a.created_at,
             link="/my-creators",
@@ -584,9 +598,10 @@ async def get_dashboard_notifications(
     wanted_statuses = [TicketStatus.pending_at_admin] if is_admin_side else [TicketStatus.pending_at_user]
     ticket_scope = await scoped_ticket_ids(user, db)
     stmt = (
-        select(PartnershipTicket, Collaboration, Creator)
+        select(PartnershipTicket, Collaboration, Creator, User)
         .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
         .join(Creator, Creator.id == Collaboration.creator_id)
+        .join(User, User.id == Collaboration.owner_id)
         .where(PartnershipTicket.ticket_status.in_(wanted_statuses))
     )
     if ticket_scope is not None:
@@ -594,13 +609,15 @@ async def get_dashboard_notifications(
     stmt = stmt.order_by(PartnershipTicket.created_at.desc()).limit(50)
     rows = (await db.execute(stmt)).all()
 
-    for ticket, collab, creator in rows:
+    for ticket, collab, creator, owner in rows:
         items.append(
             NotificationOut(
                 kind="partnership",
                 id=ticket.id,
+                agent_name=owner.name,
                 creator_name=creator.name,
                 creator_handle=creator.instagram_handle,
+                page_name=_PAGE_PARTNERSHIP,
                 subtitle=f"{collab.collab_code} · {_PARTNERSHIP_NOTIFICATION_SUBTITLES[ticket.ticket_status]}",
                 priority="high",
                 created_at=ticket.created_at,

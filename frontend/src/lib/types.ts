@@ -127,8 +127,10 @@ export interface ApprovalRequest {
 export interface Notification {
   kind: "approval" | "approval_resolved" | "partnership" | "deadline_warning";
   id: number;
+  agent_name: string;
   creator_name: string;
   creator_handle: string;
+  page_name: string;
   subtitle: string;
   priority: "high" | "normal";
   created_at: string;

@@ -9,8 +9,11 @@ from app.schemas.product import ProductPerformance
 class NotificationOut(BaseModel):
     kind: str  # "approval" | "approval_resolved" | "partnership" | "deadline_warning"
     id: int  # source row id -- unique within kind, not across kinds
+    # The bell shows: agent (who is handling the card) -> influencer -> the page it opens.
+    agent_name: str
     creator_name: str
     creator_handle: str
+    page_name: str
     subtitle: str
     priority: str  # "high" | "normal"
     created_at: datetime

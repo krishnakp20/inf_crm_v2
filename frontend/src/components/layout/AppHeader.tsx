@@ -112,7 +112,9 @@ export function AppHeader() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-xs font-semibold text-ink">{n.creator_name}</div>
+                        <div className="truncate text-xs font-semibold text-ink" title={`${n.agent_name} · ${n.creator_name}`}>
+                          {n.agent_name} <span className="font-normal text-gray-300">→</span> {n.creator_name}
+                        </div>
                         {isResolved ? (
                           <button
                             type="button"
@@ -134,6 +136,7 @@ export function AppHeader() {
                           </span>
                         )}
                       </div>
+                      <div className="truncate text-[11px] font-semibold text-brand-600">{n.page_name}</div>
                       <div className="truncate text-[11px] text-gray-500">{n.subtitle}</div>
                     </div>
                   </Link>
