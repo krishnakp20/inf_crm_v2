@@ -662,17 +662,19 @@ _STAGE_FIELD_NAMES: dict[CollabStage, str] = {
 async def user_breakdown(
     db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
 ) -> list[AnalyticsUserBreakdownRow]:
-    """Per-advisor pipeline snapshot + business metrics, for the "Summary"
-    and "Detailed view" tables. Stage columns are a current-stage snapshot
-    (each collaboration counted exactly once, in whatever stage it's at
-    right now) so they always sum to `total` -- not the cumulative
-    "reached this stage or later" reading get_collab_funnel uses, which
-    wouldn't sum meaningfully to a total. Revenue/ads_live are all-time
-    like Business impact above; avg_creator_cost/hit_rate/cost_per_comment
-    respect the selected date range like Cost efficiency/Performance
-    overview, via the same effective-live-date scoping
-    (_scoped_live_collab_ids). Meta/Google ROAS are always null -- no
-    per-platform revenue/spend split is tracked anywhere yet."""
+    """Per-advisor pipeline + business metrics, for the "Summary" and
+    "Detailed view" tables. Everything follows the selected date range:
+      * Pipeline stage columns (new lead ... approved, dead lead) and
+        `total`: collaborations CREATED in the range, each counted once in
+        the stage it's in right now.
+      * `live`: videos that went live in the range -- the same rule as the
+        Dashboard / My Creators "Videos live" (_scoped_live_collab_ids), so
+        it can include a card created before the range, and `total` is not
+        the sum of the stage columns.
+      * revenue / ads_live / avg_creator_cost / hit_rate / cost_per_comment:
+        all computed over those same in-range live videos.
+    Meta/Google ROAS are always null -- no per-platform revenue/spend split
+    is tracked anywhere yet."""
     if owner_ids is not None:
         users_stmt = select(User.id, User.name).where(User.id.in_(owner_ids)).order_by(User.name)
     else:
@@ -692,38 +694,25 @@ async def user_breakdown(
 
     stage_stmt = (
         select(Collaboration.owner_id, Collaboration.stage, func.count(Collaboration.id))
-        .where(Collaboration.owner_id.in_(user_ids))
+        .where(
+            Collaboration.owner_id.in_(user_ids),
+            Collaboration.created_at >= range_start,
+            Collaboration.created_at < range_end,
+        )
         .group_by(Collaboration.owner_id, Collaboration.stage)
     )
     stage_counts: dict[int, dict[CollabStage, int]] = defaultdict(dict)
     for owner_id, stage, count in (await db.execute(stage_stmt)).all():
         stage_counts[owner_id][stage] = count
 
-    # Ads live + revenue -- all-time, same convention as business_impact.
-    ads_live_stmt = (
-        select(Collaboration.owner_id, func.count(PartnershipTicket.id))
-        .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
-        .where(
-            PartnershipTicket.ticket_status == TicketStatus.closed_and_live,
-            Collaboration.owner_id.in_(user_ids),
-        )
-        .group_by(Collaboration.owner_id)
-    )
-    ads_live_by_owner = {owner_id: count for owner_id, count in (await db.execute(ads_live_stmt)).all()}
-
-    revenue_stmt = (
-        select(Collaboration.owner_id, func.coalesce(func.sum(Collaboration.revenue), 0))
-        .where(Collaboration.stage == CollabStage.live, Collaboration.owner_id.in_(user_ids))
-        .group_by(Collaboration.owner_id)
-    )
-    revenue_by_owner = {owner_id: float(total) for owner_id, total in (await db.execute(revenue_stmt)).all()}
-
-    # Cost/hit-rate/cost-per-comment -- date-range scoped, via the same
-    # effective-live-date rule as the rest of Analytics. One query for the
-    # whole scope's matching collab ids, one more grouped by owner for the
-    # actual sums -- avoids an N-query loop over every advisor.
+    # Live videos in the range, via the same effective-live-date rule as the
+    # rest of Analytics. Live count, revenue, cost, hit rate and comments all
+    # come from this one id list: one query for the whole scope's matching
+    # collab ids, one more grouped by owner -- avoids an N-query loop over
+    # every advisor.
     range_live_ids = await _scoped_live_collab_ids(db, user_ids, range_start, range_end)
-    cost_by_owner: dict[int, tuple[float, int, int, int]] = {}
+    cost_by_owner: dict[int, tuple[float, int, int, int, float]] = {}
+    ads_live_by_owner: dict[int, int] = {}
     if range_live_ids:
         cost_stmt = (
             select(
@@ -732,19 +721,31 @@ async def user_breakdown(
                 func.count(Collaboration.id),
                 func.coalesce(func.sum(Collaboration.comments_count), 0),
                 func.coalesce(func.sum(_HIT_CASE), 0),
+                func.coalesce(func.sum(Collaboration.revenue), 0),
             )
             .where(Collaboration.id.in_(range_live_ids))
             .group_by(Collaboration.owner_id)
         )
-        for owner_id, cost, live_count, comments, hits in (await db.execute(cost_stmt)).all():
-            cost_by_owner[owner_id] = (float(cost), live_count, int(comments), int(hits))
+        for owner_id, cost, live_count, comments, hits, revenue in (await db.execute(cost_stmt)).all():
+            cost_by_owner[owner_id] = (float(cost), live_count, int(comments), int(hits), float(revenue))
+
+        # Ads live: closed-and-live Partnership Hub tickets on those same videos.
+        ads_live_stmt = (
+            select(Collaboration.owner_id, func.count(PartnershipTicket.id))
+            .join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
+            .where(
+                PartnershipTicket.ticket_status == TicketStatus.closed_and_live,
+                PartnershipTicket.collaboration_id.in_(range_live_ids),
+            )
+            .group_by(Collaboration.owner_id)
+        )
+        ads_live_by_owner = {owner_id: count for owner_id, count in (await db.execute(ads_live_stmt)).all()}
 
     rows: list[AnalyticsUserBreakdownRow] = []
     for user_id, user_name in users:
         counts = stage_counts.get(user_id, {})
         by_field = {field: counts.get(stage, 0) for stage, field in _STAGE_FIELD_NAMES.items()}
-        cost, live_count, comments, hits = cost_by_owner.get(user_id, (0.0, 0, 0, 0))
-        revenue = revenue_by_owner.get(user_id, 0.0)
+        cost, live_count, comments, hits, revenue = cost_by_owner.get(user_id, (0.0, 0, 0, 0, 0.0))
         rows.append(
             AnalyticsUserBreakdownRow(
                 user_id=user_id,
@@ -757,7 +758,7 @@ async def user_breakdown(
                 product_delivered=by_field["product_delivered"],
                 first_draft=by_field["first_draft"],
                 approved=by_field["approved"],
-                live=by_field["live"],
+                live=live_count,
                 dead_lead=by_field["dead_lead"],
                 total=sum(counts.values()),
                 revenue=revenue if revenue else None,

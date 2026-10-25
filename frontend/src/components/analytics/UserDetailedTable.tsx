@@ -27,7 +27,7 @@ export function UserDetailedTable({
   return (
     <div className="mb-4">
       <h3 className="mb-0.5 text-sm font-semibold text-ink">Detailed view</h3>
-      <p className="mb-2 text-xs text-muted">Full pipeline breakdown per user -- each lead counted once, in its current stage.</p>
+      <p className="mb-2 text-xs text-muted">Leads opened in the selected dates, counted once in their current stage. Live is the videos that went live in those dates.</p>
       <div className="dashboard-card overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full">
