@@ -2,11 +2,23 @@ import type { FunnelStage } from "../../lib/types";
 
 const VIEW_WIDTH = 640;
 const ROW_HEIGHT = 42;
-const MIN_WIDTH_FRACTION = 0.14;
+// Even the smallest stage (or one with 0 leads) keeps a bar wide enough to hold its label.
+const MIN_WIDTH_FRACTION = 0.34;
 const TOP_RADIUS = 10;
+// Every stage is a solid fill dark enough for white text (white on #5B5CE2 is 5.1:1, on the darkest 8:1);
+// the funnel still gets darker toward the top. Labels that do not fit inside their bar are drawn
+// to the right of it in dark ink (a safety net for very long labels), so no label is ever white on white.
+const FILL_TOP = [0x3b, 0x3c, 0xc2];
+const FILL_BOTTOM = [0x5b, 0x5c, 0xe2];
+const LABEL_INK = "#1c1a25";
+const CHAR_WIDTH = 6.8; // bold 11px, with a little spare
+
+function stageFill(i: number, total: number): string {
+  const t = total > 1 ? i / (total - 1) : 0;
+  return `rgb(${FILL_TOP.map((c, k) => Math.round(c + (FILL_BOTTOM[k] - c) * t)).join(",")})`;
+}
 
 function widthFraction(count: number, maxCount: number): number {
-  if (count <= 0) return 0;
   return Math.max(count / maxCount, MIN_WIDTH_FRACTION);
 }
 
@@ -25,10 +37,6 @@ export function CumulativeLeadFunnel({ funnel }: { funnel: FunnelStage[] }) {
         <div className="mt-4 flex items-start gap-4">
           <svg viewBox={`0 0 ${VIEW_WIDTH} ${totalHeight}`} className="min-w-0 flex-1" style={{ height: totalHeight }}>
             <defs>
-              <linearGradient id="funnelGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#5B5CE2" />
-                <stop offset="100%" stopColor="#c7c6f8" />
-              </linearGradient>
               <clipPath id="funnelClip">
                 <rect x="0" y="0" width={VIEW_WIDTH} height={totalHeight} rx={TOP_RADIUS} />
               </clipPath>
@@ -51,18 +59,21 @@ export function CumulativeLeadFunnel({ funnel }: { funnel: FunnelStage[] }) {
                 ]
                   .map((p) => p.join(","))
                   .join(" ");
+                const label = `${stage.label} · ${stage.count}`;
+                const midWidth = (topWidth + bottomWidth) / 2;
+                const fitsInside = label.length * CHAR_WIDTH + 16 <= midWidth;
                 return (
                   <g key={stage.stage}>
-                    <polygon points={points} fill="url(#funnelGradient)" stroke="#fff" strokeWidth={1.5} />
+                    <polygon points={points} fill={stageFill(i, funnel.length)} stroke="#fff" strokeWidth={1.5} />
                     <text
-                      x={VIEW_WIDTH / 2}
+                      x={fitsInside ? VIEW_WIDTH / 2 : VIEW_WIDTH / 2 + midWidth / 2 + 10}
                       y={y + ROW_HEIGHT / 2 + 4}
-                      textAnchor="middle"
-                      fill="#fff"
+                      textAnchor={fitsInside ? "middle" : "start"}
+                      fill={fitsInside ? "#fff" : LABEL_INK}
                       fontSize={11}
                       fontWeight={700}
                     >
-                      {stage.label} · {stage.count}
+                      {label}
                     </text>
                   </g>
                 );

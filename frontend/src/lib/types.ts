@@ -79,6 +79,45 @@ export interface ContentCategory {
   created_at: string;
 }
 
+export interface NameCount {
+  name: string;
+  count: number;
+}
+
+export interface ActiveReelRow {
+  collab_id: number;
+  collab_code: string;
+  creator_name: string;
+  creator_handle: string;
+  products: string;
+  agent_name: string;
+  live_date: string | null;
+  video_link: string | null;
+  poc_code: string | null;
+}
+
+export interface ActiveReelsOut {
+  total: number;
+  by_agent: NameCount[];
+  rows: ActiveReelRow[];
+}
+
+export interface CreatorAddedRow {
+  creator_id: number;
+  name: string;
+  instagram_handle: string;
+  owner_name: string;
+  category: string;
+  followers_count: number;
+  created_at: string;
+}
+
+export interface CreatorsAddedOut {
+  total: number;
+  by_owner: NameCount[];
+  rows: CreatorAddedRow[];
+}
+
 export interface CreatorCategoryTier {
   id: number;
   name: string;
@@ -778,6 +817,7 @@ export interface AnalyticsUserBreakdownRow {
   live: number;
   dead_lead: number;
   total: number;
+  videos_live: number;
   revenue: number | null;
   avg_creator_cost: number | null;
   ads_live: number;

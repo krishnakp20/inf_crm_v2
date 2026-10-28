@@ -7,9 +7,17 @@ from app.core.deps import get_current_user, scoped_owner_ids
 from app.db.models.enums import UserRole
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.dashboard import DashboardResponse, KpiSummary, NotificationOut
+from app.schemas.dashboard import (
+    ActiveReelsOut,
+    CreatorsAddedOut,
+    DashboardResponse,
+    KpiSummary,
+    NotificationOut,
+)
 from app.services.dashboard import (
     _latest_announcement,
+    get_active_reels_detail,
+    get_creators_added_detail,
     get_dashboard,
     get_dashboard_notifications,
     get_followup_progress_today,
@@ -51,6 +59,34 @@ async def dashboard(
         )
     owner_ids = await scoped_owner_ids(user, db)
     return await get_dashboard(db, owner_ids, date_from, date_to, user)
+
+
+@router.get("/active-reels", response_model=ActiveReelsOut)
+async def active_reels(
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ActiveReelsOut:
+    """Videos behind the Dashboard "Active reels" tile, with the agent each is live for."""
+    if user.role in (UserRole.marketer, UserRole.editor):
+        return ActiveReelsOut(total=0, by_agent=[], rows=[])  # their Dashboard has no video KPIs
+    owner_ids = await scoped_owner_ids(user, db)
+    return await get_active_reels_detail(db, owner_ids, date_from, date_to)
+
+
+@router.get("/creators-added", response_model=CreatorsAddedOut)
+async def creators_added(
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CreatorsAddedOut:
+    """Creators behind the Dashboard "Total creators" tile, with their owner."""
+    if user.role in (UserRole.marketer, UserRole.editor):
+        return CreatorsAddedOut(total=0, by_owner=[], rows=[])
+    owner_ids = await scoped_owner_ids(user, db)
+    return await get_creators_added_detail(db, owner_ids, date_from, date_to)
 
 
 @router.get("/notifications", response_model=list[NotificationOut])

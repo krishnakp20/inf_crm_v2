@@ -6,6 +6,7 @@ import { ApprovalRequests } from "../components/dashboard/ApprovalRequests";
 import { CumulativeLeadFunnel } from "../components/dashboard/CumulativeLeadFunnel";
 import { DateRangePicker, type RangePreset } from "../components/dashboard/DateRangePicker";
 import { KpiCard } from "../components/dashboard/KpiCard";
+import { KpiDrilldownDrawer, type DrilldownKind } from "../components/dashboard/KpiDrilldownDrawer";
 import { PipelineFunnel } from "../components/dashboard/PipelineFunnel";
 import { ProductPerformance } from "../components/dashboard/ProductPerformance";
 import { Targets } from "../components/dashboard/Targets";
@@ -24,6 +25,8 @@ export default function Dashboard() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Which KPI list is open, with the dates it was opened for (so it always matches the tile).
+  const [drilldown, setDrilldown] = useState<{ kind: DrilldownKind; from?: string; to?: string } | null>(null);
   const greeting = timeBasedGreeting();
 
   function loadDashboard() {
@@ -34,6 +37,11 @@ export default function Dashboard() {
   }
 
   useEffect(loadDashboard, [rangePreset, customFrom, customTo]);
+
+  function openDrilldown(kind: DrilldownKind) {
+    const { from, to } = rangeToDates(rangePreset, customFrom, customTo);
+    setDrilldown({ kind, from, to });
+  }
 
   useEffect(() => {
     if (!successMessage) return;
@@ -137,6 +145,24 @@ export default function Dashboard() {
         )
       )}
 
+      {drilldown && (
+        <KpiDrilldownDrawer
+          kind={drilldown.kind}
+          dateFrom={drilldown.from}
+          dateTo={drilldown.to}
+          subtitle={
+            drilldown.kind === "reels"
+              ? rangePreset === "all"
+                ? "All reels gone live"
+                : `Reels gone live ${rangePhrase(rangePreset)}`
+              : rangePreset === "all"
+                ? "Across the master database"
+                : `Creators added ${rangePhrase(rangePreset)}`
+          }
+          onClose={() => setDrilldown(null)}
+        />
+      )}
+
       {showAnnouncementModal && (
         <AnnouncementModal onClose={() => setShowAnnouncementModal(false)} onSaved={loadDashboard} />
       )}
@@ -146,6 +172,7 @@ export default function Dashboard() {
           icon={Users}
           tone="indigo"
           label="Total creators"
+          onClick={() => openDrilldown("creators")}
           value={kpis.total_creators.toLocaleString()}
           subtext={rangePreset === "all" ? "Across the master database" : `Added ${rangePhrase(rangePreset)}`}
         />
@@ -153,6 +180,7 @@ export default function Dashboard() {
           icon={Megaphone}
           tone="green"
           label="Active reels"
+          onClick={() => openDrilldown("reels")}
           value={kpis.active_reels.toLocaleString()}
           subtext={rangePreset === "all" ? "All reels gone live" : `Reels gone live ${rangePhrase(rangePreset)}`}
         />

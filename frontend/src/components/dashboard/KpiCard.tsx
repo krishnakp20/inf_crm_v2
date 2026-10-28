@@ -14,6 +14,7 @@ export function KpiCard({
   subtext,
   icon: Icon,
   tone = "indigo",
+  onClick,
 }: {
   label: string;
   value: string | number;
@@ -21,16 +22,26 @@ export function KpiCard({
   subtext?: string;
   icon?: LucideIcon;
   tone?: "indigo" | "green" | "amber" | "coral";
+  /** When given, the whole card (and its arrow) opens the list behind the number. */
+  onClick?: () => void;
 }) {
   const styles = TONE_STYLES[tone];
   return (
-    <div className="dashboard-card p-[14px_15px]">
+    <div
+      className={`dashboard-card p-[14px_15px] ${onClick ? "cursor-pointer transition-shadow hover:border-brand-100 hover:shadow-md" : ""}`}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick()) : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       {Icon && (
         <div className="mb-3 flex items-center justify-between">
           <div className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg ${styles.iconBg} ${styles.iconFg}`}>
             <Icon size={18} />
           </div>
           <button
+            type="button"
+            tabIndex={-1}
             aria-label={`View ${label}`}
             className="flex h-[27px] w-[27px] items-center justify-center rounded-lg text-[#aaa6af] hover:bg-surface hover:text-brand-600"
           >

@@ -1,5 +1,5 @@
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,11 @@ from app.db.models.stage_event import StageEvent
 from app.db.models.user import User
 from app.schemas.approval_request import ApprovalRequestOut
 from app.schemas.dashboard import (
+    ActiveReelRow,
+    ActiveReelsOut,
+    CreatorAddedRow,
+    CreatorsAddedOut,
+    NameCount,
     ActivityItem,
     AnnouncementOut,
     DashboardResponse,
@@ -34,6 +39,7 @@ from app.services.collab_pipeline import (
     COLLAB_FUNNEL_BUCKETS,
     COLLAB_STAGE_LABELS,
     days_until_stage_deadline,
+    effective_live_dates,
     get_video_credit_by_product_and_owner,
     load_stage_deadline_days,
 )
@@ -146,6 +152,98 @@ async def get_kpis(
         follow_ups_completed_today=follow_ups_completed_today,
         follow_ups_total_today=follow_ups_total_today,
     )
+
+
+def _counts_by_name(names: list[str]) -> list[NameCount]:
+    counts: dict[str, int] = {}
+    for name in names:
+        counts[name] = counts.get(name, 0) + 1
+    return [NameCount(name=n, count=c) for n, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))]
+
+
+async def get_active_reels_detail(
+    db: AsyncSession,
+    owner_ids: list[int] | None,
+    range_start: datetime | None,
+    range_end: datetime | None,
+) -> ActiveReelsOut:
+    """The list behind the "Active reels" tile. Uses the very same id list as
+    get_kpis (_scoped_live_collab_ids, same window defaults), so the list can
+    never disagree with the number on the tile."""
+    now = datetime.now(timezone.utc)
+    ids = await _scoped_live_collab_ids(db, owner_ids, range_start or ALL_TIME_START, range_end or now)
+    if not ids:
+        return ActiveReelsOut(total=0, by_agent=[], rows=[])
+
+    collab_rows = (
+        await db.execute(
+            select(Collaboration, Creator, User)
+            .join(Creator, Creator.id == Collaboration.creator_id)
+            .join(User, User.id == Collaboration.owner_id)
+            .where(Collaboration.id.in_(ids))
+        )
+    ).all()
+
+    product_rows = (
+        await db.execute(
+            select(CollaborationProduct.collaboration_id, Product.name, CollaborationProduct.is_primary)
+            .join(Product, Product.id == CollaborationProduct.product_id)
+            .where(CollaborationProduct.collaboration_id.in_(ids))
+            .order_by(CollaborationProduct.is_primary.desc(), Product.name)
+        )
+    ).all()
+    products_by_collab: dict[int, list[str]] = {}
+    for collab_id, product_name, _ in product_rows:
+        products_by_collab.setdefault(collab_id, []).append(product_name)
+
+    live_dates = await effective_live_dates(db, ids)
+    rows = [
+        ActiveReelRow(
+            collab_id=collab.id,
+            collab_code=collab.collab_code,
+            creator_name=creator.name,
+            creator_handle=creator.instagram_handle,
+            products=", ".join(products_by_collab.get(collab.id, [])),
+            agent_name=owner.name,
+            live_date=live_dates.get(collab.id),
+            video_link=collab.video_link,
+            poc_code=collab.poc_code,
+        )
+        for collab, creator, owner in collab_rows
+    ]
+    rows.sort(key=lambda r: (r.live_date or date.min, r.collab_code), reverse=True)
+    return ActiveReelsOut(total=len(rows), by_agent=_counts_by_name([r.agent_name for r in rows]), rows=rows)
+
+
+async def get_creators_added_detail(
+    db: AsyncSession,
+    owner_ids: list[int] | None,
+    range_start: datetime | None,
+    range_end: datetime | None,
+) -> CreatorsAddedOut:
+    """The list behind the "Total creators" tile -- same filter as get_kpis."""
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(Creator, User.name)
+        .join(User, User.id == Creator.owner_id)
+        .where(Creator.created_at >= (range_start or ALL_TIME_START), Creator.created_at < (range_end or now))
+        .order_by(Creator.created_at.desc())
+    )
+    if owner_ids is not None:
+        stmt = stmt.where(Creator.owner_id.in_(owner_ids))
+    rows = [
+        CreatorAddedRow(
+            creator_id=creator.id,
+            name=creator.name,
+            instagram_handle=creator.instagram_handle,
+            owner_name=owner_name,
+            category=creator.category,
+            followers_count=creator.followers_count,
+            created_at=creator.created_at,
+        )
+        for creator, owner_name in (await db.execute(stmt)).all()
+    ]
+    return CreatorsAddedOut(total=len(rows), by_owner=_counts_by_name([r.owner_name for r in rows]), rows=rows)
 
 
 async def get_collab_funnel(

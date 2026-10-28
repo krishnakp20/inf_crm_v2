@@ -29,6 +29,51 @@ class KpiSummary(BaseModel):
     follow_ups_total_today: int
 
 
+class NameCount(BaseModel):
+    name: str
+    count: int
+
+
+class ActiveReelRow(BaseModel):
+    collab_id: int
+    collab_code: str
+    creator_name: str
+    creator_handle: str
+    products: str  # primary product first, comma separated
+    agent_name: str  # the user who owns the card the reel is live on
+    live_date: date | None
+    video_link: str | None
+    poc_code: str | None
+
+
+class ActiveReelsOut(BaseModel):
+    """Drill-down behind the Dashboard "Active reels" tile: exactly the videos
+    counted by KpiSummary.active_reels, so total always equals the tile."""
+
+    total: int
+    by_agent: list[NameCount]
+    rows: list[ActiveReelRow]
+
+
+class CreatorAddedRow(BaseModel):
+    creator_id: int
+    name: str
+    instagram_handle: str
+    owner_name: str
+    category: str
+    followers_count: int
+    created_at: datetime
+
+
+class CreatorsAddedOut(BaseModel):
+    """Drill-down behind the Dashboard "Total creators" tile: exactly the
+    creators counted by KpiSummary.total_creators."""
+
+    total: int
+    by_owner: list[NameCount]
+    rows: list[CreatorAddedRow]
+
+
 class FunnelStage(BaseModel):
     stage: str
     label: str

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSort } from "../../hooks/useSort";
+import type { SortDirection } from "../../lib/sort";
 import { initials } from "../../lib/format";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { TargetRow } from "../../lib/types";
@@ -7,22 +7,47 @@ import { SearchableSelect } from "../shared/SearchableSelect";
 
 const ROW_COLORS = ["#5B5CE2", "#F06E62", "#238B57", "#E6A23C"];
 
-function getValue(row: TargetRow, field: string): unknown {
-  switch (field) {
-    case "name":
-      return row.name;
-    case "monthly_pct":
-      return row.monthly_pct;
-    default:
-      return null;
-  }
+const NAME_FIELD = "name";
+const LIVE_FIELD = "monthly_completed";
+
+// A user with no target set has nothing to measure a percentage against.
+function hasTarget(row: TargetRow): boolean {
+  return row.monthly_due > 0;
 }
 
 export function Targets({ rows }: { rows: TargetRow[] }) {
   const [userFilter, setUserFilter] = useState("");
   const users = useMemo(() => rows.map((r) => r.name), [rows]);
   const visible = userFilter ? rows.filter((r) => r.name === userFilter) : rows;
-  const { sorted, field, direction, toggle } = useSort(visible, getValue);
+  // Videos live sorts High -> Low first, then Low -> High, then back to the default order.
+  const [field, setField] = useState<string | null>(null);
+  const [direction, setDirection] = useState<SortDirection>("desc");
+
+  function toggle(next: string) {
+    const first: SortDirection = next === NAME_FIELD ? "asc" : "desc";
+    if (field !== next) {
+      setField(next);
+      setDirection(first);
+    } else if (direction === first) {
+      setDirection(first === "asc" ? "desc" : "asc");
+    } else {
+      setField(null);
+    }
+  }
+
+  const sorted = useMemo(() => {
+    if (!field) return visible;
+    return [...visible].sort((a, b) => {
+      const cmp =
+        field === NAME_FIELD
+          ? a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+          : a.monthly_completed - b.monthly_completed ||
+            // Equal videos live: the one further along its target ranks first (users with no target last).
+            (hasTarget(a) ? a.monthly_pct : -1) - (hasTarget(b) ? b.monthly_pct : -1);
+      const directed = direction === "asc" ? cmp : -cmp;
+      return directed !== 0 ? directed : a.name.localeCompare(b.name);
+    });
+  }, [visible, field, direction]);
 
   return (
     <div className="dashboard-card p-5">
@@ -47,7 +72,7 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
             <SortableHeader label="Name" field="name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-            <SortableHeader label="Monthly target" field="monthly_pct" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+            <SortableHeader label="Monthly target" field={LIVE_FIELD} activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
           </tr>
         </thead>
         <tbody>
@@ -69,12 +94,15 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
                 <td>
                   <div className="flex items-center gap-2">
                     <span className="text-gray-600">
-                      {row.monthly_completed}/{row.monthly_due}
+                      {row.monthly_completed}/{hasTarget(row) ? row.monthly_due : "—"}
                     </span>
                     <div className="h-1.5 w-16 rounded-full bg-[#eee]">
-                      <div className="h-1.5 rounded-full" style={{ width: `${row.monthly_pct}%`, backgroundColor: color }} />
+                      <div
+                        className="h-1.5 rounded-full"
+                        style={{ width: `${hasTarget(row) ? Math.min(row.monthly_pct, 100) : 0}%`, backgroundColor: color }}
+                      />
                     </div>
-                    <span className="text-[11px] text-gray-500">{row.monthly_pct}%</span>
+                    <span className="text-[11px] text-gray-500">{hasTarget(row) ? `${row.monthly_pct}%` : "—"}</span>
                   </div>
                 </td>
               </tr>
