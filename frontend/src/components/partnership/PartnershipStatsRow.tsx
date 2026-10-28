@@ -34,15 +34,26 @@ function StatCard({
   );
 }
 
-export function PartnershipStatsRow({ stats }: { stats: PartnershipStats }) {
+export function PartnershipStatsRow({
+  stats,
+  videoRegister,
+  filtered = false,
+}: {
+  stats: PartnershipStats;
+  /** Videos matching the current filters; falls back to the overall count. */
+  videoRegister?: number;
+  /** True when any filter or date range is applied. */
+  filtered?: boolean;
+}) {
+  const registerValue = videoRegister ?? stats.video_register;
   return (
     <div className="mb-4 grid grid-cols-4 gap-3">
       <StatCard
         icon={Video}
         tone="indigo"
-        value={stats.video_register}
+        value={registerValue.toLocaleString()}
         label="Video register"
-        subtext="Videos always remain in Overview"
+        subtext={filtered ? `Matching your filters · ${stats.video_register.toLocaleString()} in total` : "Videos always remain in Overview"}
       />
       <StatCard
         icon={PlayCircle}

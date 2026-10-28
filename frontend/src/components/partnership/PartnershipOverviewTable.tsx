@@ -10,7 +10,7 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const TH = "whitespace-nowrap py-3 text-[9px] font-extrabold uppercase tracking-wide text-[#838590]";
+const TH = "whitespace-nowrap py-3 pr-6 text-[9px] font-extrabold uppercase tracking-wide text-[#838590]";
 const TD = "whitespace-nowrap py-3.5 pr-6 text-[11px] text-[#474a58]";
 const CHIP = "whitespace-nowrap rounded-md px-1.5 py-1 text-[9px]";
 
@@ -79,6 +79,7 @@ export function PartnershipOverviewTable({
               <SortableHeader label="POC code" field="poc_code" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Product" field="product" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Owner" field="owner_name" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
+              <SortableHeader label="Ticket status" field="ticket_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Live date" field="live_date" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <th className={TH}>Reel link</th>
               <SortableHeader label="Language" field="language" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
@@ -100,7 +101,6 @@ export function PartnershipOverviewTable({
               <SortableHeader label="Meta orders" field="meta_orders" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Google ROAS" field="google_roas" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Google orders" field="google_orders" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
-              <SortableHeader label="Ticket status" field="ticket_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Collab status" field="collab_status" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Latest remark" field="latest_remark" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
               <SortableHeader label="Updated on" field="updated_at" activeField={sortBy} direction={sortDir} onSort={onSortChange} className={TH} />
@@ -176,6 +176,11 @@ export function PartnershipOverviewTable({
                       <span>{row.owner_name}</span>
                     </div>
                   </td>
+                  <td className={TD}>
+                    <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold ${badge}`}>
+                      {TICKET_STATUS_LABELS[row.ticket_status]}
+                    </span>
+                  </td>
                   <td className={TD}>{formatDate(row.live_date)}</td>
                   <td className={TD}>
                     {row.video_link ? (
@@ -202,7 +207,12 @@ export function PartnershipOverviewTable({
                   {showCommercial && <td className={`${TD} font-semibold`}>{formatCurrency(row.commercial_amount)}</td>}
                   <td className={TD}>
                     {row.ad_code ? (
-                      <span className={`${CHIP} bg-[#f1f1ff] font-mono text-[#3f428f]`}>{row.ad_code}</span>
+                      <span
+                        title={row.ad_code}
+                        className={`${CHIP} inline-block max-w-[150px] truncate align-middle bg-[#f1f1ff] font-mono text-[#3f428f]`}
+                      >
+                        {row.ad_code}
+                      </span>
                     ) : (
                       <span className="text-[#97939d]">Not added</span>
                     )}
@@ -230,11 +240,6 @@ export function PartnershipOverviewTable({
                   <td className={`${TD} font-semibold`}>{row.meta_orders ?? "—"}</td>
                   <td className={`${TD} font-semibold`}>{row.google_roas != null ? row.google_roas.toFixed(2) : "—"}</td>
                   <td className={`${TD} font-semibold`}>{row.google_orders ?? "—"}</td>
-                  <td className={TD}>
-                    <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold ${badge}`}>
-                      {TICKET_STATUS_LABELS[row.ticket_status]}
-                    </span>
-                  </td>
                   <td className={TD}>
                     <span className={`${CHIP} border border-[#e0e1e6] bg-white font-extrabold text-[#585b68]`}>
                       {COLLAB_STATUS_LABELS[row.collab_status]}

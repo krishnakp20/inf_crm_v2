@@ -40,6 +40,7 @@ from app.services.metric_upload import OPTIONAL_COLUMNS as METRIC_UPLOAD_OPTIONA
 from app.services.metric_upload import CORE_COLUMNS as METRIC_UPLOAD_COLUMNS
 from app.services.partnership_pipeline import (
     COLLAB_STATUS_LABELS,
+    TICKET_STATUS_LABELS,
     REMARK_TAG_ADMIN_COUNTER,
     REMARK_TAG_ADMIN_REQUEST,
     REMARK_TAG_AGENT_RESPONSE,
@@ -207,6 +208,9 @@ async def _filtered_tickets(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     product_group: str | None = None,
+    ticket_status: TicketStatus | None = None,
+    comments_min: int | None = None,
+    comments_max: int | None = None,
 ) -> list[PartnershipTicket]:
     scope = await scoped_ticket_ids(user, db)
     stmt = select(PartnershipTicket).join(Collaboration, Collaboration.id == PartnershipTicket.collaboration_id)
@@ -216,6 +220,13 @@ async def _filtered_tickets(
         stmt = stmt.where(Collaboration.owner_id == owner_id)
     if platform is not None:
         stmt = stmt.where(Collaboration.platform == platform)
+    if ticket_status is not None:
+        stmt = stmt.where(PartnershipTicket.ticket_status == ticket_status)
+    # A video with no comment count recorded never matches a comments range (NULL compares false).
+    if comments_min is not None:
+        stmt = stmt.where(Collaboration.comments_count >= comments_min)
+    if comments_max is not None:
+        stmt = stmt.where(Collaboration.comments_count <= comments_max)
     if content_bucket is not None:
         stmt = stmt.where(PartnershipTicket.content_bucket == content_bucket)
     if language is not None:
@@ -324,6 +335,9 @@ async def list_overview(
     owner_id: int | None = None,
     product_id: int | None = None,
     product_group: str | None = None,
+    ticket_status: TicketStatus | None = None,
+    comments_min: int | None = Query(None, ge=0),
+    comments_max: int | None = Query(None, ge=0),
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -341,7 +355,21 @@ async def list_overview(
     if sort_by not in OVERVIEW_SORTABLE_FIELDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sort_by")
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
+        db,
+        user,
+        owner_id,
+        product_id,
+        platform,
+        content_bucket,
+        language,
+        category,
+        search,
+        date_from,
+        date_to,
+        product_group,
+        ticket_status,
+        comments_min,
+        comments_max,
     )
     batch = await _batch_load(db, tickets)
     rows = [_to_overview_row(t, batch, user) for t in tickets]
@@ -361,6 +389,9 @@ async def list_open(
     owner_id: int | None = None,
     product_id: int | None = None,
     product_group: str | None = None,
+    ticket_status: TicketStatus | None = None,
+    comments_min: int | None = Query(None, ge=0),
+    comments_max: int | None = Query(None, ge=0),
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -372,7 +403,21 @@ async def list_open(
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOpenRow]:
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
+        db,
+        user,
+        owner_id,
+        product_id,
+        platform,
+        content_bucket,
+        language,
+        category,
+        search,
+        date_from,
+        date_to,
+        product_group,
+        ticket_status,
+        comments_min,
+        comments_max,
     )
     # A ticket lands here only once an admin/marketer has actually taken
     # action on it (Take Action -> pending_at_user, or the advisor/editor's
@@ -391,6 +436,9 @@ async def list_closed(
     owner_id: int | None = None,
     product_id: int | None = None,
     product_group: str | None = None,
+    ticket_status: TicketStatus | None = None,
+    comments_min: int | None = Query(None, ge=0),
+    comments_max: int | None = Query(None, ge=0),
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -402,7 +450,21 @@ async def list_closed(
     user: User = Depends(get_current_user),
 ) -> list[PartnershipOverviewRow]:
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
+        db,
+        user,
+        owner_id,
+        product_id,
+        platform,
+        content_bucket,
+        language,
+        category,
+        search,
+        date_from,
+        date_to,
+        product_group,
+        ticket_status,
+        comments_min,
+        comments_max,
     )
     tickets = [t for t in tickets if t.ticket_status == TicketStatus.closed_and_live]
     batch = await _batch_load(db, tickets)
@@ -414,6 +476,9 @@ async def export_metrics_template(
     owner_id: int | None = None,
     product_id: int | None = None,
     product_group: str | None = None,
+    ticket_status: TicketStatus | None = None,
+    comments_min: int | None = Query(None, ge=0),
+    comments_max: int | None = Query(None, ge=0),
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -441,7 +506,21 @@ async def export_metrics_template(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
+        db,
+        user,
+        owner_id,
+        product_id,
+        platform,
+        content_bucket,
+        language,
+        category,
+        search,
+        date_from,
+        date_to,
+        product_group,
+        ticket_status,
+        comments_min,
+        comments_max,
     )
     batch = await _batch_load(db, tickets)
 
@@ -492,13 +571,17 @@ _MASTER_DATA_COLUMNS = [
     "Language",
     "Content Bucket",
     "Creator Category",
+    "Views",
     "Comments",
     "Likes",
     "Ad rights Included",
     "Collab Commercials",
     "Ad Code",
+    "Ad Right Duration (days)",
+    "Ad Right Expires",
     "CTA Link",
     "Collab Status",
+    "Ticket Status",
     "Remarks",
     "Meta ROAs",
     "Meta Order",
@@ -512,6 +595,9 @@ async def export_master_data(
     owner_id: int | None = None,
     product_id: int | None = None,
     product_group: str | None = None,
+    ticket_status: TicketStatus | None = None,
+    comments_min: int | None = Query(None, ge=0),
+    comments_max: int | None = Query(None, ge=0),
     platform: Platform | None = None,
     content_bucket: str | None = None,
     language: str | None = None,
@@ -546,7 +632,21 @@ async def export_master_data(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not available for this role.")
 
     tickets = await _filtered_tickets(
-        db, user, owner_id, product_id, platform, content_bucket, language, category, search, date_from, date_to, product_group
+        db,
+        user,
+        owner_id,
+        product_id,
+        platform,
+        content_bucket,
+        language,
+        category,
+        search,
+        date_from,
+        date_to,
+        product_group,
+        ticket_status,
+        comments_min,
+        comments_max,
     )
     batch = await _batch_load(db, tickets)
 
@@ -574,13 +674,17 @@ async def export_master_data(
                 ticket.language or "",
                 ticket.content_bucket or "",
                 creator.category or "",
+                collab.views_count if collab.views_count is not None else "",
                 collab.comments_count if collab.comments_count is not None else "",
                 collab.likes_count if collab.likes_count is not None else "",
                 "Yes" if ticket.requested_ad_rights else "No",
                 ticket.ad_rights_amount if ticket.ad_rights_amount is not None else "",
                 ticket.ad_code or "",
+                ticket.ad_right_duration_days if ticket.ad_right_duration_days is not None else "",
+                ticket.ad_right_expires_at.isoformat() if ticket.ad_right_expires_at else "",
                 ticket.cta_link or "",
                 COLLAB_STATUS_LABELS[ticket.collab_status],
+                TICKET_STATUS_LABELS[ticket.ticket_status],
                 latest_remark,
                 collab.meta_roas if collab.meta_roas is not None else "",
                 collab.meta_orders if collab.meta_orders is not None else "",
@@ -683,7 +787,23 @@ def _guard_not_closed(ticket: PartnershipTicket) -> None:
         )
 
 
+# Collab statuses that end the ticket on the spot when an admin picks them in Take action.
+_DIRECT_CLOSE_STATUSES = (PartnershipCollabStatus.closed, PartnershipCollabStatus.closed_and_live)
+
+
 def _apply_take_action(ticket: PartnershipTicket, payload: PartnershipTakeActionRequest, actor: User, db: AsyncSession) -> None:
+    if payload.collab_status in _DIRECT_CLOSE_STATUSES:
+        # Admin-only (both Take action routes check the role): closing straight from Take action needs
+        # no ad code, CTA link or commercial amount and no round trip to the agent -- unlike the
+        # normal "Verify & close" path, which still insists on whatever was requested. The ticket
+        # lands in Closed & Live at once; the collab status stays as the admin picked it.
+        ticket.collab_status = payload.collab_status
+        ticket.ticket_status = TicketStatus.closed_and_live
+        ticket.closed_and_live_at = datetime.now(timezone.utc)
+        if ticket.ad_right_duration_days is not None:
+            ticket.ad_right_expires_at = ticket.closed_and_live_at.date() + timedelta(days=ticket.ad_right_duration_days)
+        db.add(PartnershipRemark(ticket_id=ticket.id, author_id=actor.id, body=payload.remark, tag=REMARK_TAG_VERIFIED_CLOSED))
+        return
     ticket.requested_ad_code = payload.requested_ad_code
     # Ad-code and ad-rights always travel together -- requesting Ad code
     # alone still activates the ad-rights commercial negotiation, so this is

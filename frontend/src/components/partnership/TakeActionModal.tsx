@@ -26,11 +26,13 @@ export function TakeActionModal({
   const [submitting, setSubmitting] = useState(false);
 
   const isBulk = ticketIds.length > 1;
+  // Closed / Closed & Live end the ticket straight away -- no ad code or CTA link needed.
+  const closesDirectly = collabStatus === "closed" || collabStatus === "closed_and_live";
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!adCode && !ctaLink) {
+    if (!closesDirectly && !adCode && !ctaLink) {
       setError("Choose Ad code or CTA link.");
       return;
     }
@@ -41,11 +43,11 @@ export function TakeActionModal({
     setSubmitting(true);
     try {
       const payload = {
-        requested_ad_rights: adCode,
-        requested_ad_code: adCode,
-        requested_cta_link: ctaLink,
+        requested_ad_rights: !closesDirectly && adCode,
+        requested_ad_code: !closesDirectly && adCode,
+        requested_cta_link: !closesDirectly && ctaLink,
         collab_status: collabStatus,
-        response_due_at: dueDate || null,
+        response_due_at: closesDirectly ? null : dueDate || null,
         remark,
       };
       if (isBulk) {
@@ -79,22 +81,31 @@ export function TakeActionModal({
           {isBulk ? `${ticketIds.length} videos selected` : `${videoName ?? ""} · Owner ${ownerName ?? ""}`}
         </p>
 
-        <label className="mb-1 block text-sm font-medium text-gray-700">Request action</label>
-        <p className="mb-2 text-xs text-gray-400">Choose Ad code, CTA link, or both.</p>
-        <div className="mb-3 flex flex-col gap-1.5">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={adCode} onChange={(e) => setAdCode(e.target.checked)} />
-            Ad code
-          </label>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={ctaLink} onChange={(e) => setCtaLink(e.target.checked)} />
-            CTA link
-          </label>
-        </div>
-        {adCode && (
+        {closesDirectly ? (
           <p className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
-            Ad code requests automatically include the ad-rights commercial negotiation.
+            {isBulk ? "These tickets will be closed" : "This ticket will be closed"} straight away and moved to Closed &amp; Live
+            — no ad code or CTA link is needed, and nothing is sent to the agent. A closed ticket cannot be reopened.
           </p>
+        ) : (
+          <>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Request action</label>
+            <p className="mb-2 text-xs text-gray-400">Choose Ad code, CTA link, or both.</p>
+            <div className="mb-3 flex flex-col gap-1.5">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={adCode} onChange={(e) => setAdCode(e.target.checked)} />
+                Ad code
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={ctaLink} onChange={(e) => setCtaLink(e.target.checked)} />
+                CTA link
+              </label>
+            </div>
+            {adCode && (
+              <p className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
+                Ad code requests automatically include the ad-rights commercial negotiation.
+              </p>
+            )}
+          </>
         )}
 
         <label className="mb-1 block text-sm font-medium text-gray-700">Collab status</label>
@@ -110,15 +121,21 @@ export function TakeActionModal({
           ))}
         </select>
 
-        <label className="mb-1 block text-sm font-medium text-gray-700">Response due date</label>
-        <input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
+        {!closesDirectly && (
+          <>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Response due date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+          </>
+        )}
 
-        <label className="mb-1 block text-sm font-medium text-gray-700">Remark for Agent · Required</label>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          {closesDirectly ? "Remark" : "Remark for Agent"} · Required
+        </label>
         <textarea
           value={remark}
           onChange={(e) => setRemark(e.target.value)}
@@ -142,7 +159,15 @@ export function TakeActionModal({
             disabled={submitting}
             className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
-            {submitting ? "Sending..." : ownerName ? `Send to ${ownerName} →` : "Send →"}
+            {submitting
+              ? closesDirectly
+                ? "Closing..."
+                : "Sending..."
+              : closesDirectly
+                ? "Close ticket →"
+                : ownerName
+                  ? `Send to ${ownerName} →`
+                  : "Send →"}
           </button>
         </div>
       </form>

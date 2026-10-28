@@ -30,6 +30,14 @@ COLLAB_STATUS_LABELS = {
 }
 COLLAB_STATUS_BY_LABEL = {label.lower(): status for status, label in COLLAB_STATUS_LABELS.items()}
 
+# Same wording as the Ticket status badge on screen (frontend lib/partnership-stages.ts).
+TICKET_STATUS_LABELS = {
+    TicketStatus.open: "Not started",
+    TicketStatus.pending_at_user: "Pending at User",
+    TicketStatus.pending_at_admin: "Pending at Admin",
+    TicketStatus.closed_and_live: "Closed & Live",
+}
+
 _COMMERCIAL_FIELDS = (
     "commercial_amount",
     "ad_rights_creator_quote",

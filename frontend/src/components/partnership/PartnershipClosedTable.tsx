@@ -8,7 +8,7 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const TH = "whitespace-nowrap py-3 text-[9px] font-extrabold uppercase tracking-wide text-[#838590]";
+const TH = "whitespace-nowrap py-3 pr-6 text-[9px] font-extrabold uppercase tracking-wide text-[#838590]";
 const TD = "whitespace-nowrap py-3.5 pr-6 text-[11px] text-[#474a58]";
 const CHIP = "whitespace-nowrap rounded-md px-1.5 py-1 text-[9px]";
 
@@ -26,6 +26,16 @@ function getValue(row: PartnershipOverviewRow, field: string): unknown {
       return row.ad_right_duration_days;
     case "ad_rights_amount":
       return row.ad_rights_amount;
+    case "cta_link":
+      return row.cta_link;
+    case "meta_roas":
+      return row.meta_roas;
+    case "meta_orders":
+      return row.meta_orders;
+    case "google_roas":
+      return row.google_roas;
+    case "google_orders":
+      return row.google_orders;
     default:
       return null;
   }
@@ -55,7 +65,11 @@ export function PartnershipClosedTable({
               {showCommercial && (
                 <SortableHeader label="Locked amount" field="ad_rights_amount" activeField={field} direction={direction} onSort={toggle} className={TH} />
               )}
-              <th className={TH}>CTA link</th>
+              <SortableHeader label="CTA link" field="cta_link" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Meta ROAS" field="meta_roas" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Meta orders" field="meta_orders" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Google ROAS" field="google_roas" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Google orders" field="google_orders" activeField={field} direction={direction} onSort={toggle} className={TH} />
               <th className="w-20 py-3 pr-4"></th>
             </tr>
           </thead>
@@ -90,7 +104,12 @@ export function PartnershipClosedTable({
                 </td>
                 <td className={TD}>
                   {row.ad_code ? (
-                    <span className={`${CHIP} bg-[#f1f1ff] font-mono text-[#3f428f]`}>{row.ad_code}</span>
+                    <span
+                      title={row.ad_code}
+                      className={`${CHIP} inline-block max-w-[150px] truncate align-middle bg-[#f1f1ff] font-mono text-[#3f428f]`}
+                    >
+                      {row.ad_code}
+                    </span>
                   ) : (
                     <span className="text-[#97939d]">—</span>
                   )}
@@ -108,6 +127,10 @@ export function PartnershipClosedTable({
                     <span className="text-[#97939d]">—</span>
                   )}
                 </td>
+                <td className={`${TD} font-semibold`}>{row.meta_roas != null ? row.meta_roas.toFixed(2) : "—"}</td>
+                <td className={`${TD} font-semibold`}>{row.meta_orders ?? "—"}</td>
+                <td className={`${TD} font-semibold`}>{row.google_roas != null ? row.google_roas.toFixed(2) : "—"}</td>
+                <td className={`${TD} font-semibold`}>{row.google_orders ?? "—"}</td>
                 <td className="py-3.5 pr-4">
                   <button
                     onClick={() => onOpen(row.ticket_id)}
@@ -120,7 +143,7 @@ export function PartnershipClosedTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-6 text-center text-sm text-gray-400">
+                <td colSpan={showCommercial ? 12 : 11} className="py-6 text-center text-sm text-gray-400">
                   No closed tickets yet.
                 </td>
               </tr>

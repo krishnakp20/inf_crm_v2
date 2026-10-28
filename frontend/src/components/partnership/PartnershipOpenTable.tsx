@@ -1,5 +1,5 @@
 import { useSort } from "../../hooks/useSort";
-import { displayHandle, initials } from "../../lib/format";
+import { displayHandle, externalUrl, formatCurrency, initials } from "../../lib/format";
 import { AGING_BADGE, COLLAB_STATUS_LABELS, TICKET_STATUS_BADGE, TICKET_STATUS_LABELS } from "../../lib/partnership-stages";
 import { SortableHeader } from "../shared/SortableHeader";
 import type { PartnershipOpenRow, UserRole } from "../../lib/types";
@@ -9,9 +9,20 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const TH = "whitespace-nowrap py-3 text-[9px] font-extrabold uppercase tracking-wide text-[#838590]";
+const TH = "whitespace-nowrap py-3 pr-6 text-[9px] font-extrabold uppercase tracking-wide text-[#838590]";
 const TD = "whitespace-nowrap py-3.5 pr-6 text-[11px] text-[#474a58]";
 const CHIP = "whitespace-nowrap rounded-md px-1.5 py-1 text-[9px]";
+
+// What the admin asked the agent / editor for, read from the "Requested" labels.
+const askedAdCode = (row: PartnershipOpenRow) => row.requested.some((r) => r.startsWith("Ad code"));
+const askedCtaLink = (row: PartnershipOpenRow) => row.requested.includes("CTA link");
+// Same figure the Overview's "Commercial" column shows: the ad-rights amount being negotiated.
+const commercialOf = (row: PartnershipOpenRow) =>
+  row.ad_rights_amount ?? row.ad_rights_agent_counter ?? row.ad_rights_creator_quote;
+
+function Awaiting() {
+  return <span className={`${CHIP} bg-[#fff5e5] font-extrabold text-[#ad7018]`}>Requested · awaiting</span>;
+}
 
 function getValue(row: PartnershipOpenRow, field: string): unknown {
   switch (field) {
@@ -21,6 +32,18 @@ function getValue(row: PartnershipOpenRow, field: string): unknown {
       return row.poc_code;
     case "owner_name":
       return row.owner_name;
+    case "product":
+      return row.product_names.join(", ");
+    case "ad_code":
+      return row.ad_code;
+    case "cta_link":
+      return row.cta_link;
+    case "commercial":
+      return commercialOf(row);
+    case "language":
+      return row.language;
+    case "live_date":
+      return row.live_date;
     case "requested":
       return row.requested.join(", ");
     case "ticket_status":
@@ -42,11 +65,14 @@ export function PartnershipOpenTable({
   rows,
   currentUserId,
   currentUserRole,
+  showCommercial,
   onOpen,
 }: {
   rows: PartnershipOpenRow[];
   currentUserId: number;
   currentUserRole: UserRole;
+  /** Admin and advisor only -- hidden for supervisors and marketers, like everywhere else. */
+  showCommercial: boolean;
   onOpen: (ticketId: number) => void;
 }) {
   const { sorted, field, direction, toggle } = useSort(rows, getValue);
@@ -58,8 +84,16 @@ export function PartnershipOpenTable({
             <tr className="border-b border-[#e7e5e4] bg-[#fbfbfc] text-left">
               <SortableHeader label="Video name" field="video_name" activeField={field} direction={direction} onSort={toggle} className={`${TH} pl-4`} />
               <SortableHeader label="POC code" field="poc_code" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Product" field="product" activeField={field} direction={direction} onSort={toggle} className={TH} />
               <SortableHeader label="Owner" field="owner_name" activeField={field} direction={direction} onSort={toggle} className={TH} />
               <SortableHeader label="Requested" field="requested" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Ad code" field="ad_code" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="CTA link" field="cta_link" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              {showCommercial && (
+                <SortableHeader label="Commercial" field="commercial" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              )}
+              <SortableHeader label="Language" field="language" activeField={field} direction={direction} onSort={toggle} className={TH} />
+              <SortableHeader label="Live date" field="live_date" activeField={field} direction={direction} onSort={toggle} className={TH} />
               <SortableHeader label="Ticket status" field="ticket_status" activeField={field} direction={direction} onSort={toggle} className={TH} />
               <SortableHeader label="Collab status" field="collab_status" activeField={field} direction={direction} onSort={toggle} className={TH} />
               <SortableHeader label="Aging" field="aging_days" activeField={field} direction={direction} onSort={toggle} className={TH} />
@@ -101,6 +135,27 @@ export function PartnershipOpenTable({
                     )}
                   </td>
                   <td className={TD}>
+                    {row.product_names.length > 0 ? (
+                      <div className="flex items-center gap-1">
+                        {row.product_names.slice(0, 2).map((name) => (
+                          <span key={name} className={`${CHIP} border border-[#e2e3e7] bg-[#fafafa] text-[#5f626e]`}>
+                            {name}
+                          </span>
+                        ))}
+                        {row.product_names.length > 2 && (
+                          <span
+                            title={row.product_names.slice(2).join(", ")}
+                            className={`${CHIP} border border-[#e2e3e7] bg-[#f1f2f4] font-semibold text-[#838590]`}
+                          >
+                            +{row.product_names.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[#97939d]">—</span>
+                    )}
+                  </td>
+                  <td className={TD}>
                     <div className="flex items-center gap-1.5">
                       <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-[9px] font-extrabold text-brand-600">
                         {initials(row.owner_name)}
@@ -109,6 +164,34 @@ export function PartnershipOpenTable({
                     </div>
                   </td>
                   <td className={TD}>{row.requested.join(", ") || "—"}</td>
+                  <td className={TD}>
+                    {row.ad_code ? (
+                      <span
+                        title={row.ad_code}
+                        className={`${CHIP} inline-block max-w-[150px] truncate align-middle bg-[#f1f1ff] font-mono text-[#3f428f]`}
+                      >
+                        {row.ad_code}
+                      </span>
+                    ) : askedAdCode(row) ? (
+                      <Awaiting />
+                    ) : (
+                      <span className="text-[#97939d]">—</span>
+                    )}
+                  </td>
+                  <td className={TD}>
+                    {row.cta_link ? (
+                      <a href={externalUrl(row.cta_link)} target="_blank" rel="noreferrer" className="font-semibold text-brand-600 hover:underline">
+                        Open link
+                      </a>
+                    ) : askedCtaLink(row) ? (
+                      <Awaiting />
+                    ) : (
+                      <span className="text-[#97939d]">—</span>
+                    )}
+                  </td>
+                  {showCommercial && <td className={`${TD} font-semibold`}>{formatCurrency(commercialOf(row))}</td>}
+                  <td className={TD}>{row.language ?? <span className="text-[#97939d]">—</span>}</td>
+                  <td className={TD}>{formatDate(row.live_date)}</td>
                   <td className={TD}>
                     <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold ${badge}`}>
                       {TICKET_STATUS_LABELS[row.ticket_status]}
@@ -167,7 +250,7 @@ export function PartnershipOpenTable({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-6 text-center text-sm text-gray-400">
+                <td colSpan={showCommercial ? 16 : 15} className="py-6 text-center text-sm text-gray-400">
                   No open tickets match these filters.
                 </td>
               </tr>

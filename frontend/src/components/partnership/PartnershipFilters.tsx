@@ -1,8 +1,69 @@
 import { Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { DateRangePicker, type RangePreset } from "../dashboard/DateRangePicker";
 import { PLATFORM_OPTIONS } from "../../lib/campaign-stages";
+import { TICKET_STATUS_LABELS } from "../../lib/partnership-stages";
 import { SearchableSelect } from "../shared/SearchableSelect";
-import type { ContentBucket, ContentCategory, Language, Platform, Product, User } from "../../lib/types";
+import type { ContentBucket, ContentCategory, Language, Platform, Product, TicketStatus, User } from "../../lib/types";
+
+const TICKET_STATUS_OPTIONS = (Object.keys(TICKET_STATUS_LABELS) as TicketStatus[]).map((key) => ({
+  value: key,
+  label: TICKET_STATUS_LABELS[key],
+}));
+
+/** Min / Max comment boxes. Typing waits a moment before filtering, so the list isn't reloaded on every keystroke. */
+function CommentsRange({
+  min,
+  max,
+  onMinChange,
+  onMaxChange,
+}: {
+  min: string;
+  max: string;
+  onMinChange: (value: string) => void;
+  onMaxChange: (value: string) => void;
+}) {
+  const [localMin, setLocalMin] = useState(min);
+  const [localMax, setLocalMax] = useState(max);
+  useEffect(() => setLocalMin(min), [min]);
+  useEffect(() => setLocalMax(max), [max]);
+  useEffect(() => {
+    if (localMin === min && localMax === max) return;
+    const timer = setTimeout(() => {
+      if (localMin !== min) onMinChange(localMin);
+      if (localMax !== max) onMaxChange(localMax);
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localMin, localMax]);
+
+  const box =
+    "h-7 w-[58px] rounded-md border border-[#e7e5e4] bg-white px-1.5 text-xs font-semibold text-ink placeholder:font-normal placeholder:text-gray-400 focus:outline-none";
+  return (
+    <div className="flex h-9 items-center gap-1.5 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5">
+      <span className="text-xs font-semibold text-ink">Comments</span>
+      <input
+        type="number"
+        min={0}
+        aria-label="Minimum comments"
+        placeholder="Min"
+        value={localMin}
+        onChange={(e) => setLocalMin(e.target.value)}
+        className={box}
+      />
+      <span className="text-xs text-gray-400">–</span>
+      <input
+        type="number"
+        min={0}
+        aria-label="Maximum comments"
+        placeholder="Max"
+        value={localMax}
+        onChange={(e) => setLocalMax(e.target.value)}
+        className={box}
+      />
+    </div>
+  );
+}
 
 export function PartnershipFilters({
   search,
@@ -21,6 +82,12 @@ export function PartnershipFilters({
   onLanguageChange,
   category,
   onCategoryChange,
+  ticketStatus,
+  onTicketStatusChange,
+  commentsMin,
+  onCommentsMinChange,
+  commentsMax,
+  onCommentsMaxChange,
   rangePreset,
   customFrom,
   customTo,
@@ -48,6 +115,12 @@ export function PartnershipFilters({
   onLanguageChange: (value: string) => void;
   category: string;
   onCategoryChange: (value: string) => void;
+  ticketStatus: TicketStatus | "";
+  onTicketStatusChange: (value: TicketStatus | "") => void;
+  commentsMin: string;
+  onCommentsMinChange: (value: string) => void;
+  commentsMax: string;
+  onCommentsMaxChange: (value: string) => void;
   rangePreset: RangePreset;
   customFrom: string;
   customTo: string;
@@ -143,6 +216,16 @@ export function PartnershipFilters({
         className="h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"
         options={[{ value: "", label: "All categories" }, ...categories.map((c) => ({ value: c.name, label: c.name }))]}
       />
+
+      <SearchableSelect
+        ariaLabel="Filter by ticket status"
+        value={ticketStatus}
+        onChange={(v) => onTicketStatusChange(v as TicketStatus | "")}
+        className={"h-9 rounded-[8px] border border-[#e7e5e4] bg-white px-2.5 text-xs font-semibold text-ink"}
+        options={[{ value: "", label: "All ticket statuses" }, ...TICKET_STATUS_OPTIONS]}
+      />
+
+      <CommentsRange min={commentsMin} max={commentsMax} onMinChange={onCommentsMinChange} onMaxChange={onCommentsMaxChange} />
     </div>
   );
 }

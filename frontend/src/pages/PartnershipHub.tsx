@@ -22,6 +22,7 @@ import type {
   PartnershipOverviewResponse,
   PartnershipOverviewRow,
   PartnershipStats,
+  TicketStatus,
   User,
 } from "../lib/types";
 
@@ -34,6 +35,7 @@ export default function PartnershipHub() {
   const [tab, setTab] = useState<Tab>("overview");
   const [overviewRows, setOverviewRows] = useState<PartnershipOverviewRow[]>([]);
   const [overviewTotal, setOverviewTotal] = useState(0);
+  const [overviewLoaded, setOverviewLoaded] = useState(false);
   const [overviewSortBy, setOverviewSortBy] = useState("live_date");
   const [overviewSortDir, setOverviewSortDir] = useState<"asc" | "desc">("desc");
   const [overviewOffset, setOverviewOffset] = useState(0);
@@ -53,6 +55,9 @@ export default function PartnershipHub() {
   const [platform, setPlatform] = useState<Platform | "">("");
   const [contentBucket, setContentBucket] = useState("");
   const [language, setLanguage] = useState("");
+  const [ticketStatus, setTicketStatus] = useState<TicketStatus | "">("");
+  const [commentsMin, setCommentsMin] = useState("");
+  const [commentsMax, setCommentsMax] = useState("");
   const [category, setCategory] = useState("");
   const [rangePreset, setRangePreset] = useState<RangePreset>("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -63,6 +68,21 @@ export default function PartnershipHub() {
   const [detailTicketId, setDetailTicketId] = useState<number | null>(null);
 
   const { from: dateFrom, to: dateTo } = rangeToDates(rangePreset, customFrom, customTo);
+  const isFiltered =
+    !!(
+      search ||
+      ownerId ||
+      productId ||
+      productGroup ||
+      platform ||
+      contentBucket ||
+      language ||
+      category ||
+      ticketStatus ||
+      commentsMin ||
+      commentsMax
+    ) ||
+    rangePreset !== "all";
 
   const params = {
     search: search || undefined,
@@ -73,6 +93,9 @@ export default function PartnershipHub() {
     content_bucket: contentBucket || undefined,
     language: language || undefined,
     category: category || undefined,
+    ticket_status: ticketStatus || undefined,
+    comments_min: commentsMin || undefined,
+    comments_max: commentsMax || undefined,
     date_from: dateFrom,
     date_to: dateTo,
   };
@@ -93,6 +116,7 @@ export default function PartnershipHub() {
       .then((res) => {
         setOverviewRows(res.data.items);
         setOverviewTotal(res.data.total);
+        setOverviewLoaded(true);
       });
   }
 
@@ -149,6 +173,9 @@ export default function PartnershipHub() {
     contentBucket,
     language,
     category,
+    ticketStatus,
+    commentsMin,
+    commentsMax,
     rangePreset,
     customFrom,
     customTo,
@@ -156,8 +183,9 @@ export default function PartnershipHub() {
     overviewSortDir,
     overviewOffset,
   ]);
-  useEffect(loadOpen, [search, ownerId, productId, productGroup, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
-  useEffect(loadClosed, [search, ownerId, productId, productGroup, platform, contentBucket, language, category, rangePreset, customFrom, customTo]);
+  const hubFilters = [search, ownerId, productId, productGroup, platform, contentBucket, language, category, ticketStatus, commentsMin, commentsMax, rangePreset, customFrom, customTo];
+  useEffect(loadOpen, hubFilters);
+  useEffect(loadClosed, hubFilters);
   useEffect(loadStats, []);
 
   function refresh() {
@@ -218,7 +246,14 @@ export default function PartnershipHub() {
         }
       />
 
-      {stats && <PartnershipStatsRow stats={stats} />}
+      {stats && (
+        <PartnershipStatsRow
+          stats={stats}
+          // Video register follows the filters: it is the number of videos the Overview lists for them.
+          videoRegister={overviewLoaded ? overviewTotal : stats.video_register}
+          filtered={isFiltered}
+        />
+      )}
 
       <div className="mb-4 flex items-center gap-2 rounded-card border border-[#e7e5e4] bg-white p-2">
         {(
@@ -276,6 +311,12 @@ export default function PartnershipHub() {
         onLanguageChange={(v) => changeFilter(setLanguage, v)}
         category={category}
         onCategoryChange={(v) => changeFilter(setCategory, v)}
+        ticketStatus={ticketStatus}
+        onTicketStatusChange={(v) => changeFilter(setTicketStatus, v)}
+        commentsMin={commentsMin}
+        onCommentsMinChange={(v) => changeFilter(setCommentsMin, v)}
+        commentsMax={commentsMax}
+        onCommentsMaxChange={(v) => changeFilter(setCommentsMax, v)}
         rangePreset={rangePreset}
         customFrom={customFrom}
         customTo={customTo}
@@ -330,7 +371,13 @@ export default function PartnershipHub() {
       )}
 
       {tab === "open" && user && (
-        <PartnershipOpenTable rows={openRows} currentUserId={user.id} currentUserRole={user.role} onOpen={setDetailTicketId} />
+        <PartnershipOpenTable
+          rows={openRows}
+          currentUserId={user.id}
+          currentUserRole={user.role}
+          showCommercial={showCommercial}
+          onOpen={setDetailTicketId}
+        />
       )}
 
       {tab === "closed" && (
