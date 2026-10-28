@@ -6,7 +6,7 @@ import { SortableHeader } from "../shared/SortableHeader";
 import type { AnalyticsProductPerformanceRow } from "../../lib/types";
 import { SearchableSelect } from "../shared/SearchableSelect";
 
-const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
+const TH = "py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
 type DisplayRow =
   | { kind: "product"; row: AnalyticsProductPerformanceRow }
@@ -144,12 +144,12 @@ export function ProductPerformanceTable({
                   const row = displayRow.row;
                   return (
                     <tr key={`p-${row.product_id}`} className="border-t border-gray-100">
-                      <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">{row.product_name}</td>
-                      <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.videos}</td>
-                      <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.views.toLocaleString("en-IN")}</td>
-                      <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.comments.toLocaleString("en-IN")}</td>
+                      <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">{row.product_name}</td>
+                      <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.videos}</td>
+                      <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.views.toLocaleString("en-IN")}</td>
+                      <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.comments.toLocaleString("en-IN")}</td>
                       {showCostPerComment && (
-                        <td className="py-2.5 pr-4 text-[8px] font-semibold text-[#55515c]">{formatCurrency(row.cost_per_comment)}</td>
+                        <td className="py-2.5 pr-4 text-[11px] font-semibold text-[#55515c]">{formatCurrency(row.cost_per_comment)}</td>
                       )}
                     </tr>
                   );
@@ -160,7 +160,7 @@ export function ProductPerformanceTable({
                 return (
                   <Fragment key={`g-${displayRow.parent}`}>
                     <tr className="border-t border-gray-100 bg-surface/60">
-                      <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">
+                      <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">
                         <button
                           type="button"
                           onClick={() => toggleExpanded(displayRow.parent)}
@@ -172,27 +172,27 @@ export function ProductPerformanceTable({
                             <ChevronRight size={12} className="shrink-0 text-gray-400" />
                           )}
                           {displayRow.parent}
-                          <span className="text-[8px] font-semibold text-gray-400">
+                          <span className="text-[11px] font-semibold text-gray-400">
                             ({displayRow.members.length} product{displayRow.members.length !== 1 ? "s" : ""})
                           </span>
                         </button>
                       </td>
-                      <td className="py-2.5 pr-3 text-[8px] font-semibold text-[#55515c]">{agg.videos}</td>
-                      <td className="py-2.5 pr-3 text-[8px] font-semibold text-[#55515c]">{agg.views.toLocaleString("en-IN")}</td>
-                      <td className="py-2.5 pr-3 text-[8px] font-semibold text-[#55515c]">{agg.comments.toLocaleString("en-IN")}</td>
+                      <td className="py-2.5 pr-3 text-[11px] font-semibold text-[#55515c]">{agg.videos}</td>
+                      <td className="py-2.5 pr-3 text-[11px] font-semibold text-[#55515c]">{agg.views.toLocaleString("en-IN")}</td>
+                      <td className="py-2.5 pr-3 text-[11px] font-semibold text-[#55515c]">{agg.comments.toLocaleString("en-IN")}</td>
                       {showCostPerComment && (
-                        <td className="py-2.5 pr-4 text-[8px] font-semibold text-[#55515c]">{formatCurrency(agg.cost_per_comment)}</td>
+                        <td className="py-2.5 pr-4 text-[11px] font-semibold text-[#55515c]">{formatCurrency(agg.cost_per_comment)}</td>
                       )}
                     </tr>
                     {isOpen &&
                       displayRow.members.map((row) => (
                         <tr key={`p-${row.product_id}`} className="border-t border-gray-100">
-                          <td className="py-2.5 pl-8 pr-3 text-[9px] text-[#55515c]">{row.product_name}</td>
-                          <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.videos}</td>
-                          <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.views.toLocaleString("en-IN")}</td>
-                          <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.comments.toLocaleString("en-IN")}</td>
+                          <td className="py-2.5 pl-8 pr-3 text-[12px] text-[#55515c]">{row.product_name}</td>
+                          <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.videos}</td>
+                          <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.views.toLocaleString("en-IN")}</td>
+                          <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.comments.toLocaleString("en-IN")}</td>
                           {showCostPerComment && (
-                            <td className="py-2.5 pr-4 text-[8px] text-[#55515c]">{formatCurrency(row.cost_per_comment)}</td>
+                            <td className="py-2.5 pr-4 text-[11px] text-[#55515c]">{formatCurrency(row.cost_per_comment)}</td>
                           )}
                         </tr>
                       ))}

@@ -9,7 +9,7 @@ export function TargetVsAchievedPanel({ rows }: { rows: AnalyticsTargetRow[] }) 
       <div className="dashboard-card flex flex-col gap-3 p-4">
         {rows.map((row) => (
           <div key={row.user_id} className="flex items-center gap-3">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-100 text-[9px] font-extrabold text-brand-600">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-100 text-[12px] font-extrabold text-brand-600">
               {initials(row.user_name)}
             </div>
             <div className="flex-1">

@@ -1,8 +1,8 @@
 import { formatCurrency } from "../../lib/format";
 import type { AnalyticsUserBreakdownRow } from "../../lib/types";
 
-const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
-const TD = "py-2.5 pr-3 text-[8px] text-[#55515c]";
+const TH = "py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]";
+const TD = "py-2.5 pr-3 text-[11px] text-[#55515c]";
 
 function sum(rows: AnalyticsUserBreakdownRow[], key: keyof AnalyticsUserBreakdownRow): number {
   return rows.reduce((total, row) => total + (typeof row[key] === "number" ? (row[key] as number) : 0), 0);
@@ -27,7 +27,7 @@ export function UserDetailedTable({
   return (
     <div className="mb-4">
       <h3 className="mb-0.5 text-sm font-semibold text-ink">Detailed view</h3>
-      <p className="mb-2 text-xs text-muted">Leads opened in the selected dates, counted once in their current stage. Live is the videos that went live in those dates.</p>
+      <p className="mb-2 text-xs text-muted">Leads opened in the selected dates. Each stage counts every lead that has reached it, so a lead now at Live also appears in the stages before it.</p>
       <div className="dashboard-card overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -55,7 +55,7 @@ export function UserDetailedTable({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.user_id} className="border-t border-gray-100">
-                  <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">{row.user_name}</td>
+                  <td className="whitespace-nowrap py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">{row.user_name}</td>
                   <td className={TD}>{row.new_lead}</td>
                   <td className={TD}>{row.replied}</td>
                   <td className={TD}>{row.negotiating}</td>
@@ -71,7 +71,7 @@ export function UserDetailedTable({
                   <td className={TD}>{row.meta_roas ?? "—"}</td>
                   <td className={TD}>{row.google_roas ?? "—"}</td>
                   <td className={TD}>{row.hit_rate_pct}%</td>
-                  <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{row.total}</td>
+                  <td className="py-2.5 pr-4 text-[11px] font-extrabold text-ink">{row.total}</td>
                 </tr>
               ))}
               {rows.length === 0 && (
@@ -83,7 +83,7 @@ export function UserDetailedTable({
               )}
               {rows.length > 0 && (
                 <tr className="border-t border-[#e7e5e4] bg-surface">
-                  <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">Total</td>
+                  <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">Total</td>
                   <td className={`${TD} font-extrabold text-ink`}>{sum(rows, "new_lead")}</td>
                   <td className={`${TD} font-extrabold text-ink`}>{sum(rows, "replied")}</td>
                   <td className={`${TD} font-extrabold text-ink`}>{sum(rows, "negotiating")}</td>
@@ -99,7 +99,7 @@ export function UserDetailedTable({
                   <td className={TD}>—</td>
                   <td className={TD}>—</td>
                   <td className={`${TD} font-extrabold text-ink`}>{totalHitRatePct}%</td>
-                  <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{sum(rows, "total")}</td>
+                  <td className="py-2.5 pr-4 text-[11px] font-extrabold text-ink">{sum(rows, "total")}</td>
                 </tr>
               )}
             </tbody>

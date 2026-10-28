@@ -115,9 +115,11 @@ class AnalyticsProductUserMatrix(BaseModel):
 class AnalyticsUserBreakdownRow(BaseModel):
     user_id: int
     user_name: str
-    # Current stage snapshot -- each collaboration counted exactly once, in
-    # whichever stage it's sitting in right now (not date-range scoped,
-    # not cumulative) -- new_lead + ... + dead_lead always sums to total.
+    # Pipeline columns are cumulative, over collaborations created in the
+    # selected range: each one counts the cards currently in that stage OR
+    # any later stage (so a card added straight at Live also counts in every
+    # stage before it, like the Dashboard's Lead pipeline). dead_lead is the
+    # cards currently in Dead Leads; total is every card created in the range.
     new_lead: int
     replied: int
     negotiating: int
@@ -126,9 +128,11 @@ class AnalyticsUserBreakdownRow(BaseModel):
     product_delivered: int
     first_draft: int
     approved: int
-    live: int
+    live: int  # cards created in the range that are Live now (same basis as the stages above)
     dead_lead: int
     total: int
+    # Videos that WENT live in the range (the Dashboard / My Creators "Videos live" rule).
+    videos_live: int
     # Business metrics -- scoped to the selected Analytics date range
     # except revenue/ads_live, which (like Business impact above) are
     # always all-time.

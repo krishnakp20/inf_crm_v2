@@ -659,18 +659,35 @@ _STAGE_FIELD_NAMES: dict[CollabStage, str] = {
 }
 
 
+# Pipeline order for the cumulative "reached this stage or later" columns (Dead Leads is not a stage of progress).
+_PIPELINE_ORDER = [
+    CollabStage.new_lead,
+    CollabStage.replied,
+    CollabStage.negotiating,
+    CollabStage.commercial_locked,
+    CollabStage.product_sent,
+    CollabStage.product_delivered,
+    CollabStage.first_draft,
+    CollabStage.approved,
+    CollabStage.live,
+]
+
+
 async def user_breakdown(
     db: AsyncSession, owner_ids: list[int] | None, range_start: datetime, range_end: datetime
 ) -> list[AnalyticsUserBreakdownRow]:
     """Per-advisor pipeline + business metrics, for the "Summary" and
     "Detailed view" tables. Everything follows the selected date range:
-      * Pipeline stage columns (new lead ... approved, dead lead) and
-        `total`: collaborations CREATED in the range, each counted once in
-        the stage it's in right now.
-      * `live`: videos that went live in the range -- the same rule as the
-        Dashboard / My Creators "Videos live" (_scoped_live_collab_ids), so
-        it can include a card created before the range, and `total` is not
-        the sum of the stage columns.
+      * Pipeline stage columns (new lead ... approved, live): collaborations
+        CREATED in the range, cumulative -- each column counts the cards
+        currently in that stage or any later one, so a card added straight at
+        Live (which only records a single "created at Live" event) still counts
+        in every stage before it. Same reading as the Dashboard's Lead
+        pipeline. `dead_lead` is the cards now in Dead Leads, `total` every
+        card created in the range (so the stage columns don't sum to it).
+      * `videos_live`: videos that went live in the range -- the same rule as
+        the Dashboard / My Creators "Videos live" (_scoped_live_collab_ids),
+        so it can include a card created before the range.
       * revenue / ads_live / avg_creator_cost / hit_rate / cost_per_comment:
         all computed over those same in-range live videos.
     Meta/Google ROAS are always null -- no per-platform revenue/spend split
@@ -744,7 +761,12 @@ async def user_breakdown(
     rows: list[AnalyticsUserBreakdownRow] = []
     for user_id, user_name in users:
         counts = stage_counts.get(user_id, {})
-        by_field = {field: counts.get(stage, 0) for stage, field in _STAGE_FIELD_NAMES.items()}
+        # Cumulative: stage i counts every card now at stage i or any later pipeline stage.
+        by_field = {
+            _STAGE_FIELD_NAMES[stage]: sum(counts.get(later, 0) for later in _PIPELINE_ORDER[i:])
+            for i, stage in enumerate(_PIPELINE_ORDER)
+        }
+        by_field["dead_lead"] = counts.get(CollabStage.dead_leads, 0)
         cost, live_count, comments, hits, revenue = cost_by_owner.get(user_id, (0.0, 0, 0, 0, 0.0))
         rows.append(
             AnalyticsUserBreakdownRow(
@@ -758,7 +780,8 @@ async def user_breakdown(
                 product_delivered=by_field["product_delivered"],
                 first_draft=by_field["first_draft"],
                 approved=by_field["approved"],
-                live=live_count,
+                live=by_field["live"],
+                videos_live=live_count,
                 dead_lead=by_field["dead_lead"],
                 total=sum(counts.values()),
                 revenue=revenue if revenue else None,

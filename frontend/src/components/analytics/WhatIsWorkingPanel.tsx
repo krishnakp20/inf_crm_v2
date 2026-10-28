@@ -16,23 +16,23 @@ function RankingTable({ dimensionLabel, rows }: { dimensionLabel: string; rows: 
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#e7e5e4] bg-surface text-left">
-              <th className="w-8 py-2.5 pl-4 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">#</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">{dimensionLabel}</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Videos</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Views</th>
-              <th className="py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Comments</th>
-              <th className="py-2.5 pr-4 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]">Hit rate</th>
+              <th className="w-8 py-2.5 pl-4 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]">#</th>
+              <th className="py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]">{dimensionLabel}</th>
+              <th className="py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]">Videos</th>
+              <th className="py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]">Views</th>
+              <th className="py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]">Comments</th>
+              <th className="py-2.5 pr-4 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]">Hit rate</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.dimension_value} className="border-t border-gray-100">
-                <td className="py-2.5 pl-4 pr-3 text-[8px] font-bold text-gray-400">{row.rank}</td>
-                <td className="py-2.5 pr-3 text-[9px] font-extrabold text-ink">{row.dimension_value}</td>
-                <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.videos}</td>
-                <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.views.toLocaleString("en-IN")}</td>
-                <td className="py-2.5 pr-3 text-[8px] text-[#55515c]">{row.comments.toLocaleString("en-IN")}</td>
-                <td className="py-2.5 pr-4 text-[8px] font-semibold text-[#55515c]">{row.hit_rate_pct}%</td>
+                <td className="py-2.5 pl-4 pr-3 text-[11px] font-bold text-gray-400">{row.rank}</td>
+                <td className="py-2.5 pr-3 text-[12px] font-extrabold text-ink">{row.dimension_value}</td>
+                <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.videos}</td>
+                <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.views.toLocaleString("en-IN")}</td>
+                <td className="py-2.5 pr-3 text-[11px] text-[#55515c]">{row.comments.toLocaleString("en-IN")}</td>
+                <td className="py-2.5 pr-4 text-[11px] font-semibold text-[#55515c]">{row.hit_rate_pct}%</td>
               </tr>
             ))}
             {rows.length === 0 && (

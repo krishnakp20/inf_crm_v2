@@ -19,10 +19,10 @@ function Tile({
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-600">
           <Icon size={16} />
         </span>
-        <div className="text-[10px] font-bold uppercase tracking-wide text-muted">{label}</div>
+        <div className="text-[11px] font-bold uppercase tracking-wide text-muted">{label}</div>
       </div>
       <div className="mt-2 text-2xl font-bold leading-tight text-ink">{value}</div>
-      <div className="mt-0.5 text-[11px] text-muted">{subtext}</div>
+      <div className="mt-0.5 text-[12px] text-muted">{subtext}</div>
     </div>
   );
 }

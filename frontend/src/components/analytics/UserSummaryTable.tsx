@@ -1,8 +1,8 @@
 import { formatCurrency } from "../../lib/format";
 import type { AnalyticsUserBreakdownRow } from "../../lib/types";
 
-const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
-const TD = "py-2.5 pr-3 text-[8px] text-[#55515c]";
+const TH = "py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]";
+const TD = "py-2.5 pr-3 text-[11px] text-[#55515c]";
 
 export function UserSummaryTable({ rows }: { rows: AnalyticsUserBreakdownRow[] }) {
   return (
@@ -30,17 +30,17 @@ export function UserSummaryTable({ rows }: { rows: AnalyticsUserBreakdownRow[] }
             <tbody>
               {rows.map((row) => (
                 <tr key={row.user_id} className="border-t border-gray-100">
-                  <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">{row.user_name}</td>
+                  <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">{row.user_name}</td>
                   <td className={TD}>{row.new_lead}</td>
                   <td className={TD}>{row.locked}</td>
                   <td className={TD}>{formatCurrency(row.avg_creator_cost)}</td>
-                  <td className={TD}>{row.live}</td>
+                  <td className={TD}>{row.videos_live}</td>
                   <td className={TD}>{row.ads_live}</td>
                   <td className={TD}>{row.hit_rate_pct}%</td>
                   <td className={TD}>{formatCurrency(row.cost_per_comment)}</td>
                   <td className={TD}>{row.google_roas ?? "—"}</td>
                   <td className={TD}>{row.meta_roas ?? "—"}</td>
-                  <td className="py-2.5 pr-4 text-[8px] font-semibold text-[#55515c]">{formatCurrency(row.revenue)}</td>
+                  <td className="py-2.5 pr-4 text-[11px] font-semibold text-[#55515c]">{formatCurrency(row.revenue)}</td>
                 </tr>
               ))}
               {rows.length === 0 && (

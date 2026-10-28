@@ -4,7 +4,7 @@ import type { SortDirection } from "../../lib/sort";
 import type { AnalyticsMatrixCell, AnalyticsProductUserMatrix, AnalyticsProductUserMatrixRow } from "../../lib/types";
 import { SortableHeader } from "../shared/SortableHeader";
 
-const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
+const TH = "py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
 type ViewMode = "achieved" | "target" | "comparison";
 
@@ -135,15 +135,15 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
   function renderProductRow(row: AnalyticsProductUserMatrixRow, indented: boolean) {
     return (
       <tr key={row.product_id} className="border-t border-gray-100">
-        <td className={`py-2.5 pr-3 text-[9px] font-extrabold text-ink ${indented ? "pl-9" : "pl-4"}`}>
+        <td className={`py-2.5 pr-3 text-[12px] font-extrabold text-ink ${indented ? "pl-9" : "pl-4"}`}>
           {row.product_name}
         </td>
         {row.cells.map((cell, idx) => (
-          <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[8px] text-[#55515c]">
+          <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[11px] text-[#55515c]">
             {formatCell(cell, view)}
           </td>
         ))}
-        <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{formatCell(row.total, view)}</td>
+        <td className="py-2.5 pr-4 text-[11px] font-extrabold text-ink">{formatCell(row.total, view)}</td>
       </tr>
     );
   }
@@ -160,7 +160,7 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
             <button
               key={o.value}
               onClick={() => setView(o.value)}
-              className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${
+              className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${
                 view === o.value ? "bg-brand-50 text-brand-600" : "text-gray-500 hover:bg-surface"
               }`}
             >
@@ -200,7 +200,7 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
                       aria-expanded={isOpen}
                       className="cursor-pointer border-t border-gray-100 hover:bg-surface"
                     >
-                      <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">
+                      <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">
                         <span className="flex items-center gap-1.5">
                           {isOpen ? (
                             <ChevronDown size={12} className="shrink-0 text-gray-400" />
@@ -208,17 +208,17 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
                             <ChevronRight size={12} className="shrink-0 text-gray-400" />
                           )}
                           {entry.parent}
-                          <span className="text-[8px] font-normal text-gray-400">
+                          <span className="text-[11px] font-normal text-gray-400">
                             ({entry.members.length} product{entry.members.length !== 1 ? "s" : ""})
                           </span>
                         </span>
                       </td>
                       {entry.cells.map((cell, idx) => (
-                        <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[8px] font-bold text-ink">
+                        <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[11px] font-bold text-ink">
                           {formatCell(cell, view)}
                         </td>
                       ))}
-                      <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{formatCell(entry.total, view)}</td>
+                      <td className="py-2.5 pr-4 text-[11px] font-extrabold text-ink">{formatCell(entry.total, view)}</td>
                     </tr>
                     {isOpen && entry.members.map((m) => renderProductRow(m, true))}
                   </Fragment>
@@ -233,13 +233,13 @@ export function ProductUserTargetMatrix({ matrix }: { matrix: AnalyticsProductUs
               )}
               {matrix.rows.length > 0 && (
                 <tr className="border-t border-[#e7e5e4] bg-surface">
-                  <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">Total</td>
+                  <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">Total</td>
                   {matrix.column_totals.map((cell, idx) => (
-                    <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[8px] font-extrabold text-ink">
+                    <td key={matrix.users[idx].user_id} className="py-2.5 pr-3 text-[11px] font-extrabold text-ink">
                       {formatCell(cell, view)}
                     </td>
                   ))}
-                  <td className="py-2.5 pr-4 text-[8px] font-extrabold text-ink">{formatCell(matrix.grand_total, view)}</td>
+                  <td className="py-2.5 pr-4 text-[11px] font-extrabold text-ink">{formatCell(matrix.grand_total, view)}</td>
                 </tr>
               )}
             </tbody>

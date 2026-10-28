@@ -20,7 +20,7 @@ function FunnelTooltip({ active, payload }: { active?: boolean; payload?: { payl
         <span className="h-[2px] w-3 shrink-0 rounded-full" style={{ backgroundColor: ACCENT }} />
         <span className="text-xs font-semibold text-ink">{stage.count.toLocaleString()}</span>
       </div>
-      <div className="mt-0.5 text-[10px] text-gray-400">{stage.label}</div>
+      <div className="mt-0.5 text-[11px] text-gray-400">{stage.label}</div>
     </div>
   );
 }
@@ -31,7 +31,7 @@ export function FunnelTrendChart({ funnel }: { funnel: FunnelStage[] }) {
   return (
     <div className="dashboard-card p-5">
       <h2 className="text-[15px] font-normal text-ink">Funnel trend</h2>
-      <p className="mt-1 text-[10px] text-muted">How the pipeline narrows from lead to live, for the selected scope and date range</p>
+      <p className="mt-1 text-[11px] text-muted">How the pipeline narrows from lead to live, for the selected scope and date range</p>
 
       {hasData ? (
         <>
@@ -41,7 +41,7 @@ export function FunnelTrendChart({ funnel }: { funnel: FunnelStage[] }) {
                 <CartesianGrid vertical={false} stroke="#edecf0" strokeWidth={1} />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 10, fill: "#99949e" }}
+                  tick={{ fontSize: 11, fill: "#99949e" }}
                   axisLine={{ stroke: "#edecf0" }}
                   tickLine={false}
                   interval={0}
@@ -51,7 +51,7 @@ export function FunnelTrendChart({ funnel }: { funnel: FunnelStage[] }) {
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fontSize: 10, fill: "#99949e" }}
+                  tick={{ fontSize: 11, fill: "#99949e" }}
                   axisLine={false}
                   tickLine={false}
                   width={36}
@@ -73,7 +73,7 @@ export function FunnelTrendChart({ funnel }: { funnel: FunnelStage[] }) {
 
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-[#e7e5e4] pt-3">
             {funnel.map((stage) => (
-              <div key={stage.stage} className="flex items-baseline gap-1 text-[11px]">
+              <div key={stage.stage} className="flex items-baseline gap-1 text-[12px]">
                 <span className="font-semibold text-ink">{stage.count.toLocaleString()}</span>
                 <span className="text-gray-400">{stage.label}</span>
               </div>

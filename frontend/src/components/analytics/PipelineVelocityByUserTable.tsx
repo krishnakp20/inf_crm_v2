@@ -1,6 +1,6 @@
 import type { AnalyticsVelocityByUserRow } from "../../lib/types";
 
-const TH = "py-2.5 text-[7px] font-extrabold uppercase tracking-wide text-[#918d97]";
+const TH = "py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-[#918d97]";
 
 function formatDays(avgDays: number | null): string {
   return avgDays != null ? `${avgDays}d` : "—";
@@ -29,9 +29,9 @@ export function PipelineVelocityByUserTable({ rows }: { rows: AnalyticsVelocityB
             <tbody>
               {rows.map((row) => (
                 <tr key={row.user_id} className="border-t border-gray-100">
-                  <td className="py-2.5 pl-4 pr-3 text-[9px] font-extrabold text-ink">{row.user_name}</td>
+                  <td className="py-2.5 pl-4 pr-3 text-[12px] font-extrabold text-ink">{row.user_name}</td>
                   {row.cells.map((cell) => (
-                    <td key={cell.label} className="py-2.5 pr-3 text-[8px] text-[#55515c]">
+                    <td key={cell.label} className="py-2.5 pr-3 text-[11px] text-[#55515c]">
                       {formatDays(cell.avg_days)}
                     </td>
                   ))}
