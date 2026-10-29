@@ -44,7 +44,13 @@ from app.services.collab_pipeline import (
     load_stage_deadline_days,
 )
 from app.services.partnership_pipeline import scoped_ticket_ids
-from app.services.product_targets import derive_weekly_target, get_video_credit_by_product_since
+from app.services.product_targets import (
+    current_month,
+    derive_weekly_target,
+    effective_targets,
+    get_video_credit_by_product_since,
+    month_bounds,
+)
 
 
 async def get_followup_progress_today(
@@ -369,7 +375,9 @@ async def _latest_announcement(db: AsyncSession, owner_ids: list[int] | None) ->
     return None
 
 
-async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | None = None) -> list[TargetRow]:
+async def get_targets(
+    db: AsyncSession, now: datetime, owner_ids: list[int] | None = None, month: date | None = None
+) -> list[TargetRow]:
     """Weekly/monthly LIVE VIDEO count against each advisor's product
     targets -- due is the sum of their ProductTarget.monthly_target rows
     (weekly derived the same way Settings > My Targets does), completed is
@@ -378,31 +386,43 @@ async def get_targets(db: AsyncSession, now: datetime, owner_ids: list[int] | No
     always read 0/0 in practice (nothing here sets FollowUp.due_at from a
     video going live) -- confirmed with the client and fixed to the real
     video-target concept used everywhere else in the app (Settings > My
-    Targets, Analytics' Target vs achieved)."""
+    Targets, Analytics' Target vs achieved).
+
+    `month` (first day of a month, default this month) picks the month shown: the
+    target is the one in force for that month (see effective_targets) and the
+    videos are counted by their real live date inside it, so a past month can be
+    checked as Target vs Achieved."""
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=today_start.weekday())
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_first = month or current_month()
+    month_from, month_to = month_bounds(month_first)
 
     advisors_stmt = select(User).where(User.role == UserRole.advisor, User.is_active.is_(True)).order_by(User.name)
     if owner_ids is not None:
         advisors_stmt = advisors_stmt.where(User.id.in_(owner_ids))
     advisors = (await db.execute(advisors_stmt)).scalars().all()
 
+    advisor_ids = [a.id for a in advisors]
+    effective = await effective_targets(db, advisor_ids, month_first) if advisor_ids else {}
+    due_by_user: dict[int, int] = {}
+    for (uid, _), target in effective.items():
+        due_by_user[uid] = due_by_user.get(uid, 0) + target.value
+    credit_by_product = (
+        await get_video_credit_by_product_and_owner(db, advisor_ids, month_from, month_to) if advisor_ids else {}
+    )
+    done_by_user: dict[int, float] = {}
+    for by_owner in credit_by_product.values():
+        for uid, credit in by_owner.items():
+            done_by_user[uid] = done_by_user.get(uid, 0.0) + credit
+
     rows: list[TargetRow] = []
     for advisor in advisors:
-        monthly_due = (
-            await db.execute(
-                select(func.coalesce(func.sum(ProductTarget.monthly_target), 0)).where(
-                    ProductTarget.user_id == advisor.id
-                )
-            )
-        ).scalar_one()
+        monthly_due = due_by_user.get(advisor.id, 0)
         weekly_due = derive_weekly_target(monthly_due, now)
 
         weekly_credit = await get_video_credit_by_product_since(db, advisor.id, week_start)
-        monthly_credit = await get_video_credit_by_product_since(db, advisor.id, month_start)
         weekly_completed = round(sum(weekly_credit.values()), 2)
-        monthly_completed = round(sum(monthly_credit.values()), 2)
+        monthly_completed = round(done_by_user.get(advisor.id, 0.0), 2)
 
         weekly_pct = (weekly_completed / weekly_due * 100) if weekly_due else 100.0
         monthly_pct = (monthly_completed / monthly_due * 100) if monthly_due else 100.0

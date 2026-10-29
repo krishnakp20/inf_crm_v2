@@ -236,6 +236,7 @@ export interface CollabBoardStats {
   active_collaborations: number;
   videos_live: number;
   dead_leads: number;
+  at_risk: number;
 }
 
 export interface Creator {
@@ -457,10 +458,20 @@ export interface TargetRow {
   monthly_pct: number;
 }
 
+export interface ProductTargetMonth {
+  month: string; // 'YYYY-MM'
+  total_target: number;
+  product_count: number;
+}
+
 export interface ProductTarget {
   id: number;
   product_id: number;
   product_name: string;
+  /** The month this figure is for ('YYYY-MM'), and where it came from. */
+  month: string;
+  source: "month" | "carried" | "standing";
+  source_month: string | null;
   weekly_target: number;
   monthly_target: number;
   weekly_progress: number;

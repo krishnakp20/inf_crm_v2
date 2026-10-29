@@ -2,8 +2,26 @@ import { Check, Pencil, Search, Target, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSort } from "../../hooks/useSort";
 import { api } from "../../lib/api";
+import { SearchableSelect } from "../shared/SearchableSelect";
 import { SortableHeader } from "../shared/SortableHeader";
-import type { Product, ProductTarget, User } from "../../lib/types";
+import type { Product, ProductTarget, ProductTargetMonth, User } from "../../lib/types";
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function monthKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function addMonths(key: string, n: number): string {
+  const [y, m] = key.split("-").map(Number);
+  return monthKeyOf(new Date(y, m - 1 + n, 1));
+}
+
+function monthLabel(key: string, short = false): string {
+  const [y, m] = key.split("-").map(Number);
+  const name = MONTH_NAMES[m - 1];
+  return `${short ? name.slice(0, 3) : name} ${y}`;
+}
 
 function getValue(t: ProductTarget, field: string): unknown {
   switch (field) {
@@ -17,6 +35,8 @@ function getValue(t: ProductTarget, field: string): unknown {
       return t.weekly_progress;
     case "monthly_progress":
       return t.monthly_progress;
+    case "source":
+      return t.source;
     default:
       return null;
   }
@@ -43,6 +63,9 @@ export function SetTargetDrawer({
 }) {
   const [selectedUserId, setSelectedUserId] = useState<number | "">(advisors?.[0]?.id ?? "");
   const [targets, setTargets] = useState<ProductTarget[]>([]);
+  const thisMonth = monthKeyOf(new Date());
+  const [month, setMonth] = useState(thisMonth);
+  const [monthList, setMonthList] = useState<ProductTargetMonth[]>([]);
   const { sorted: sortedTargets, field, direction, toggle } = useSort(targets, getValue);
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [productSearch, setProductSearch] = useState("");
@@ -64,11 +87,31 @@ export function SetTargetDrawer({
       return;
     }
     api
-      .get<ProductTarget[]>("/product-targets", { params: targetUserId ? { user_id: targetUserId } : undefined })
+      .get<ProductTarget[]>("/product-targets", { params: { user_id: targetUserId || undefined, month } })
       .then((res) => setTargets(res.data));
+    loadMonthList();
   }
 
-  useEffect(loadTargets, [targetUserId]);
+  function loadMonthList() {
+    if (managingOther && !targetUserId) {
+      setMonthList([]);
+      return;
+    }
+    api
+      .get<ProductTargetMonth[]>("/product-targets/months", { params: { user_id: targetUserId || undefined } })
+      .then((res) => setMonthList(res.data));
+  }
+
+  useEffect(loadTargets, [targetUserId, month]);
+
+  // Last month through six months ahead, plus any month that already has targets of its own.
+  const monthOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (let n = -1; n <= 6; n++) keys.add(addMonths(thisMonth, n));
+    monthList.forEach((m) => keys.add(m.month));
+    keys.add(month);
+    return [...keys].sort().map((key) => ({ value: key, label: monthLabel(key) + (key === thisMonth ? " (this month)" : "") }));
+  }, [monthList, month, thisMonth]);
 
   const visibleProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -114,6 +157,7 @@ export function SetTargetDrawer({
       await api.post("/product-targets", {
         product_id: t.product_id,
         monthly_target: value,
+        month,
         user_id: targetUserId || undefined,
       });
       setEditingId(null);
@@ -150,6 +194,7 @@ export function SetTargetDrawer({
           api.post("/product-targets", {
             product_id: p.id,
             monthly_target: shares[i],
+            month,
             user_id: targetUserId || undefined,
           })
         )
@@ -184,7 +229,7 @@ export function SetTargetDrawer({
               <h2 className="text-base font-semibold text-ink">
                 {managingOther ? "Set product targets for a user" : "Set my product targets"}
               </h2>
-              <p className="text-xs text-gray-500">Set a monthly target -- the weekly pace is worked out for you.</p>
+              <p className="text-xs text-gray-500">Pick a month, then set its target.</p>
             </div>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface">
@@ -210,6 +255,43 @@ export function SetTargetDrawer({
               </select>
             </div>
           )}
+
+          <div className="mb-5 rounded-card border border-[#e7e5e4] p-3">
+            <label className="mb-1 block text-xs font-medium text-gray-700">Month</label>
+            <SearchableSelect
+              fullWidth
+              ariaLabel="Target month"
+              value={month}
+              onChange={setMonth}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              options={monthOptions}
+            />
+            <p className="mt-1.5 text-[11px] text-gray-500">
+              Targets you save below are for {monthLabel(month)}. A month with no target of its own uses the latest earlier month's.
+            </p>
+            {monthList.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">Months with targets</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {monthList.map((m) => (
+                    <button
+                      key={m.month}
+                      type="button"
+                      onClick={() => setMonth(m.month)}
+                      title={`${m.product_count} product${m.product_count !== 1 ? "s" : ""}`}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        m.month === month
+                          ? "border-brand-300 bg-brand-50 text-brand-600"
+                          : "border-[#e7e5e4] text-ink hover:bg-surface"
+                      }`}
+                    >
+                      {monthLabel(m.month, true)} · {m.total_target}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="mb-5 rounded-card border border-[#e7e5e4] p-3">
             <p className="text-xs font-semibold text-ink">Synced product names</p>
@@ -305,21 +387,26 @@ export function SetTargetDrawer({
           </div>
 
           <p className="mb-2 text-[11px] text-gray-400">
-            Weekly is auto-calculated from the monthly target you set. Click a monthly target below to change it.
+            Targets for {monthLabel(month)}. Click a monthly target to change it for this month.
           </p>
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#e7e5e4] text-left uppercase tracking-wide text-gray-400">
                 <SortableHeader label="Product" field="product_name" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
                 <SortableHeader label="Monthly target" field="monthly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-                <SortableHeader label="Weekly (auto)" field="weekly_target" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
-                <SortableHeader label="Achieved this week" field="weekly_progress" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
+                <SortableHeader label="Achieved" field="monthly_progress" activeField={field} direction={direction} onSort={toggle} className="pb-2 font-medium" />
               </tr>
             </thead>
             <tbody>
               {sortedTargets.map((t) => (
                 <tr key={t.id} className="border-b border-gray-100">
-                  <td className="py-2 font-medium text-ink">{t.product_name}</td>
+                  <td className="py-2 font-medium text-ink">
+                    {t.product_name}
+                    {t.source === "carried" && t.source_month && (
+                      <div className="text-[10px] font-normal text-amber-600">Carried from {monthLabel(t.source_month)}</div>
+                    )}
+                    {t.source === "standing" && <div className="text-[10px] font-normal text-gray-400">Standing target</div>}
+                  </td>
                   <td className="py-2 text-gray-600">
                     {editingId === t.id ? (
                       <div>
@@ -370,13 +457,12 @@ export function SetTargetDrawer({
                       </button>
                     )}
                   </td>
-                  <td className="py-2 text-gray-600">{t.weekly_target}</td>
-                  <td className="py-2 font-semibold text-ink">{t.weekly_progress}</td>
+                  <td className="py-2 font-semibold text-ink">{t.monthly_progress}</td>
                 </tr>
               ))}
               {targets.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-4 text-center text-gray-400">
+                  <td colSpan={3} className="py-4 text-center text-gray-400">
                     {managingOther && !selectedUserId ? "Select a user above to see and set their targets." : "No targets set yet."}
                   </td>
                 </tr>

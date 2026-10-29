@@ -13,6 +13,7 @@ from app.schemas.dashboard import (
     DashboardResponse,
     KpiSummary,
     NotificationOut,
+    TargetRow,
 )
 from app.services.dashboard import (
     _latest_announcement,
@@ -21,7 +22,9 @@ from app.services.dashboard import (
     get_dashboard,
     get_dashboard_notifications,
     get_followup_progress_today,
+    get_targets,
 )
+from app.services.product_targets import parse_month
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -59,6 +62,19 @@ async def dashboard(
         )
     owner_ids = await scoped_owner_ids(user, db)
     return await get_dashboard(db, owner_ids, date_from, date_to, user)
+
+
+@router.get("/targets", response_model=list[TargetRow])
+async def targets_for_month(
+    month: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[TargetRow]:
+    """Target vs Achieved per user for one month ('YYYY-MM', default this month)."""
+    if user.role in (UserRole.marketer, UserRole.editor):
+        return []
+    owner_ids = await scoped_owner_ids(user, db)
+    return await get_targets(db, datetime.now(timezone.utc), owner_ids, parse_month(month))
 
 
 @router.get("/active-reels", response_model=ActiveReelsOut)

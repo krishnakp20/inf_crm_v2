@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../../lib/api";
 import type { SortDirection } from "../../lib/sort";
 import { initials } from "../../lib/format";
 import { SortableHeader } from "../shared/SortableHeader";
@@ -15,7 +16,33 @@ function hasTarget(row: TargetRow): boolean {
   return row.monthly_due > 0;
 }
 
-export function Targets({ rows }: { rows: TargetRow[] }) {
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function monthInfo(offset: number): { key: string; label: string } {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` };
+}
+
+export function Targets({ rows: thisMonthRows }: { rows: TargetRow[] }) {
+  // The Dashboard sends this month's rows; last month is fetched when asked for, so Target vs Achieved can be checked.
+  const [monthChoice, setMonthChoice] = useState<"this" | "last">("this");
+  const [lastMonthRows, setLastMonthRows] = useState<TargetRow[] | null>(null);
+  const thisMonth = monthInfo(0);
+  const lastMonth = monthInfo(-1);
+
+  useEffect(() => {
+    if (monthChoice !== "last") return;
+    setLastMonthRows(null);
+    api
+      .get<TargetRow[]>("/dashboard/targets", { params: { month: lastMonth.key } })
+      .then((res) => setLastMonthRows(res.data))
+      .catch(() => setLastMonthRows([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthChoice]);
+
+  const loading = monthChoice === "last" && lastMonthRows === null;
+  const rows = monthChoice === "last" ? lastMonthRows ?? [] : thisMonthRows;
   const [userFilter, setUserFilter] = useState("");
   const users = useMemo(() => rows.map((r) => r.name), [rows]);
   const visible = userFilter ? rows.filter((r) => r.name === userFilter) : rows;
@@ -54,8 +81,28 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[15px] font-normal text-ink">Targets</h2>
-          <p className="mt-1 text-[10px] text-muted">Monthly performance by user</p>
+          <p className="mt-1 text-[10px] text-muted">
+            Monthly performance by user · {monthChoice === "last" ? lastMonth.label : thisMonth.label}
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-lg border border-[#e7e5e4] bg-surface p-0.5">
+            {(["this", "last"] as const).map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                onClick={() => {
+                  setUserFilter("");
+                  setMonthChoice(choice);
+                }}
+                className={`rounded-md px-2 py-1 text-[10px] font-bold ${
+                  monthChoice === choice ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-ink"
+                }`}
+              >
+                {choice === "this" ? "This month" : "Last month"}
+              </button>
+            ))}
+          </div>
         {users.length > 1 && (
           <SearchableSelect
             ariaLabel="Filter targets by user"
@@ -66,6 +113,7 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
             options={[{ value: "", label: "All users" }, ...users.map((name) => ({ value: name, label: name }))]}
           />
         )}
+        </div>
       </div>
       <div className="mt-4 max-h-[520px] overflow-y-auto">
       <table className="w-full text-[13px]">
@@ -108,6 +156,20 @@ export function Targets({ rows }: { rows: TargetRow[] }) {
               </tr>
             );
           })}
+          {loading && (
+            <tr>
+              <td colSpan={2} className="py-4 text-center text-sm text-gray-400">
+                Loading...
+              </td>
+            </tr>
+          )}
+          {!loading && sorted.length === 0 && (
+            <tr>
+              <td colSpan={2} className="py-4 text-center text-sm text-gray-400">
+                No targets for this month.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
       </div>

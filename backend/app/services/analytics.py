@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.product_target import ProductTarget
 from app.db.models.user import User
+from app.services.product_targets import effective_targets
 from app.schemas.analytics import (
     AnalyticsBusinessImpact,
     AnalyticsCommercialLocked,
@@ -42,6 +43,13 @@ HIT_COMMENT_THRESHOLD = 500
 ALL_TIME_START = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 _HIT_CASE = case((Collaboration.comments_count >= HIT_COMMENT_THRESHOLD, 1), else_=0)
+
+
+def _target_month(range_end: datetime) -> date:
+    """The month whose targets apply to a range: the month of its LAST moment. The end is
+    exclusive, so "Last month" (1st of last month -> 1st of this month) belongs to last month."""
+    last_moment = range_end - timedelta(microseconds=1)
+    return date(last_moment.year, last_moment.month, 1)
 
 
 def show_cost_data(user: User) -> bool:
@@ -532,15 +540,11 @@ async def target_vs_achieved(
         return []
     user_ids = [u[0] for u in users]
 
-    targets_stmt = (
-        select(
-            ProductTarget.user_id,
-            func.coalesce(func.sum(ProductTarget.monthly_target), 0),
-        )
-        .where(ProductTarget.user_id.in_(user_ids))
-        .group_by(ProductTarget.user_id)
-    )
-    targets_by_user = {row[0]: row[1] for row in (await db.execute(targets_stmt)).all()}
+    # The target in force for the month the range ends in (month-wise targets;
+    # a month without its own figure carries the earlier one forward).
+    targets_by_user: dict[int, int] = {}
+    for (uid, _), target in (await effective_targets(db, user_ids, _target_month(range_end))).items():
+        targets_by_user[uid] = targets_by_user.get(uid, 0) + target.value
 
     rows: list[AnalyticsTargetRow] = []
     for user_id, user_name in users:
@@ -569,10 +573,9 @@ async def product_user_target_matrix(
     range_days = (range_end - range_start).days or 1
     proration = range_days / 30.0
 
-    targets_stmt = select(ProductTarget.user_id, ProductTarget.product_id, ProductTarget.monthly_target)
-    if owner_ids is not None:
-        targets_stmt = targets_stmt.where(ProductTarget.user_id.in_(owner_ids))
-    target_rows = (await db.execute(targets_stmt)).all()
+    # Targets in force for the month the range ends in (see effective_targets).
+    effective = await effective_targets(db, owner_ids, _target_month(range_end))
+    target_rows = [(uid, pid, target.value) for (uid, pid), target in effective.items()]
 
     empty_cell = AnalyticsMatrixCell(achieved=0.0, target=0.0)
     if not target_rows:
