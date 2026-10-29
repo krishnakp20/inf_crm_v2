@@ -27,6 +27,39 @@ ACTIVE_STALE_DAYS = 60
 LIVE_STALE_DAYS = 182
 
 
+# A card is "at risk" when the sweep below will move it to Dead Leads within this many days.
+AT_RISK_DAYS = 7
+
+
+def at_risk_condition(deadline_days: dict[CollabStage, int | None]):
+    """SQL condition for cards the sweep will move to Dead Leads within AT_RISK_DAYS -- the very
+    same three rules as find_stale_collaborations (the 60-day catch-all for cards that are not
+    Live, the ~6-month rule for Live cards, and any Settings > Stage deadlines), each with its
+    cut-off pulled forward by AT_RISK_DAYS. A card already past a rule but not yet swept counts
+    too (it moves at the next 2:00 AM run). Callers exclude Dead Leads themselves."""
+    now = datetime.now(timezone.utc)
+    window = timedelta(days=AT_RISK_DAYS)
+    conditions = [
+        and_(
+            Collaboration.stage != CollabStage.live,
+            Collaboration.last_activity_at <= now - (timedelta(days=ACTIVE_STALE_DAYS) - window),
+        ),
+        and_(
+            Collaboration.stage == CollabStage.live,
+            Collaboration.last_activity_at <= now - (timedelta(days=LIVE_STALE_DAYS) - window),
+        ),
+    ]
+    for stage, max_days in deadline_days.items():
+        if max_days is not None:
+            conditions.append(
+                and_(
+                    Collaboration.stage == stage,
+                    Collaboration.last_activity_at <= now - (timedelta(days=max_days) - window),
+                )
+            )
+    return or_(*conditions)
+
+
 async def find_stale_collaborations(db, deadline_days: dict[CollabStage, int | None]) -> list[Collaboration]:
     now = datetime.now(timezone.utc)
     active_cutoff = now - timedelta(days=ACTIVE_STALE_DAYS)

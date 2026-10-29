@@ -1,4 +1,4 @@
-import { AlertTriangle, LayoutGrid, ShieldCheck, UsersRound, PlayCircle } from "lucide-react";
+import { AlertTriangle, Hourglass, LayoutGrid, ShieldCheck, UsersRound, PlayCircle } from "lucide-react";
 import type { CollabBoardStats } from "../../lib/types";
 
 function StatCard({
@@ -33,11 +33,17 @@ function StatCard({
 
 export function CollabBoardStatsRow({ stats }: { stats: CollabBoardStats }) {
   return (
-    <div className="mb-4 grid grid-cols-[1fr_1fr_1fr_1fr_1.9fr] gap-2.5">
+    <div className="mb-4 grid grid-cols-[1fr_1fr_1fr_1fr_1.35fr_1.9fr] gap-2.5">
       <StatCard icon={UsersRound} tone="indigo" value={stats.unique_creators} label="Unique creators" />
       <StatCard icon={LayoutGrid} tone="amber" value={stats.active_collaborations} label="Active collaborations" />
       <StatCard icon={PlayCircle} tone="green" value={stats.videos_live} label="Videos live" />
       <StatCard icon={AlertTriangle} tone="coral" value={stats.dead_leads} label="Dead leads" />
+      <StatCard
+        icon={Hourglass}
+        tone="amber"
+        value={stats.at_risk}
+        label="At risk – (Moving to dead leads in 7 days)"
+      />
       <div className="flex items-center gap-2.5 rounded-card border border-[#dddcf8] bg-[#f9f8ff] p-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-brand-100 text-brand-600">
           <ShieldCheck size={16} />

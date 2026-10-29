@@ -22,7 +22,7 @@ from app.db.models.collaboration import Collaboration
 from app.db.models.collaboration_product import CollaborationProduct
 from app.db.models.collaboration_video_link import CollaborationVideoLink
 from app.db.models.creator import Creator
-from app.db.models.enums import CollabStage, CreatorStatus, PaymentStatus, UserRole
+from app.db.models.enums import CollabStage, CreatorStatus, DealType, PaymentStatus, UserRole
 from app.db.models.partnership_ticket import PartnershipTicket
 from app.db.models.product import Product
 from app.db.models.product_variant import ProductVariant
@@ -37,6 +37,7 @@ from app.schemas.collaboration import (
     CollaborationUpdate,
     CollaborationVideoLinkOut,
 )
+from app.services.dead_zone import at_risk_condition
 from app.services.analytics import ALL_TIME_START, _scoped_live_collab_ids
 from app.services.collab_pipeline import (
     COLLAB_STAGE_INDEX,
@@ -461,11 +462,31 @@ async def collab_board_stats(
         videos_live = len(live_ids)
     dead_leads = sum(1 for c in collabs if c.stage == CollabStage.dead_leads)
 
+    # At risk is about right now: cards about to be moved to Dead Leads, so the date range
+    # doesn't apply -- only who owns them and the product filter, like the rest of this row.
+    at_risk_stmt = select(func.count(Collaboration.id)).where(
+        Collaboration.stage != CollabStage.dead_leads,
+        at_risk_condition(await load_stage_deadline_days(db)),
+    )
+    if owner_ids is not None:
+        at_risk_stmt = at_risk_stmt.where(Collaboration.owner_id.in_(owner_ids))
+    if product_id is not None:
+        at_risk_stmt = at_risk_stmt.where(
+            exists(
+                select(CollaborationProduct.id).where(
+                    CollaborationProduct.collaboration_id == Collaboration.id,
+                    CollaborationProduct.product_id == product_id,
+                )
+            )
+        )
+    at_risk = (await db.execute(at_risk_stmt)).scalar_one()
+
     return CollabBoardStats(
         unique_creators=unique_creators,
         active_collaborations=active_collaborations,
         videos_live=videos_live,
         dead_leads=dead_leads,
+        at_risk=at_risk,
     )
 
 
@@ -653,6 +674,15 @@ async def _ensure_creator_not_owned_by_other(db: AsyncSession, creator: Creator,
     )
 
 
+def _zero_commercials_if_barter(collab: Collaboration) -> None:
+    """A Barter deal carries no money: every commercial field is 0, whatever was typed or sent."""
+    if collab.deal_type == DealType.barter:
+        collab.commercial_quoted = 0
+        collab.counter_quote_agent = 0
+        collab.counter_quote_creator = 0
+        collab.commercial_amount = 0
+
+
 async def _create_collaboration(
     db: AsyncSession, payload: CollaborationCreate, user: User, enforce_creator_ownership: bool = True
 ) -> CollaborationOut:
@@ -660,6 +690,11 @@ async def _create_collaboration(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Dead Leads isn't a valid starting stage -- move a card there instead of creating into it.",
+        )
+
+    if payload.deal_type == DealType.barter:
+        payload = payload.model_copy(
+            update={"commercial_quoted": 0, "counter_quote_agent": 0, "counter_quote_creator": 0, "commercial_amount": 0}
         )
 
     required = STAGE_REQUIRED_FIELDS[payload.stage]
@@ -928,6 +963,7 @@ async def update_collaboration(
 
     for field, value in update_data.items():
         setattr(collab, field, value)
+    _zero_commercials_if_barter(collab)
 
     if has_additional_video_links:
         await db.execute(delete(CollaborationVideoLink).where(CollaborationVideoLink.collaboration_id == collab.id))
@@ -1060,9 +1096,20 @@ async def transition_collab_stage(
             (payload.creator_phone and payload.creator_phone.strip()) or (creator.phone and creator.phone.strip())
         ):
             missing.append("creator_phone")
-        if "commercial_quoted" in required and payload.commercial_quoted is None and collab.commercial_quoted is None:
+        is_barter = (payload.deal_type or collab.deal_type) == DealType.barter  # its commercials are 0 -- nothing to ask for
+        if (
+            "commercial_quoted" in required
+            and not is_barter
+            and payload.commercial_quoted is None
+            and collab.commercial_quoted is None
+        ):
             missing.append("commercial_quoted")
-        if "commercial_amount" in required and payload.commercial_amount is None and collab.commercial_amount is None:
+        if (
+            "commercial_amount" in required
+            and not is_barter
+            and payload.commercial_amount is None
+            and collab.commercial_amount is None
+        ):
             missing.append("commercial_amount")
         if "deal_type" in required and payload.deal_type is None and collab.deal_type is None:
             missing.append("deal_type")
@@ -1130,6 +1177,7 @@ async def transition_collab_stage(
             collab.commercial_amount = payload.commercial_amount
         if payload.deal_type is not None:
             collab.deal_type = payload.deal_type
+        _zero_commercials_if_barter(collab)
         if payload.content_type is not None:
             collab.content_type = payload.content_type
         if payload.tracking_link is not None:

@@ -159,7 +159,7 @@ def days_until_stage_deadline(collab: Collaboration, deadline_days: dict[CollabS
 # one CollaborationProduct row with is_live_attributed=True must be provided".
 _STAGE_FIELD_ADDITIONS: dict[CollabStage, list[str]] = {
     CollabStage.replied: ["creator_reply"],
-    CollabStage.negotiating: ["commercial_quoted", "deal_type"],
+    CollabStage.negotiating: ["deal_type"],  # the quote is optional
     CollabStage.commercial_locked: ["commercial_amount", "content_type"],
     CollabStage.product_sent: ["tracking_link"],
     CollabStage.live: ["live_attribution", "poc_code", "video_link", "language", "content_bucket"],

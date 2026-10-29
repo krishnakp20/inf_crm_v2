@@ -2,7 +2,8 @@ import { Copy, Loader2, ShieldCheck, Truck } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import { externalUrl, initials, instagramUrl } from "../../lib/format";
+import { initials, instagramUrl } from "../../lib/format";
+import { trackingHref } from "../../lib/tracking";
 import type { Collaboration, CollabStage } from "../../lib/types";
 
 function formatCredit(credit: number): string {
@@ -137,18 +138,27 @@ export function CollabKanbanCard({
           >
             <ShieldCheck size={12} />
           </button>
-          {collab.tracking_link && (
-            <a
-              href={externalUrl(collab.tracking_link)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              title="Open tracking link"
-              className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-surface hover:text-brand-600"
-            >
-              <Truck size={12} />
-            </a>
-          )}
+          {collab.tracking_link &&
+            (trackingHref(collab.tracking_link) ? (
+              <a
+                href={trackingHref(collab.tracking_link)!}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="Open tracking link"
+                className="flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:bg-surface hover:text-brand-600"
+              >
+                <Truck size={12} />
+              </a>
+            ) : (
+              // Not a web address (an Order ID typed on its own): show it, never turn it into a broken link.
+              <span
+                title={`Tracking: ${collab.tracking_link}`}
+                className="flex h-5 w-5 items-center justify-center rounded text-gray-300"
+              >
+                <Truck size={12} />
+              </span>
+            ))}
         </div>
       </div>
 

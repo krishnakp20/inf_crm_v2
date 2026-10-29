@@ -170,3 +170,5 @@ class CollabBoardStats(BaseModel):
     active_collaborations: int
     videos_live: int
     dead_leads: int
+    # Cards the nightly job will move to Dead Leads within 7 days (right now, not date-range scoped).
+    at_risk: int

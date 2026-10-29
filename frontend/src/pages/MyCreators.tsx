@@ -437,6 +437,7 @@ export default function MyCreators() {
       {pendingMove && (
         <StageMovePrompt
           collabId={pendingMove.collabId}
+          cardDealType={collaborations.find((c) => c.id === pendingMove.collabId)?.deal_type}
           targetStage={pendingMove.toStage}
           missingFields={pendingMove.missingFields}
           linkedProducts={

@@ -1,6 +1,7 @@
 import { Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { TRACKING_LINK_PREFIX, cleanTrackingLink, isBareTrackingLink } from "../../lib/tracking";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
 import type { CollabStage, ContentBucket, ContentType, DealType, Language, Platform } from "../../lib/types";
 
@@ -11,6 +12,7 @@ interface VideoLinkRow {
 
 export function StageMovePrompt({
   collabId,
+  cardDealType,
   targetStage,
   missingFields,
   linkedProducts,
@@ -18,6 +20,8 @@ export function StageMovePrompt({
   onMoved,
 }: {
   collabId: number;
+  /** The card's saved deal type, so a Barter card never asks for a locked amount. */
+  cardDealType?: DealType | null;
   targetStage: CollabStage;
   missingFields: string[];
   linkedProducts: { id: number; name: string }[];
@@ -28,10 +32,18 @@ export function StageMovePrompt({
   const [commercialQuoted, setCommercialQuoted] = useState("");
   const [commercialAmount, setCommercialAmount] = useState("");
   const [dealType, setDealType] = useState<DealType | "">("");
+  const isBarter = (dealType || cardDealType) === "barter";
+  // Barter carries no money: the locked amount (and any quote) is 0 and locked.
+  useEffect(() => {
+    if (isBarter) {
+      setCommercialAmount("0");
+      setCommercialQuoted("0");
+    }
+  }, [isBarter]);
   const [contentType, setContentType] = useState<ContentType | "">("");
   const [liveAttributionIds, setLiveAttributionIds] = useState<number[]>([]);
   const [creatorPhone, setCreatorPhone] = useState("");
-  const [trackingLink, setTrackingLink] = useState("");
+  const [trackingLink, setTrackingLink] = useState(TRACKING_LINK_PREFIX);
   const [orderId, setOrderId] = useState("");
   const [pocCode, setPocCode] = useState("");
   const [videoLinks, setVideoLinks] = useState<VideoLinkRow[]>([{ platform: "", url: "" }]);
@@ -96,8 +108,8 @@ export function StageMovePrompt({
       setError("Phone / WhatsApp is required.");
       return;
     }
-    if (missingFields.includes("tracking_link") && !trackingLink.trim()) {
-      setError("Tracking link is required.");
+    if (missingFields.includes("tracking_link") && isBareTrackingLink(trackingLink)) {
+      setError("Add the Order ID after the link, or paste a full tracking link.");
       return;
     }
     if (missingFields.includes("order_id") && !orderId.trim()) {
@@ -139,7 +151,7 @@ export function StageMovePrompt({
         content_type: missingFields.includes("content_type") ? contentType : undefined,
         live_attribution_product_ids: missingFields.includes("live_attribution") ? liveAttributionIds : undefined,
         creator_phone: missingFields.includes("creator_phone") ? creatorPhone : undefined,
-        tracking_link: missingFields.includes("tracking_link") ? trackingLink : undefined,
+        tracking_link: missingFields.includes("tracking_link") ? cleanTrackingLink(trackingLink) : undefined,
         order_id: missingFields.includes("order_id") ? orderId : undefined,
         poc_code: missingFields.includes("poc_code") ? pocCode : undefined,
         video_link: missingFields.includes("video_link") ? videoLinks[0].url.trim() : undefined,
@@ -210,13 +222,14 @@ export function StageMovePrompt({
           {missingFields.includes("commercial_amount") && (
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">
-                Commercial locked amount · Required
+                Commercial locked amount · {isBarter ? "Barter: ₹0" : "Required"}
               </label>
               <input
                 type="number"
                 min={0}
                 value={commercialAmount}
                 onChange={(e) => setCommercialAmount(e.target.value)}
+                disabled={isBarter}
                 placeholder="₹13,000"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
@@ -256,9 +269,11 @@ export function StageMovePrompt({
               <input
                 value={trackingLink}
                 onChange={(e) => setTrackingLink(e.target.value)}
-                placeholder="https://..."
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Type the Order ID at the end of the link, or clear it and paste a full tracking link.
+              </p>
             </div>
           )}
           {missingFields.includes("order_id") && (

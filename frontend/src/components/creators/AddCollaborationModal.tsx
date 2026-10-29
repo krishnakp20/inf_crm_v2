@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER, STARTABLE_COLLAB_STAGES } from "../../lib/collab-stages";
 import { findTier, tierLabel } from "../../lib/creator-tiers";
 import { usernameLinkError } from "../../lib/format";
+import { TRACKING_LINK_PREFIX, cleanTrackingLink, isBareTrackingLink } from "../../lib/tracking";
 import type {
   CreatorCategoryTier,
   CollabStage,
@@ -110,8 +111,18 @@ export function AddCollaborationModal({
   const [counterQuoteCreator, setCounterQuoteCreator] = useState("");
   const [commercialAmount, setCommercialAmount] = useState("");
   const [dealType, setDealType] = useState<DealType | "">("");
+  const isBarter = dealType === "barter";
+  // Barter carries no money: every commercial field becomes 0 and is locked.
+  useEffect(() => {
+    if (isBarter) {
+      setCommercialQuoted("0");
+      setCounterQuoteAgent("0");
+      setCounterQuoteCreator("0");
+      setCommercialAmount("0");
+    }
+  }, [isBarter]);
   const [contentType, setContentType] = useState<ContentType | "">("");
-  const [trackingLink, setTrackingLink] = useState("");
+  const [trackingLink, setTrackingLink] = useState(TRACKING_LINK_PREFIX);
   const [orderId, setOrderId] = useState("");
   const [pocCode, setPocCode] = useState("");
   const [videoLinks, setVideoLinks] = useState<VideoLinkRow[]>([{ platform: "", url: "" }]);
@@ -251,11 +262,6 @@ export function AddCollaborationModal({
         setSubmitting(false);
         return;
       }
-      if (showNegotiation && !commercialQuoted) {
-        setError("Commercial quoted is required for this stage.");
-        setSubmitting(false);
-        return;
-      }
       if (showLocked && !commercialAmount) {
         setError("Commercial locked amount is required for this stage.");
         setSubmitting(false);
@@ -276,8 +282,8 @@ export function AddCollaborationModal({
         setSubmitting(false);
         return;
       }
-      if (showProductSent && !trackingLink.trim()) {
-        setError("Tracking link is required for this stage.");
+      if (showProductSent && isBareTrackingLink(trackingLink)) {
+        setError("Add the Order ID after the tracking link, or paste a full tracking link.");
         setSubmitting(false);
         return;
       }
@@ -327,7 +333,7 @@ export function AddCollaborationModal({
         commercial_amount: showLocked && commercialAmount ? Number(commercialAmount) : null,
         deal_type: showNegotiation && dealType ? dealType : null,
         content_type: showLocked && contentType ? contentType : null,
-        tracking_link: showProductSent && trackingLink ? trackingLink : null,
+        tracking_link: showProductSent && !isBareTrackingLink(trackingLink) ? cleanTrackingLink(trackingLink) : null,
         order_id: showProductSent && orderId ? orderId : null,
         poc_code: showLiveAttribution && pocCode ? pocCode : null,
         video_link: showLiveAttribution ? videoLinks[0].url.trim() : null,
@@ -666,12 +672,13 @@ export function AddCollaborationModal({
         {showNegotiation && (
           <div className="mb-3 rounded-md border border-gray-200 p-3">
             <p className="mb-2 text-xs font-semibold text-ink">Commercial negotiation</p>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Commercial quoted · Required</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Commercial quoted · Optional</label>
             <input
               type="number"
               min={0}
               value={commercialQuoted}
               onChange={(e) => setCommercialQuoted(e.target.value)}
+              disabled={isBarter}
               placeholder="₹18,000"
               className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
@@ -681,6 +688,7 @@ export function AddCollaborationModal({
               min={0}
               value={counterQuoteAgent}
               onChange={(e) => setCounterQuoteAgent(e.target.value)}
+              disabled={isBarter}
               placeholder="₹14,000"
               className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
@@ -690,6 +698,7 @@ export function AddCollaborationModal({
               min={0}
               value={counterQuoteCreator}
               onChange={(e) => setCounterQuoteCreator(e.target.value)}
+              disabled={isBarter}
               placeholder="₹15,000"
               className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
@@ -703,6 +712,7 @@ export function AddCollaborationModal({
               <option value="paid">Paid</option>
               <option value="barter">Barter</option>
             </select>
+            {isBarter && <p className="mt-1 text-[11px] text-amber-700">Barter: every commercial amount is ₹0.</p>}
           </div>
         )}
 
@@ -714,6 +724,7 @@ export function AddCollaborationModal({
               min={0}
               value={commercialAmount}
               onChange={(e) => setCommercialAmount(e.target.value)}
+              disabled={isBarter}
               placeholder="₹13,000"
               className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
@@ -737,8 +748,11 @@ export function AddCollaborationModal({
             <input
               value={trackingLink}
               onChange={(e) => setTrackingLink(e.target.value)}
-              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
+            <p className="mb-2 mt-1 text-[11px] text-gray-400">
+              Type the Order ID at the end of the link, or clear it and paste a full tracking link.
+            </p>
             <label className="mb-1 block text-sm font-medium text-gray-700">Order ID · Optional</label>
             <input
               value={orderId}

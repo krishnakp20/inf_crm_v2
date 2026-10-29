@@ -3,7 +3,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { COLLAB_STAGE_ORDER } from "../../lib/collab-stages";
-import { externalUrl, initials, instagramUrl } from "../../lib/format";
+import { initials, instagramUrl } from "../../lib/format";
+import { TRACKING_LINK_PREFIX, cleanTrackingLink, trackingHref } from "../../lib/tracking";
 import type {
   ApprovalRequest,
   Collaboration,
@@ -64,8 +65,19 @@ export function CollabDetailPanel({
   const [counterQuoteCreator, setCounterQuoteCreator] = useState(collab.counter_quote_creator?.toString() ?? "");
   const [commercialAmount, setCommercialAmount] = useState(collab.commercial_amount?.toString() ?? "");
   const [dealType, setDealType] = useState<DealType | "">(collab.deal_type ?? "");
+  const isBarter = dealType === "barter";
+  // Barter carries no money: every commercial field becomes 0 and is locked.
+  useEffect(() => {
+    if (isBarter) {
+      setCommercialQuoted("0");
+      setCounterQuoteAgent("0");
+      setCounterQuoteCreator("0");
+      setCommercialAmount("0");
+    }
+  }, [isBarter]);
   const [contentType, setContentType] = useState<ContentType | "">(collab.content_type ?? "");
-  const [trackingLink, setTrackingLink] = useState(collab.tracking_link ?? "");
+  // A card with no tracking link starts with the courier prefix, ready for the Order ID.
+  const [trackingLink, setTrackingLink] = useState(collab.tracking_link || TRACKING_LINK_PREFIX);
   const [orderId, setOrderId] = useState(collab.order_id ?? "");
   const [pocCode, setPocCode] = useState(collab.poc_code ?? "");
   const [videoLinks, setVideoLinks] = useState<VideoLinkRow[]>([
@@ -207,7 +219,7 @@ export function CollabDetailPanel({
         commercial_amount: commercialAmount ? Number(commercialAmount) : null,
         deal_type: dealType || null,
         content_type: contentType || null,
-        tracking_link: trackingLink || null,
+        tracking_link: cleanTrackingLink(trackingLink) || null,
         order_id: orderId || null,
         poc_code: pocCode || null,
         video_link: videoLinks[0].url.trim() || null,
@@ -472,6 +484,7 @@ export function CollabDetailPanel({
                   min={0}
                   value={commercialQuoted}
                   onChange={(e) => setCommercialQuoted(e.target.value)}
+                  disabled={isBarter}
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </div>
@@ -482,6 +495,7 @@ export function CollabDetailPanel({
                   min={0}
                   value={counterQuoteAgent}
                   onChange={(e) => setCounterQuoteAgent(e.target.value)}
+                  disabled={isBarter}
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </div>
@@ -492,6 +506,7 @@ export function CollabDetailPanel({
                   min={0}
                   value={counterQuoteCreator}
                   onChange={(e) => setCounterQuoteCreator(e.target.value)}
+                  disabled={isBarter}
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </div>
@@ -502,6 +517,7 @@ export function CollabDetailPanel({
               min={0}
               value={commercialAmount}
               onChange={(e) => setCommercialAmount(e.target.value)}
+              disabled={isBarter}
               className="mb-2 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             />
             <div className="grid grid-cols-2 gap-2">
@@ -544,9 +560,9 @@ export function CollabDetailPanel({
                     onChange={(e) => setTrackingLink(e.target.value)}
                     className="w-full min-w-0 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                   />
-                  {trackingLink.trim() && (
+                  {trackingHref(trackingLink) && (
                     <a
-                      href={externalUrl(trackingLink)}
+                      href={trackingHref(trackingLink)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Open tracking link"
